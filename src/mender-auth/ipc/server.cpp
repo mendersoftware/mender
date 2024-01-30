@@ -18,7 +18,6 @@
 #include <iostream>
 #include <string>
 
-#include <api/auth.hpp>
 #include <common/crypto.hpp>
 #include <common/dbus.hpp>
 #include <common/error.hpp>
@@ -30,7 +29,6 @@ namespace auth {
 namespace ipc {
 
 namespace crypto = mender::common::crypto;
-namespace auth_client = mender::api::auth;
 namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;

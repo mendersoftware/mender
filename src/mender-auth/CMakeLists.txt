@@ -13,6 +13,7 @@ add_custom_target(uninstall-mender-auth
   COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_component mender-auth -P ${MENDER_BINARY_SRC_DIR}/cmake_uninstall.cmake
   WORKING_DIRECTORY ${MENDER_BINARY_SRC_DIR}
 )
+add_subdirectory(api)
 add_subdirectory(ipc)
 add_subdirectory(cli)
 add_subdirectory(http_forwarder)

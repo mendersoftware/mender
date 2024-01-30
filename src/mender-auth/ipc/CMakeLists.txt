@@ -7,6 +7,7 @@ target_link_libraries(mender_auth_ipc_server PUBLIC
   common_io
   common_http
   api_auth
+  mender_auth_api_auth
   mender_http_forwarder
 )
 
