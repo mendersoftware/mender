@@ -30,7 +30,7 @@
 #include <boost/asio/ssl/stream.hpp>
 #endif // MENDER_USE_BOOST_BEAST
 
-#include <config.h>
+#include <common/config.h>
 
 #include <common/common.hpp>
 #include <common/error.hpp>

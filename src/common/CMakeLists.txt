@@ -1,13 +1,64 @@
+project(mender-common)
+
 include(CheckCXXSourceCompiles)
 
+# TODO: proper platform detection
+set(PLATFORM linux_x86)
+
+set(MENDER_BUFSIZE 16384 CACHE STRING "Size of most internal block buffers. Can be reduced to conserve memory, but increases CPU usage.")
+option(MENDER_LOG_BOOST "Use Boost as the underlying logging library provider (Default: ON)" ON)
+option(MENDER_TAR_LIBARCHIVE "Use libarchive as the underlying tar library provider (Default: ON)" ON)
+option(MENDER_SHA_OPENSSL "Use OpenSSL as the underlying shasum provider (Default: ON)" ON)
+option(MENDER_CRYPTO_OPENSSL "Use OpenSSL as the underlying cryptography provider (Default: ON)" ON)
+option(MENDER_USE_SYSTEMD "Use systemd as the watchdog provider (Default: ON)" ON)
+
+option(MENDER_ARTIFACT_GZIP_COMPRESSION "Enable GZIP compression support when downloading and extracting Artifacts (Default: ON)" ON)
+option(MENDER_ARTIFACT_LZMA_COMPRESSION "Enable LZMA compression support when downloading and extracting Artifacts (Default: ON)" ON)
+option(MENDER_ARTIFACT_ZSTD_COMPRESSION "Enable Zstd compression support when downloading and extracting Artifacts (Default: ON)" ON)
+
+if (${PLATFORM} STREQUAL linux_x86)
+  set(MENDER_USE_ASIO_LIBDBUS 1)
+  set(MENDER_USE_BOOST_ASIO 1)
+  set(MENDER_USE_BOOST_BEAST 1)
+  set(MENDER_USE_LMDB 1)
+  set(MENDER_USE_NLOHMANN_JSON 1)
+  set(MENDER_USE_TINY_PROC_LIB 1)
+else()
+  set(MENDER_USE_ASIO_LIBDBUS 0)
+  set(MENDER_USE_BOOST_ASIO 0)
+  set(MENDER_USE_BOOST_BEAST 0)
+  set(MENDER_USE_LMDB 0)
+  set(MENDER_USE_NLOHMANN_JSON 0)
+  set(MENDER_USE_TINY_PROC_LIB 0)
+endif()
+
+configure_file(config.h.in config.h)
+
+if(${MENDER_USE_NLOHMANN_JSON})
+  add_subdirectory(vendor/tiny-process-library)
+endif()
+
+include(cmake/boost.cmake)
+
+add_library(common_cpp INTERFACE)
+target_compile_options(common_cpp INTERFACE -Werror -Wall -Wsuggest-override)
+target_include_directories(common_cpp SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/expected/include)
+target_include_directories(common_cpp SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/optional-lite/include)
+
 add_library(common STATIC common.cpp)
+target_include_directories(common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# For the generated config.h.
+target_include_directories(common PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/..)
+target_link_libraries(common PUBLIC common_cpp)
 
 add_library(common_setup STATIC setup/platform/posix/setup.cpp)
+target_link_libraries(common_setup PUBLIC common)
 
 add_library(common_error STATIC
   error.cpp
   error/platform/c++11/error.cpp
 )
+target_link_libraries(common_error PUBLIC common)
 
 add_library(common_io STATIC
   io/io.cpp
@@ -15,6 +66,7 @@ add_library(common_io STATIC
   io/platform/posix/io.cpp
 )
 target_compile_options(common_io PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+target_link_libraries(common_io PUBLIC common)
 
 add_library(common_path STATIC)
 target_sources(common_path PRIVATE
@@ -39,7 +91,7 @@ set(procs_sources "$<$<EQUAL:${MENDER_USE_TINY_PROC_LIB},1>:tiny_process_library
 add_library(common_json STATIC json/json.cpp json/platform/${json_sources})
 target_compile_options(common_json PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 if(${json_sources} MATCHES ".*nlohmann.*")
-  target_include_directories(common_json PUBLIC ${CMAKE_SOURCE_DIR}/vendor/json/include/)
+  target_include_directories(common_json PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/json/include/)
   target_link_libraries(common_json PUBLIC common common_io common_error)
 endif()
 
@@ -50,7 +102,7 @@ target_compile_options(common_key_value_database PRIVATE ${PLATFORM_SPECIFIC_COM
 if(MENDER_USE_LMDB)
   target_sources(common_key_value_database PRIVATE key_value_database/platform/lmdb/lmdb.cpp)
   # Note: Use SYSTEM include style, since lmdbxx triggers some of our warnings.
-  target_include_directories(common_key_value_database SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/vendor/lmdbxx)
+  target_include_directories(common_key_value_database SYSTEM PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/lmdbxx)
   target_link_libraries(common_key_value_database PUBLIC
     lmdb
     common
@@ -108,7 +160,7 @@ add_library(common_processes STATIC processes/processes.cpp processes/platform/$
 target_compile_options(common_processes PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(common_processes PUBLIC common_error common_events common_log common)
 if(${procs_sources} MATCHES ".*tiny_process_library.*")
-  target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
+  target_include_directories(common_processes PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/tiny-process-library)
   target_link_libraries(common_processes PUBLIC tiny-process-library::tiny-process-library common_path)
   target_compile_definitions(common_processes PUBLIC MENDER_USE_TINY_PROC_LIB=${MENDER_USE_TINY_PROC_LIB})
 endif()

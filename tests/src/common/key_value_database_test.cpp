@@ -12,8 +12,10 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/common.hpp>
 #include <common/key_value_database.hpp>
+
+#include <common/common.hpp>
+#include <common/config.h>
 
 #if MENDER_USE_LMDB
 #include <common/key_value_database_lmdb.hpp>

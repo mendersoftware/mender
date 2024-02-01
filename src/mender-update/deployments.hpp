@@ -15,7 +15,7 @@
 #ifndef MENDER_UPDATE_DEPLOYMENTS_HPP
 #define MENDER_UPDATE_DEPLOYMENTS_HPP
 
-#include <config.h>
+#include <common/config.h>
 
 #ifdef MENDER_LOG_BOOST
 #include <boost/log/sinks/sync_frontend.hpp>

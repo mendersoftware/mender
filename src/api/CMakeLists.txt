@@ -1,3 +1,5 @@
+project(mender-api)
+
 add_library(api_auth STATIC auth/auth.cpp)
 target_link_libraries(api_auth PUBLIC
   common_log

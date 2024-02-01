@@ -15,7 +15,7 @@
 #ifndef MENDER_LOG_HPP
 #define MENDER_LOG_HPP
 
-#include <config.h>
+#include <common/config.h>
 
 #ifdef MENDER_LOG_BOOST
 #include <boost/log/common.hpp>

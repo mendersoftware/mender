@@ -34,7 +34,6 @@ target_link_libraries(key_value_database_test PRIVATE
   main_test
   gmock
 )
-target_compile_definitions(key_value_database_test PRIVATE MENDER_USE_LMDB=${MENDER_USE_LMDB})
 # Use NO_PRETTY_VALUES to avoid very long byte strings in the output due to
 # parametrized tests that have binary objects as input.
 gtest_discover_tests(key_value_database_test NO_PRETTY_VALUES)

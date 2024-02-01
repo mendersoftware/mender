@@ -15,7 +15,7 @@
 #ifndef MENDER_COMMON_DBUS_HPP
 #define MENDER_COMMON_DBUS_HPP
 
-#include <config.h>
+#include <common/config.h>
 
 #include <functional>
 #include <memory>

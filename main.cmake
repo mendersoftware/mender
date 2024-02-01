@@ -27,24 +27,8 @@ if($CACHE{COVERAGE})
   set(CMAKE_CXX_FLAGS "--coverage $CACHE{CMAKE_CXX_FLAGS}")
 endif()
 
-include(cmake/boost.cmake)
-
-# TODO: proper platform detection
-set(PLATFORM linux_x86)
-
-set(MENDER_BUFSIZE 16384 CACHE STRING "Size of most internal block buffers. Can be reduced to conserve memory, but increases CPU usage.")
-
 option(BUILD_TESTS "Build the unit tests (Default: ON)" ON)
 option(ENABLE_CCACHE "Enable ccache support" OFF)
-option(MENDER_LOG_BOOST "Use Boost as the underlying logging library provider (Default: ON)" ON)
-option(MENDER_TAR_LIBARCHIVE "Use libarchive as the underlying tar library provider (Default: ON)" ON)
-option(MENDER_SHA_OPENSSL "Use OpenSSL as the underlying shasum provider (Default: ON)" ON)
-option(MENDER_CRYPTO_OPENSSL "Use OpenSSL as the underlying cryptography provider (Default: ON)" ON)
-option(MENDER_USE_SYSTEMD "Use systemd as the watchdog provider (Default: ON)" ON)
-
-option(MENDER_ARTIFACT_GZIP_COMPRESSION "Enable GZIP compression support when downloading and extracting Artifacts (Default: ON)" ON)
-option(MENDER_ARTIFACT_LZMA_COMPRESSION "Enable LZMA compression support when downloading and extracting Artifacts (Default: ON)" ON)
-option(MENDER_ARTIFACT_ZSTD_COMPRESSION "Enable Zstd compression support when downloading and extracting Artifacts (Default: ON)" ON)
 
 if(ENABLE_CCACHE)
   find_program(CCACHE ccache)
@@ -60,30 +44,6 @@ if(ENABLE_CCACHE)
     message(WARNING "ENABLE_CCACHE: ${ENABLE_CCACHE} but no ccache binary found!")
   endif()
 endif()
-
-
-if (${PLATFORM} STREQUAL linux_x86)
-  set(MENDER_USE_ASIO_LIBDBUS 1)
-  set(MENDER_USE_BOOST_ASIO 1)
-  set(MENDER_USE_BOOST_BEAST 1)
-  set(MENDER_USE_LMDB 1)
-  set(MENDER_USE_NLOHMANN_JSON 1)
-  set(MENDER_USE_TINY_PROC_LIB 1)
-  add_subdirectory(vendor/tiny-process-library)
-else()
-  set(MENDER_USE_ASIO_LIBDBUS 0)
-  set(MENDER_USE_BOOST_ASIO 0)
-  set(MENDER_USE_BOOST_BEAST 0)
-  set(MENDER_USE_LMDB 0)
-  set(MENDER_USE_NLOHMANN_JSON 0)
-  set(MENDER_USE_TINY_PROC_LIB 0)
-endif()
-
-add_subdirectory(vendor/expected)
-include_directories(${CMAKE_SOURCE_DIR}/vendor/expected/include)
-
-add_subdirectory(vendor/optional-lite)
-include_directories(${CMAKE_SOURCE_DIR}/vendor/optional-lite/include)
 
 include(cmake/build_mode.cmake)
 

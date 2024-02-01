@@ -1,3 +1,5 @@
+project(mender-artifact)
+
 add_subdirectory(sha)
 add_subdirectory(tar)
 add_subdirectory(v3/scripts)
@@ -29,5 +31,4 @@ target_link_libraries(artifact_parser PUBLIC
 target_compile_options(common_json PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 add_library(artifact STATIC artifact.cpp)
 target_link_libraries(artifact PUBLIC artifact_parser)
-target_include_directories(artifact PUBLIC ${MENDER_SRC_DIR}/artifact/)
-
+target_include_directories(artifact PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
