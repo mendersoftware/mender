@@ -156,3 +156,7 @@ if (MENDER_USE_SYSTEMD)
 else()
   target_sources(common_watchdog PRIVATE watchdog/noop/watchdog.cpp)
 endif()
+
+# Header-only.
+add_library(common_state_machine INTERFACE)
+target_link_libraries(common_state_machine INTERFACE common_watchdog)

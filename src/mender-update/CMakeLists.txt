@@ -89,7 +89,7 @@ target_link_libraries(mender_update_daemon PUBLIC
   mender_deployments
   mender_inventory
   artifact_scripts_executor
-  common_watchdog
+  common_state_machine
 )
 
 add_library(mender_update_cli STATIC
