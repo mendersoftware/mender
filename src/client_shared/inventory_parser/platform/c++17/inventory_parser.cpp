@@ -12,23 +12,25 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/inventory_parser.hpp>
+#include <client_shared/inventory_parser.hpp>
 
 #include <filesystem>
 
+#include <common/expected.hpp>
 #include <common/key_value_parser.hpp>
 #include <common/processes.hpp>
 #include <common/log.hpp>
 
 namespace mender {
-namespace common {
+namespace client_shared {
 namespace inventory_parser {
 
 using namespace std;
+namespace expected = mender::common::expected;
 namespace kvp = mender::common::key_value_parser;
 namespace procs = mender::common::processes;
 namespace log = mender::common::log;
-namespace err = mender::common::error;
+namespace error = mender::common::error;
 namespace fs = std::filesystem;
 
 kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
@@ -85,7 +87,7 @@ kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
 		if (any_success || !any_failure) {
 			return kvp::ExpectedKeyValuesMap(data);
 		} else {
-			err::Error error = MakeError(
+			error::Error error = MakeError(
 				kvp::KeyValueParserErrorCode::NoDataError,
 				"No data successfully read from inventory scripts in '" + generators_dir + "'");
 			return expected::unexpected(error);
@@ -97,5 +99,5 @@ kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
 }
 
 } // namespace inventory_parser
-} // namespace common
+} // namespace client_shared
 } // namespace mender

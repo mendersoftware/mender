@@ -30,7 +30,7 @@
 #include <boost/asio/ssl/stream.hpp>
 #endif // MENDER_USE_BOOST_BEAST
 
-#include <config.h>
+#include <common/config.h>
 
 #include <common/common.hpp>
 #include <common/error.hpp>
@@ -50,6 +50,7 @@ class BodyHandlerFunctor;
 } // namespace mender
 
 namespace mender {
+namespace common {
 namespace http {
 
 using namespace std;
@@ -828,6 +829,7 @@ expected::ExpectedString GetNoProxyStringFromEnvironment();
 bool HostNameMatchesNoProxy(const string &host, const string &no_proxy);
 
 } // namespace http
+} // namespace common
 } // namespace mender
 
 #endif // MENDER_COMMON_HTTP_HPP

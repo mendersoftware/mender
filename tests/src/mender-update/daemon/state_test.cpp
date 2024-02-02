@@ -23,7 +23,7 @@
 
 #include <api/client.hpp>
 #include <common/common.hpp>
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/key_value_database.hpp>
@@ -46,7 +46,7 @@ namespace fs = std::filesystem;
 
 namespace api = mender::api;
 namespace common = mender::common;
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace kvdb = mender::common::key_value_database;

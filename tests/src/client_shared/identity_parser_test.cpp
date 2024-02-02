@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/identity_parser.hpp>
+#include <client_shared/identity_parser.hpp>
 
 #include <sys/stat.h>
 #include <gtest/gtest.h>
@@ -20,7 +20,7 @@
 
 #include <common/key_value_parser.hpp>
 
-namespace id_p = mender::common::identity_parser;
+namespace id_p = mender::client_shared::identity_parser;
 namespace kv_p = mender::common::key_value_parser;
 
 using namespace std;

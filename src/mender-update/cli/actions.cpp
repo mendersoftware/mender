@@ -38,12 +38,13 @@ namespace update {
 namespace cli {
 
 namespace processes = mender::common::processes;
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace daemon = mender::update::daemon;
 namespace database = mender::common::key_value_database;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
+namespace http = mender::common::http;
 namespace kv_db = mender::common::key_value_database;
 namespace log = mender::common::log;
 namespace path = mender::common::path;

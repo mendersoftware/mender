@@ -15,7 +15,4 @@ target_sources(common_tar PRIVATE
   platform/libarchive/tar.cpp
   platform/libarchive/wrapper.cpp
 )
-target_include_directories(common_tar PUBLIC
-  ${MENDER_SRC_DIR}/artifact/tar/platform/
-)
-
+target_include_directories(common_tar PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/platform)

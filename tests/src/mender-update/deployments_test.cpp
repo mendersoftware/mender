@@ -21,7 +21,7 @@
 
 #include <api/client.hpp>
 #include <common/common.hpp>
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/events.hpp>
 #include <common/http.hpp>
 #include <common/io.hpp>
@@ -38,13 +38,13 @@ using mender::optional;
 
 namespace api = mender::api;
 namespace common = mender::common;
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace context = mender::update::context;
 namespace deps = mender::update::deployments;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
-namespace http = mender::http;
+namespace http = mender::common::http;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace mlog = mender::common::log;

@@ -19,7 +19,7 @@
 #include <functional>
 #include <string>
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/dbus.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
@@ -27,8 +27,8 @@
 #include <common/path.hpp>
 
 #include <api/api.hpp>
-#include <api/auth.hpp>
 
+#include <mender-auth/api/auth.hpp>
 #include <mender-auth/http_forwarder.hpp>
 
 namespace mender {
@@ -38,15 +38,16 @@ namespace ipc {
 
 using namespace std;
 
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace crypto = mender::common::crypto;
 namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
+namespace http = mender::common::http;
 namespace log = mender::common::log;
 namespace path = mender::common::path;
 
-namespace auth_client = mender::api::auth;
+namespace auth_client = mender::auth::api::auth;
 
 namespace http_forwarder = mender::auth::http_forwarder;
 

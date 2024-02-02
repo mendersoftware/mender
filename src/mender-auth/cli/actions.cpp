@@ -17,12 +17,12 @@
 #include <string>
 #include <memory>
 
-#include <api/auth.hpp>
+#include <mender-auth/api/auth.hpp>
 
 #include <mender-auth/context.hpp>
 #include <mender-auth/cli/keystore.hpp>
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/events.hpp>
 #include <common/log.hpp>
 
@@ -34,8 +34,9 @@ namespace cli {
 
 using namespace std;
 
-namespace auth_client = mender::api::auth;
+namespace auth_client = mender::auth::api::auth;
 namespace events = mender::common::events;
+namespace http = mender::common::http;
 namespace ipc = mender::auth::ipc;
 namespace log = mender::common::log;
 

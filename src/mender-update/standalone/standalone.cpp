@@ -30,7 +30,7 @@ namespace standalone {
 namespace common = mender::common;
 namespace events = mender::common::events;
 namespace executor = mender::artifact::scripts::executor;
-namespace http = mender::http;
+namespace http = mender::common::http;
 namespace io = mender::common::io;
 namespace log = mender::common::log;
 namespace path = mender::common::path;

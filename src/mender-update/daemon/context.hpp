@@ -44,7 +44,7 @@ using namespace std;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
-namespace http = mender::http;
+namespace http = mender::common::http;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace kv_db = mender::common::key_value_database;

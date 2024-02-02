@@ -15,7 +15,7 @@
 #ifndef MENDER_SHA_HPP
 #define MENDER_SHA_HPP
 
-#include <config.h>
+#include <common/config.h>
 
 #include <ctime>
 #include <iomanip>

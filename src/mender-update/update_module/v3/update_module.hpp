@@ -18,7 +18,7 @@
 #include <vector>
 #include <string>
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/optional.hpp>
@@ -37,7 +37,7 @@ namespace v3 {
 
 using namespace std;
 
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace context = mender::update::context;
 namespace error = mender::common::error;
 namespace events = mender::common::events;

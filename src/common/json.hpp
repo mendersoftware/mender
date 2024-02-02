@@ -15,7 +15,7 @@
 #ifndef MENDER_COMMON_JSON_HPP
 #define MENDER_COMMON_JSON_HPP
 
-#include <config.h>
+#include <common/config.h>
 
 #include <string>
 #include <map>

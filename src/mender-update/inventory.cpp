@@ -21,11 +21,11 @@
 #include <api/api.hpp>
 #include <api/client.hpp>
 #include <common/common.hpp>
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/http.hpp>
-#include <common/inventory_parser.hpp>
+#include <client_shared/inventory_parser.hpp>
 #include <common/io.hpp>
 #include <common/json.hpp>
 #include <common/log.hpp>
@@ -39,12 +39,12 @@ using namespace std;
 
 namespace api = mender::api;
 namespace common = mender::common;
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
-namespace http = mender::http;
-namespace inv_parser = mender::common::inventory_parser;
+namespace http = mender::common::http;
+namespace inv_parser = mender::client_shared::inventory_parser;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace log = mender::common::log;

@@ -21,7 +21,7 @@
 
 #include <gtest/gtest.h>
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/dbus.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
@@ -38,12 +38,12 @@
 
 using namespace std;
 
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
-namespace http = mender::http;
+namespace http = mender::common::http;
 namespace io = mender::common::io;
 namespace mlog = mender::common::log;
 namespace path = mender::common::path;

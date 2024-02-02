@@ -21,7 +21,7 @@
 #include <gmock/gmock.h>
 
 #include <common/common.hpp>
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/error.hpp>
 #include <common/path.hpp>
 #include <common/processes.hpp>
@@ -32,7 +32,7 @@
 
 namespace cli = mender::update::cli;
 namespace common = mender::common;
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace context = mender::update::context;
 namespace error = mender::common::error;
 namespace mtesting = mender::common::testing;

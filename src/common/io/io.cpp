@@ -14,7 +14,7 @@
 
 #include <common/io.hpp>
 
-#include <config.h>
+#include <common/config.h>
 
 #include <cerrno>
 #include <cstdint>

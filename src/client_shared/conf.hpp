@@ -20,19 +20,20 @@
 #include <unordered_set>
 #include <vector>
 
-#include <common/config_parser.hpp>
+#include <client_shared/config_parser.hpp>
 #include <common/http.hpp>
 #include <common/path.hpp>
 
 namespace mender {
-namespace common {
+namespace client_shared {
 namespace conf {
 
 using namespace std;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
-namespace cfg_parser = mender::common::config_parser;
-namespace http = mender::http;
+namespace cfg_parser = mender::client_shared::config_parser;
+namespace path = mender::common::path;
+namespace http = mender::common::http;
 
 extern const string kMenderVersion;
 
@@ -286,7 +287,7 @@ private:
 };
 
 } // namespace conf
-} // namespace common
+} // namespace client_shared
 } // namespace mender
 
 #endif // MENDER_COMMON_CONF_HPP

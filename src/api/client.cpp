@@ -24,7 +24,7 @@ namespace api {
 
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
-namespace http = mender::http;
+namespace http = mender::common::http;
 namespace log = mender::common::log;
 
 http::ExpectedOutgoingRequestPtr APIRequest::WithAuthData(const auth::AuthData &auth_data) {

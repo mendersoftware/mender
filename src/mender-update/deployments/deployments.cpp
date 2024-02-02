@@ -44,6 +44,7 @@ namespace context = mender::update::context;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
+namespace http = mender::common::http;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace log = mender::common::log;

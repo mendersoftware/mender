@@ -4,7 +4,7 @@ add_library(mender_auth_cli STATIC
   keystore.cpp
 )
 target_link_libraries(mender_auth_cli PUBLIC
-  common_conf
+  client_shared_conf
   common_crypto
   common_error
   common_json

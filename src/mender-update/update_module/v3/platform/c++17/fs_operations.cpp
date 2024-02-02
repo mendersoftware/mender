@@ -21,7 +21,7 @@
 
 #include <filesystem>
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/events_io.hpp>
 #include <common/io.hpp>
 #include <common/log.hpp>
@@ -38,7 +38,7 @@ using namespace std;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace context = mender::update::context;
 namespace io = mender::common::io;
 namespace log = mender::common::log;

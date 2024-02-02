@@ -19,7 +19,7 @@
 #include <unordered_map>
 
 #include <artifact/artifact.hpp>
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/key_value_database.hpp>
@@ -36,7 +36,7 @@ namespace update {
 namespace context {
 
 namespace artifact = mender::artifact;
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace kv_db = mender::common::key_value_database;

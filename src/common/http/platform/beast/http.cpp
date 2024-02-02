@@ -25,6 +25,7 @@
 #include <common/crypto.hpp>
 
 namespace mender {
+namespace common {
 namespace http {
 
 namespace common = mender::common;
@@ -1940,4 +1941,5 @@ void Server::RemoveStream(StreamPtr stream) {
 }
 
 } // namespace http
+} // namespace common
 } // namespace mender

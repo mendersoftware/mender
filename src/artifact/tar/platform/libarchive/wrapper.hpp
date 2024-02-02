@@ -15,7 +15,7 @@
 #ifndef MENDER_LIB_ARCHIVE_WRAPPER_HPP
 #define MENDER_LIB_ARCHIVE_WRAPPER_HPP
 
-#include <config.h>
+#include <common/config.h>
 
 #include <archive.h>
 #include <archive_entry.h>

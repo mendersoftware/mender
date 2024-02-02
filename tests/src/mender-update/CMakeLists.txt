@@ -20,6 +20,7 @@ add_dependencies(tests deployments_test)
 add_executable(inventory_test EXCLUDE_FROM_ALL inventory_test.cpp)
 target_link_libraries(inventory_test PUBLIC
   mender_inventory
+  client_shared_conf
   common_testing
   main_test
   gmock

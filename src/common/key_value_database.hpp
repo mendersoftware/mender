@@ -15,7 +15,7 @@
 #ifndef MENDER_COMMON_KEY_VALUE_DATABASE_HPP
 #define MENDER_COMMON_KEY_VALUE_DATABASE_HPP
 
-#include <config.h>
+#include <common/config.h>
 
 #include <functional>
 #include <string>

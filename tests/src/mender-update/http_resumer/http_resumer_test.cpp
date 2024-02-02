@@ -29,7 +29,7 @@ using namespace std;
 
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
-namespace http = mender::http;
+namespace http = mender::common::http;
 namespace http_resumer = mender::update::http_resumer;
 namespace io = mender::common::io;
 namespace common = mender::common;
@@ -42,6 +42,7 @@ using testing::StartsWith;
 using TestEventLoop = mender::common::testing::TestEventLoop;
 
 namespace mender {
+namespace common {
 namespace http {
 
 class BackupServer : public Server {
@@ -67,6 +68,7 @@ private:
 };
 
 } // namespace http
+} // namespace common
 } // namespace mender
 
 class RangeBodyOfXes : virtual public io::Reader {

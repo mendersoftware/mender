@@ -67,6 +67,7 @@ include_directories(${CMAKE_BINARY_DIR}/src ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOUR
 add_subdirectory(src/api)
 add_subdirectory(src/artifact)
 add_subdirectory(src/common)
+add_subdirectory(src/client_shared)
 add_subdirectory(src/mender-auth)
 add_subdirectory(src/mender-update)
 

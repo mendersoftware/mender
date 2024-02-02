@@ -19,8 +19,6 @@
 #include <string>
 #include <vector>
 
-#include <common/conf.hpp>
-#include <common/crypto.hpp>
 #include <common/dbus.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
@@ -34,49 +32,33 @@ namespace auth {
 
 using namespace std;
 
-namespace crypto = mender::common::crypto;
 namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 
-enum AuthClientErrorCode {
+enum AuthenticatorErrorCode {
 	NoError = 0,
-	SetupError,
-	RequestError,
-	ResponseError,
 	APIError,
 	UnauthorizedError,
 	AuthenticationError,
 };
 
-class AuthClientErrorCategoryClass : public std::error_category {
+class AuthenticatorErrorCategoryClass : public std::error_category {
 public:
 	const char *name() const noexcept override;
 	string message(int code) const override;
 };
-extern const AuthClientErrorCategoryClass AuthClientErrorCategory;
+extern const AuthenticatorErrorCategoryClass AuthenticatorErrorCategory;
 
-error::Error MakeError(AuthClientErrorCode code, const string &msg);
-
+error::Error MakeError(AuthenticatorErrorCode code, const string &msg);
 struct AuthData {
 	string server_url;
 	string token;
 };
 using ExpectedAuthData = expected::expected<AuthData, error::Error>;
 
-using APIResponse = ExpectedAuthData;
-using APIResponseHandler = function<void(APIResponse)>;
-
 using AuthenticatedAction = function<void(ExpectedAuthData)>;
-
-error::Error FetchJWTToken(
-	mender::http::Client &client,
-	const vector<string> &servers,
-	const crypto::Args &args,
-	const string &device_identity_script_path,
-	APIResponseHandler api_handler,
-	const string &tenant_token = "");
 
 class Authenticator {
 public:

@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 
 #include <string>
 // Need POSIX header for setenv.
@@ -27,7 +27,7 @@
 #include <common/path.hpp>
 #include <common/testing.hpp>
 
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace error = mender::common::error;
 namespace mlog = mender::common::log;
 namespace path = mender::common::path;

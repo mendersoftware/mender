@@ -15,14 +15,14 @@
 #ifndef MENDER_AUTH_CONTEXT_HPP
 #define MENDER_AUTH_CONTEXT_HPP
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/error.hpp>
 
 namespace mender {
 namespace auth {
 namespace context {
 
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace error = mender::common::error;
 
 using namespace std;

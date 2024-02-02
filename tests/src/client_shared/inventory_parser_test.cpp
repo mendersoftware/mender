@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/inventory_parser.hpp>
+#include <client_shared/inventory_parser.hpp>
 
 #include <sys/stat.h>
 #include <gtest/gtest.h>
@@ -22,7 +22,7 @@
 #include <common/log.hpp>
 #include <common/testing.hpp>
 
-namespace ivp = mender::common::inventory_parser;
+namespace ivp = mender::client_shared::inventory_parser;
 namespace kvp = mender::common::key_value_parser;
 
 using namespace std;

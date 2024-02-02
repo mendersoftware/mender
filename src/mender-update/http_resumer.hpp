@@ -35,7 +35,7 @@ namespace error = mender::common::error;
 namespace io = mender::common::io;
 namespace log = mender::common::log;
 namespace events = mender::common::events;
-namespace http = mender::http;
+namespace http = mender::common::http;
 
 enum class DownloadResumerActiveStatus { None, Inactive, Resuming };
 enum class DownloadResumerUserHandlersStatus {

@@ -21,7 +21,7 @@
 #include <mender-auth/context.hpp>
 #include <mender-auth/cli/keystore.hpp>
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/crypto.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
@@ -32,7 +32,7 @@ namespace cli {
 
 using namespace std;
 
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace context = mender::auth::context;
 namespace crypto = mender::common::crypto;
 namespace error = mender::common::error;

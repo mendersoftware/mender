@@ -16,7 +16,7 @@
 
 #include <iostream>
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 
@@ -24,7 +24,7 @@ namespace mender {
 namespace update {
 namespace cli {
 
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 
@@ -215,7 +215,7 @@ ExpectedActionPtr ParseUpdateArguments(
 static error::Error DoMain(
 	const vector<string> &args,
 	function<void(mender::update::context::MenderContext &ctx)> test_hook) {
-	mender::common::conf::MenderConfig config;
+	mender::client_shared::conf::MenderConfig config;
 
 	auto args_pos = config.ProcessCmdlineArgs(args.begin(), args.end(), cli_mender_update);
 	if (!args_pos) {
