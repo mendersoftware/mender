@@ -31,6 +31,13 @@ namespace mender {
 namespace common {
 namespace json {
 
+const string empty_input_error_message = "attempting to parse an empty input";
+
+static bool IsEmptyError(insensitive_json::parse_error &e) {
+	auto is_empty_error = string(e.what()).find(empty_input_error_message);
+	return is_empty_error != string::npos;
+}
+
 static error::Error GetErrorFromException(exception &e, const string &context_message) {
 	try {
 		// Trick to delegate the exception into the handlers below: Rethrow the exception
@@ -38,6 +45,10 @@ static error::Error GetErrorFromException(exception &e, const string &context_me
 		// clarity.
 		throw;
 	} catch (insensitive_json::parse_error &e) {
+		if (IsEmptyError(e)) {
+			return MakeError(
+				JsonErrorCode::EmptyError, context_message + ": " + "Empty input encountered");
+		}
 		return MakeError(JsonErrorCode::ParseError, context_message + ": " + e.what());
 	} catch (insensitive_json::type_error &e) {
 		return MakeError(JsonErrorCode::TypeError, context_message + ": " + e.what());

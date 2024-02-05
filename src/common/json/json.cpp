@@ -40,6 +40,8 @@ string JsonErrorCategoryClass::message(int code) const {
 		return "Index error";
 	case TypeError:
 		return "Type error";
+	case EmptyError:
+		return "Empty input error";
 	default:
 		return "Unknown";
 	}

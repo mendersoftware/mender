@@ -88,7 +88,7 @@ TEST(JsonStringTests, LoadFromInvalidString) {
 
 	ej = json::Load("");
 	EXPECT_FALSE(ej);
-	EXPECT_EQ(ej.error().code, expected_error.code);
+	EXPECT_EQ(ej.error().code, json::MakeError(json::JsonErrorCode::EmptyError, "").code);
 	EXPECT_THAT(ej.error().message, StartsWith("Failed to parse"));
 }
 
@@ -395,4 +395,12 @@ TEST(Json, TemplateGet) {
 		data.value().Get("stringlist").value().Get<vector<string>>(), (vector<string> {"a", "b"}));
 	EXPECT_EQ(
 		data.value().Get("map").value().Get<json::KeyValueMap>(), (json::KeyValueMap {{"a", "b"}}));
+}
+
+TEST(Json, ParseEmpty) {
+	auto data = json::Load("");
+
+	ASSERT_FALSE(data);
+
+	EXPECT_EQ(data.error().code, json::MakeError(json::JsonErrorCode::EmptyError, "").code);
 }

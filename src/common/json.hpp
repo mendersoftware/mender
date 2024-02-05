@@ -46,6 +46,7 @@ enum JsonErrorCode {
 	KeyError,
 	IndexError,
 	TypeError,
+	EmptyError,
 };
 
 class CaseInsensitiveLess {
