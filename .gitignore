@@ -60,5 +60,5 @@ build/
 *.cmake
 !main.cmake
 !/cmake/*.cmake
-/Testing
+Testing
 /install_manifest*.txt
