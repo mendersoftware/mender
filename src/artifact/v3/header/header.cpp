@@ -86,6 +86,10 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 	tok = lexer.Next();
 	vector<ArtifactScript> state_scripts {};
 	if (tok.type == token::Type::ArtifactScripts) {
+		if (conf.artifact_scripts_filesystem_path == "") {
+			return expected::unexpected(
+				parser_error::MakeError(parser_error::NoStateScriptsPathError, ""));
+		}
 		if (not path::FileExists(conf.artifact_scripts_filesystem_path)) {
 			log::Trace(
 				"Creating the Artifact script directory: " + conf.artifact_scripts_filesystem_path);

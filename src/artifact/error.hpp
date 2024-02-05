@@ -34,6 +34,7 @@ enum Code {
 	NoMorePayloadFilesError,
 	EOFError,
 	SignatureVerificationError,
+	NoStateScriptsPathError,
 };
 
 class ErrorCategoryClass : public std::error_category {
