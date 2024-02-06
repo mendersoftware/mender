@@ -2388,7 +2388,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"installing",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactInstall", "ArtifactFailure_Leave_00"},
 		},
 

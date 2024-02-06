@@ -60,8 +60,8 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 		ctx_.mender_context.GetConfig().paths.GetArtScriptsPath(),
 		ctx_.mender_context.GetConfig().paths.GetRootfsScriptsPath()),
 	runner_(ctx) {
-	runner_.AddStateMachine(main_states_);
 	runner_.AddStateMachine(deployment_tracking_.states_);
+	runner_.AddStateMachine(main_states_);
 
 	runner_.AttachToEventLoop(event_loop_);
 
