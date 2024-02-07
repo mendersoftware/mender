@@ -43,6 +43,8 @@ string ErrorCategoryClass::message(int code) const {
 		return "EOF error";
 	case SignatureVerificationError:
 		return "Signature verification Error";
+	case NoStateScriptsPathError:
+		return "Artifact has state scripts and no state scripts path has been specified";
 	}
 	assert(false);
 	return "Unknown";
