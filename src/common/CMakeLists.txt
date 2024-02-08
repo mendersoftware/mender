@@ -207,7 +207,10 @@ if (MENDER_USE_SYSTEMD)
     systemd
   )
 else()
-  target_sources(common_watchdog PRIVATE watchdog/noop/watchdog.cpp)
+  target_sources(common_watchdog PRIVATE watchdog/platform/noop/watchdog.cpp)
+  target_link_libraries(common_watchdog PUBLIC
+    common
+  )
 endif()
 
 # Header-only.
