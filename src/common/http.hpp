@@ -22,6 +22,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <common/config.h>
+
 #ifdef MENDER_USE_BOOST_BEAST
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
@@ -29,8 +31,6 @@
 #include <boost/asio/ssl/error.hpp>
 #include <boost/asio/ssl/stream.hpp>
 #endif // MENDER_USE_BOOST_BEAST
-
-#include <common/config.h>
 
 #include <common/common.hpp>
 #include <common/error.hpp>
