@@ -13,3 +13,6 @@
 [submodule "vendor/optional-lite"]
 	path = src/common/vendor/optional-lite
 	url = https://github.com/martinmoene/optional-lite.git
+[submodule "src/common/vendor/yaml-cpp"]
+	path = src/common/vendor/yaml-cpp
+	url = https://github.com/jbeder/yaml-cpp.git

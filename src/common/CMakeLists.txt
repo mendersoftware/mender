@@ -15,6 +15,7 @@ option(MENDER_USE_SYSTEMD "Use systemd as the watchdog provider (Default: ON)" O
 option(MENDER_ARTIFACT_GZIP_COMPRESSION "Enable GZIP compression support when downloading and extracting Artifacts (Default: ON)" ON)
 option(MENDER_ARTIFACT_LZMA_COMPRESSION "Enable LZMA compression support when downloading and extracting Artifacts (Default: ON)" ON)
 option(MENDER_ARTIFACT_ZSTD_COMPRESSION "Enable Zstd compression support when downloading and extracting Artifacts (Default: ON)" ON)
+option(MENDER_USE_YAML_CPP "Use Yaml CPP as the Yaml library provider (Default: OFF)" OFF)
 
 if (${PLATFORM} STREQUAL linux_x86)
   set(MENDER_USE_ASIO_LIBDBUS 1)
@@ -212,3 +213,11 @@ endif()
 # Header-only.
 add_library(common_state_machine INTERFACE)
 target_link_libraries(common_state_machine INTERFACE common_watchdog)
+
+
+if (MENDER_USE_YAML_CPP)
+  add_subdirectory(vendor/yaml-cpp)
+  add_library(common_yaml STATIC yaml/yaml.cpp yaml/platform/yaml-cpp/yaml.cpp)
+  target_link_libraries(common_yaml PUBLIC common common_io common_error yaml-cpp::yaml-cpp)
+  target_compile_options(common_yaml PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+endif()
