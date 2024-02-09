@@ -62,7 +62,7 @@ const vector<CliOption> common_global_options = {
 		.long_option = "data",
 		.short_option = "d",
 		.description = "Mender state data DIRECTORY path",
-		.default_value = default_paths.GetPathDataDir(),
+		.default_value = default_paths.GetDataStore(),
 		.parameter = "DIR",
 	},
 	CliOption {
