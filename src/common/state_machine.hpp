@@ -143,6 +143,8 @@ public:
 		// We don't actually own the object, we are just keeping a pointer to it. Use null
 		// deleter.
 		event_loop_.reset(&event_loop, [](events::EventLoop *loop) {});
+
+		PostToEventLoop();
 	}
 
 	void DetachFromEventLoop() {
