@@ -70,7 +70,7 @@ TEST(CliTest, NoAction) {
 
 	{
 		mtesting::RedirectStreamOutputs redirect_output;
-		vector<string> args {"--data", tmpdir.Path()};
+		vector<string> args {"--datastore", tmpdir.Path()};
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
@@ -90,7 +90,7 @@ TEST(CliTest, ShowArtifact) {
 
 	{
 		mtesting::RedirectStreamOutputs redirect_output;
-		vector<string> args {"--data", tmpdir.Path(), "show-artifact"};
+		vector<string> args {"--datastore", tmpdir.Path(), "show-artifact"};
 		EXPECT_EQ(cli::Main(args), 0);
 		EXPECT_EQ(redirect_output.GetCout(), "unknown\n");
 	}
@@ -102,7 +102,7 @@ TEST(CliTest, ShowArtifact) {
 
 	{
 		mtesting::RedirectStreamOutputs redirect_output;
-		vector<string> args {"--data", tmpdir.Path(), "show-artifact"};
+		vector<string> args {"--datastore", tmpdir.Path(), "show-artifact"};
 		EXPECT_EQ(cli::Main(args), 0);
 		EXPECT_EQ(redirect_output.GetCout(), "my-name\n");
 	}
@@ -116,7 +116,7 @@ TEST(CliTest, ShowArtifactErrors) {
 
 	{
 		mtesting::RedirectStreamOutputs redirect_output;
-		vector<string> args {"--data", tmpdir.Path(), "show-artifact", "--bogus-option"};
+		vector<string> args {"--datastore", tmpdir.Path(), "show-artifact", "--bogus-option"};
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
@@ -125,7 +125,7 @@ TEST(CliTest, ShowArtifactErrors) {
 
 	{
 		mtesting::RedirectStreamOutputs redirect_output;
-		vector<string> args {"--data", tmpdir.Path(), "show-artifact", "bogus-argument"};
+		vector<string> args {"--datastore", tmpdir.Path(), "show-artifact", "bogus-argument"};
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
@@ -145,7 +145,7 @@ TEST(CliTest, ShowProvides) {
 
 	{
 		mtesting::RedirectStreamOutputs redirect_output;
-		vector<string> args {"--data", tmpdir.Path(), "show-provides"};
+		vector<string> args {"--datastore", tmpdir.Path(), "show-provides"};
 		EXPECT_EQ(cli::Main(args), 0);
 		EXPECT_EQ(redirect_output.GetCout(), R"(artifact_name=unknown
 )");
@@ -154,7 +154,7 @@ TEST(CliTest, ShowProvides) {
 	auto verify = [&](const string &content) {
 		{
 			mtesting::RedirectStreamOutputs redirect_output;
-			vector<string> args {"--data", tmpdir.Path(), "show-provides"};
+			vector<string> args {"--datastore", tmpdir.Path(), "show-provides"};
 			EXPECT_EQ(cli::Main(args), 0);
 			EXPECT_EQ(redirect_output.GetCout(), content);
 		}
@@ -237,7 +237,7 @@ TEST(CliTest, ShowProvidesErrors) {
 
 	{
 		mtesting::RedirectStreamOutputs redirect_output;
-		vector<string> args {"--data", tmpdir.Path(), "show-provides", "--bogus-option"};
+		vector<string> args {"--datastore", tmpdir.Path(), "show-provides", "--bogus-option"};
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
@@ -246,7 +246,7 @@ TEST(CliTest, ShowProvidesErrors) {
 
 	{
 		mtesting::RedirectStreamOutputs redirect_output;
-		vector<string> args {"--data", tmpdir.Path(), "show-provides", "bogus-argument"};
+		vector<string> args {"--datastore", tmpdir.Path(), "show-provides", "bogus-argument"};
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
@@ -383,7 +383,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir,
 			"install",
 			artifact,
@@ -399,7 +399,7 @@ exit 0
 
 bool VerifyProvides(const string &tmpdir, const string &expected) {
 	vector<string> args {
-		"--data",
+		"--datastore",
 		tmpdir,
 		"show-provides",
 	};
@@ -441,7 +441,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -496,7 +496,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -543,7 +543,7 @@ artifact_name=test
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -597,7 +597,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -659,7 +659,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -687,7 +687,7 @@ SupportsRollback
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"commit",
 		};
@@ -745,7 +745,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -773,7 +773,7 @@ SupportsRollback
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"rollback",
 		};
@@ -835,7 +835,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -901,7 +901,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -964,7 +964,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -1023,7 +1023,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -1061,7 +1061,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -1091,7 +1091,7 @@ TEST(CliTest, CommitNoExistingUpdate) {
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"commit",
 		};
@@ -1142,7 +1142,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -1179,7 +1179,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"rollback",
 		};
@@ -1233,7 +1233,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -1292,7 +1292,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -1354,7 +1354,7 @@ exit 0
 )"));
 
 	vector<string> args {
-		"--data",
+		"--datastore",
 		tmpdir.Path(),
 		"install",
 		artifact,
@@ -1433,7 +1433,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -1461,7 +1461,7 @@ SupportsRollback
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"rollback",
 		};
@@ -1497,7 +1497,7 @@ artifact_name=test_INCONSISTENT
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"rollback",
 		};
@@ -1538,7 +1538,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -1605,7 +1605,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -1695,7 +1695,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -1723,7 +1723,7 @@ SupportsRollback
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"commit",
 		};
@@ -1780,7 +1780,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -1815,7 +1815,7 @@ SupportsRollback
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"commit",
 		};
@@ -1876,7 +1876,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -1911,7 +1911,7 @@ SupportsRollback
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"rollback",
 		};
@@ -1952,7 +1952,7 @@ TEST(CliTest, InstallBootstrapArtifact) {
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			artifact,
@@ -1994,7 +1994,7 @@ exit 0
 
 	{
 		vector<string> args {
-			"--data",
+			"--datastore",
 			tmpdir.Path(),
 			"install",
 			file_server.GetBaseUrl() + "/" + path::BaseName(artifact),
@@ -2639,6 +2639,9 @@ exit 0
 
 	{
 		vector<string> args {
+			// `--data` is deprecated in favor of `--datastore`, which we use everywhere
+			// else. Leave one instance here, just to keep coverage of this old option
+			// as well.
 			"--data",
 			tmpdir_path,
 			"install",
@@ -2653,7 +2656,7 @@ exit 0
 	if (common::StartsWith<string>(GetParam().case_name, "rollback")) {
 		{
 			vector<string> args {
-				"--data",
+				"--datastore",
 				tmpdir.Path(),
 				"rollback",
 			};

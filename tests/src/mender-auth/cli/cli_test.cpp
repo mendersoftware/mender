@@ -62,7 +62,7 @@ TEST(CliTest, InvalidAction) {
 TEST(CliTest, BootstrapActionGenerateKey) {
 	mtesting::TemporaryDirectory tmpdir;
 
-	vector<string> args = {"--data", tmpdir.Path(), "bootstrap"};
+	vector<string> args = {"--datastore", tmpdir.Path(), "bootstrap"};
 	EXPECT_EQ(cli::Main(args), 0);
 
 	string key_path = path::Join(tmpdir.Path(), "mender-agent.pem");
@@ -87,13 +87,13 @@ TEST(CliTest, BootstrapActionExistingKey) {
 	sample_key.close();
 	test_key.close();
 
-	vector<string> args = {"--data", tmpdir.Path(), "bootstrap"};
+	vector<string> args = {"--datastore", tmpdir.Path(), "bootstrap"};
 	EXPECT_EQ(cli::Main(args), 0);
 
 	EXPECT_TRUE(mtesting::FilesEqual("./sample.key", key_path));
 
 	// Now force new key with --forcebootstrap
-	args = {"--data", tmpdir.Path(), "bootstrap", "--forcebootstrap"};
+	args = {"--datastore", tmpdir.Path(), "bootstrap", "--forcebootstrap"};
 	EXPECT_EQ(cli::Main(args), 0);
 
 	EXPECT_TRUE(mtesting::FileContains(key_path, "-----BEGIN RSA PRIVATE KEY-----"));
@@ -151,7 +151,7 @@ echo ID=ABC
 			error::NoError);
 	}
 
-	vector<string> args = {"--data", tmpdir.Path(), "bootstrap"};
+	vector<string> args = {"--datastore", tmpdir.Path(), "bootstrap"};
 	EXPECT_EQ(
 		cli::Main(
 			args,

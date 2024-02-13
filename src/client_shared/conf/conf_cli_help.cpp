@@ -60,6 +60,11 @@ const vector<CliOption> common_global_options = {
 	},
 	CliOption {
 		.long_option = "data",
+		.description = "Deprecated; alias for --datastore",
+		.parameter = "DIR",
+	},
+	CliOption {
+		.long_option = "datastore",
 		.short_option = "d",
 		.description = "Mender state data DIRECTORY path",
 		.default_value = default_paths.GetDataStore(),

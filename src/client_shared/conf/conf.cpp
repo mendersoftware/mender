@@ -168,7 +168,9 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 		} else if ((opt_val.option == "--fallback-config") || (opt_val.option == "-b")) {
 			paths.SetFallbackConfFile(opt_val.value);
 			explicit_fallback_config_path = true;
-		} else if ((opt_val.option == "--data") || (opt_val.option == "-d")) {
+		} else if (
+			(opt_val.option == "--data") || (opt_val.option == "--datastore")
+			|| (opt_val.option == "-d")) {
 			paths.SetDataStore(opt_val.value);
 		} else if ((opt_val.option == "--log-file") || (opt_val.option == "-L")) {
 			log_file = opt_val.value;
