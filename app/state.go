@@ -731,6 +731,16 @@ func (uf *updateFetchState) Update() *datastore.UpdateInfo {
 	return &uf.update
 }
 
+func (uf *updateFetchState) HandleError(
+	ctx *StateContext,
+	c Controller,
+	err menderError,
+) (State, bool) {
+	log.Error(err.Error())
+
+	return NewUpdateErrorState(err, uf.Update()), false
+}
+
 func (uf *updateFetchState) PermitLooping() bool {
 	return false
 }

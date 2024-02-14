@@ -1331,6 +1331,32 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 	},
 
 	{
+		caseName: "Error in Download state, with rollback",
+		stateChain: []State{
+			&updateFetchState{},
+			&updateStoreState{},
+			&updateCleanupState{},
+			&updateStatusReportState{},
+			&idleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"Download_Error_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"failure",
+		},
+		TestModuleAttr: tests.TestModuleAttr{
+			ErrorStates:      []string{"Download"},
+			RollbackDisabled: false,
+		},
+		installOutcome: tests.SuccessfulRollback,
+	},
+
+	{
 		caseName: "Killed in Download state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2583,14 +2609,16 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		caseName: "Error in Download_Enter_00 state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
-			&errorState{},
+			&updateErrorState{},
+			&updateCleanupState{},
+			&updateStatusReportState{},
 			&idleState{},
 		},
 		artifactStateChain: []string{
 			"Download_Enter_00",
 			"Download_Error_00",
 		},
-		reportsLog: []string{""},
+		reportsLog: []string{"failure"},
 		TestModuleAttr: tests.TestModuleAttr{
 			ErrorStates:      []string{"Download_Enter_00"},
 			RollbackDisabled: true,
