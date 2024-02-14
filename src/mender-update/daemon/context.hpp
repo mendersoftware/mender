@@ -169,6 +169,8 @@ public:
 	shared_ptr<deployments::DeploymentAPI> deployment_client;
 	shared_ptr<inventory::InventoryAPI> inventory_client;
 
+	bool has_submitted_inventory {false};
+
 	struct {
 		unique_ptr<StateData> state_data;
 		io::ReaderPtr artifact_reader;
