@@ -364,6 +364,21 @@ void AsyncCopy(
 	}
 }
 
+ExpectedSize ByteReader::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
+	assert(end > start);
+	Vsize max_read {emitter_->size() - bytes_read_};
+	Vsize iterator_size {static_cast<Vsize>(end - start)};
+	Vsize bytes_to_read {min(iterator_size, max_read)};
+	auto it = next(emitter_->begin(), bytes_read_);
+	std::copy_n(it, bytes_to_read, start);
+	bytes_read_ += bytes_to_read;
+	return bytes_to_read;
+}
+
+void ByteReader::Rewind() {
+	bytes_read_ = 0;
+}
+
 void ByteWriter::SetUnlimited(bool enabled) {
 	unlimited_ = enabled;
 }
@@ -571,6 +586,45 @@ error::Error FileReader::Rewind() {
 			"Failed to seek to the beginning of the stream");
 	}
 	return error::NoError;
+}
+
+ExpectedSize BufferedReader::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
+	if (rewind_done_ && !rewind_consumed_) {
+		// Read from the buffer
+		auto ex_bytes_read = buffer_reader_.Read(start, end);
+		if (!ex_bytes_read) {
+			return ex_bytes_read;
+		}
+
+		Vsize bytes_read_buffer = ex_bytes_read.value();
+		if (bytes_read_buffer > 0) {
+			return bytes_read_buffer;
+		}
+		// When EOF, continue with reading from the wrapped reader
+		rewind_consumed_ = true;
+	}
+
+	// Read from the wrapped reader and save copy into the buffer
+	auto bytes_read = wrapped_reader_.Read(start, end);
+	if (!bytes_read) {
+		return bytes_read;
+	}
+	if (!stop_done_) {
+		buffer_.insert(buffer_.end(), start, end);
+	} else if (rewind_consumed_) {
+		buffer_.clear();
+	}
+	return bytes_read;
+}
+
+void BufferedReader::Rewind() {
+	buffer_reader_.Rewind();
+	rewind_done_ = true;
+	rewind_consumed_ = false;
+}
+
+void BufferedReader::StopBuffering() {
+	stop_done_ = true;
 }
 
 } // namespace io

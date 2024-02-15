@@ -288,6 +288,47 @@ TEST(IO, TestByteWriter) {
 	EXPECT_EQ(some_fn(), true);
 }
 
+TEST(IO, TestByteReader) {
+	vector<uint8_t> vec_write {};
+	auto byte_writer = io::ByteWriter(vec_write);
+	byte_writer.SetUnlimited(true);
+
+	vector<uint8_t> vec_read {1, 2, 3, 4, 5, 6, 7, 14};
+	auto byte_reader = io::ByteReader(vec_read);
+
+	auto err = Copy(byte_writer, byte_reader);
+	ASSERT_EQ(error::NoError, err);
+	EXPECT_EQ(vec_write, (vector<uint8_t> {1, 2, 3, 4, 5, 6, 7, 14}));
+
+	vector<uint8_t> vec_write_partial(3);
+	auto byte_reader2 = io::ByteReader(vec_read);
+
+	auto ex_bytes_read = byte_reader2.Read(vec_write_partial.begin(), vec_write_partial.end());
+	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
+	ASSERT_EQ(3, ex_bytes_read.value());
+	EXPECT_EQ(vec_write_partial, (vector<uint8_t> {1, 2, 3}));
+
+	ex_bytes_read = byte_reader2.Read(vec_write_partial.begin(), vec_write_partial.end());
+	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
+	ASSERT_EQ(3, ex_bytes_read.value());
+	EXPECT_EQ(vec_write_partial, (vector<uint8_t> {4, 5, 6}));
+
+	ex_bytes_read = byte_reader2.Read(vec_write_partial.begin(), vec_write_partial.end());
+	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
+	ASSERT_EQ(2, ex_bytes_read.value());
+	vec_write_partial.resize(2);
+	EXPECT_EQ(vec_write_partial, (vector<uint8_t> {7, 14}));
+
+	vector<uint8_t> vec_write2 {};
+	auto byte_writer2 = io::ByteWriter(vec_write2);
+	byte_writer2.SetUnlimited(true);
+
+	byte_reader2.Rewind();
+	err = Copy(byte_writer2, byte_reader2);
+	ASSERT_EQ(error::NoError, err);
+	EXPECT_EQ(vec_write2, (vector<uint8_t> {1, 2, 3, 4, 5, 6, 7, 14}));
+}
+
 class StreamIOTests : public testing::Test {
 protected:
 	TemporaryDirectory tmp_dir;
@@ -365,4 +406,76 @@ TEST_F(StreamIOTests, WriteStringIntoClosedOfstream) {
 
 	auto err = io::WriteStringIntoOfstream(os, "some data");
 	EXPECT_NE(err, error::NoError);
+}
+
+TEST(IO, TestBufferedReaderRewind) {
+	auto string_reader = io::StringReader("foobarbaz");
+	auto buffered_reader = io::BufferedReader(string_reader);
+
+	vector<uint8_t> vec_write_partial(3);
+
+	auto ex_bytes_read = buffered_reader.Read(vec_write_partial.begin(), vec_write_partial.end());
+	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
+	ASSERT_EQ(3, ex_bytes_read.value());
+	EXPECT_EQ(vec_write_partial, (vector<uint8_t> {'f', 'o', 'o'}));
+
+	vector<uint8_t> vec_write_full(9);
+	buffered_reader.Rewind();
+	ex_bytes_read = buffered_reader.Read(vec_write_full.begin(), vec_write_full.end());
+	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
+	ASSERT_EQ(3, ex_bytes_read.value());
+	ex_bytes_read = buffered_reader.Read(vec_write_full.begin() + 3, vec_write_full.end());
+	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
+	ASSERT_EQ(6, ex_bytes_read.value());
+	EXPECT_EQ(vec_write_full, (vector<uint8_t> {'f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'z'}));
+
+	buffered_reader.Rewind();
+	ex_bytes_read = buffered_reader.Read(vec_write_full.begin(), vec_write_full.end());
+	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
+	ASSERT_EQ(9, ex_bytes_read.value());
+	EXPECT_EQ(vec_write_full, (vector<uint8_t> {'f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'z'}));
+}
+
+TEST(IO, TestBufferedReaderStopBuffering) {
+	class TestBufferedReader : public io::BufferedReader {
+	public:
+		TestBufferedReader(io::Reader &reader) :
+			BufferedReader {reader} {};
+		size_t GetBufferSize() const {
+			return buffer_.size();
+		};
+	};
+
+	auto string_reader2 = io::StringReader("foobarbaz");
+	auto buffered_reader2 = TestBufferedReader(string_reader2);
+	vector<uint8_t> vec_write_full(9);
+
+	auto ex_bytes_read = buffered_reader2.Read(vec_write_full.begin(), vec_write_full.begin() + 3);
+	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
+	ASSERT_EQ(3, ex_bytes_read.value());
+	EXPECT_EQ(
+		(vector<uint8_t> {vec_write_full.begin(), vec_write_full.begin() + 3}),
+		(vector<uint8_t> {'f', 'o', 'o'}));
+	ASSERT_EQ(3, buffered_reader2.GetBufferSize());
+
+	buffered_reader2.StopBuffering();
+	ASSERT_EQ(3, buffered_reader2.GetBufferSize());
+
+	// Read one byte, the buffer shall not increase
+	ex_bytes_read = buffered_reader2.Read(vec_write_full.begin(), vec_write_full.begin() + 1);
+	ASSERT_EQ(1, ex_bytes_read.value());
+	ASSERT_EQ(3, buffered_reader2.GetBufferSize());
+	// Read rest, the buffer shall not increase
+	ex_bytes_read = buffered_reader2.Read(vec_write_full.begin() + 1, vec_write_full.end());
+	ASSERT_EQ(5, ex_bytes_read.value());
+	ASSERT_EQ(3, buffered_reader2.GetBufferSize());
+	vec_write_full.resize(6);
+	EXPECT_EQ(vec_write_full, (vector<uint8_t> {'b', 'a', 'r', 'b', 'a', 'z'}));
+	ASSERT_EQ(3, buffered_reader2.GetBufferSize());
+	// Rewind and read, the buffer shall be cleared
+	buffered_reader2.Rewind();
+	auto discard_writer = io::Discard {};
+	auto err = Copy(discard_writer, buffered_reader2);
+	EXPECT_EQ(error::NoError, err);
+	ASSERT_EQ(0, buffered_reader2.GetBufferSize());
 }
