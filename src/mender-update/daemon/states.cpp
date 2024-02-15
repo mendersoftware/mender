@@ -106,11 +106,14 @@ void IdleState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 void SubmitInventoryState::DoSubmitInventory(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Submitting inventory");
 
-	auto handler = [&poster](error::Error err) {
+	auto handler = [&ctx, &poster](error::Error err) {
 		if (err != error::NoError) {
 			log::Error("Failed to submit inventory: " + err.String());
+			poster.PostEvent(StateEvent::Failure);
+			return;
 		}
-		poster.PostEvent((err == error::NoError) ? StateEvent::Success : StateEvent::Failure);
+		ctx.has_submitted_inventory = true;
+		poster.PostEvent(StateEvent::Success);
 	};
 
 	auto err = ctx.inventory_client->PushData(
@@ -178,6 +181,17 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 			} else if (!response.value()) {
 				log::Info("No update available");
 				poster.PostEvent(StateEvent::NothingToDo);
+
+				if (not ctx.has_submitted_inventory) {
+					// If we have not submitted inventory successfully at least
+					// once, schedule this after receiving a successful response
+					// with no update. This enables inventory to be submitted
+					// immediately after the device has been accepted. If there
+					// is an update available, an inventory update will be
+					// scheduled at the end of it unconditionally.
+					poster.PostEvent(StateEvent::InventoryPollingTriggered);
+				}
+
 				return;
 			}
 
