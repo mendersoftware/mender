@@ -51,24 +51,26 @@ tl::unexpected<V> unexpected(V &v) {
 }
 #endif
 
-using ExpectedString = expected<string, error::Error>;
-using ExpectedBytes = expected<vector<uint8_t>, error::Error>;
-using ExpectedInt = expected<int, error::Error>;
-using ExpectedInt64 = expected<int64_t, error::Error>;
-using ExpectedDouble = expected<double, error::Error>;
-using ExpectedBool = expected<bool, error::Error>;
-using ExpectedSize = expected<size_t, error::Error>;
-using ExpectedSize = expected<size_t, error::Error>;
-using ExpectedBool = expected<bool, error::Error>;
-using ExpectedLong = expected<long, error::Error>;
-using ExpectedLongLong = expected<long long, error::Error>;
-using ExpectedStringVector = expected<vector<string>, error::Error>;
+template <typename T>
+using Expected = expected<T, error::Error>;
+
+using ExpectedString = Expected<string>;
+using ExpectedBytes = Expected<vector<uint8_t>>;
+using ExpectedInt = Expected<int>;
+using ExpectedInt64 = Expected<int64_t>;
+using ExpectedDouble = Expected<double>;
+using ExpectedBool = Expected<bool>;
+using ExpectedSize = Expected<size_t>;
+using ExpectedBool = Expected<bool>;
+using ExpectedLong = Expected<long>;
+using ExpectedLongLong = Expected<long long>;
+using ExpectedStringVector = Expected<vector<string>>;
 
 template <typename T>
-using ExpectedVector = expected<vector<T>, error::Error>;
+using ExpectedVector = Expected<vector<T>>;
 
 template <typename T>
-using ExpectedUnorderedSet = expected<unordered_set<T>, error::Error>;
+using ExpectedUnorderedSet = Expected<unordered_set<T>>;
 
 } // namespace expected
 } // namespace common
