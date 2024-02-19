@@ -17,6 +17,7 @@
 
 #include <memory>
 #include <vector>
+#include <unordered_map>
 
 #include <boost/asio.hpp>
 
@@ -139,6 +140,62 @@ private:
 	EventLoop &event_loop_;
 
 	mio::AsyncReaderPtr reader_;
+};
+
+class TeeReader;
+using TeeReaderPtr = shared_ptr<TeeReader>;
+
+class TeeReader : public enable_shared_from_this<TeeReader> {
+public:
+	class TeeReaderLeaf;
+	using TeeReaderLeafPtr = shared_ptr<TeeReaderLeaf>;
+
+private:
+	mio::AsyncReader &source_reader_;
+
+	struct TeeReaderRequestedRead {
+		vector<uint8_t>::iterator start;
+		vector<uint8_t>::iterator end;
+		mio::AsyncIoHandler handler;
+	};
+
+	std::unordered_map<TeeReaderLeafPtr, TeeReaderRequestedRead> leaf_readers_;
+
+	size_t ready_to_read {0};
+
+	void CallAllHandlers(mio::ExpectedSize);
+
+public:
+	TeeReader(mio::AsyncReader &source) :
+		source_reader_ {source} {};
+
+	TeeReaderLeafPtr MakeAsyncReader();
+
+	error::Error ReadyToAsyncRead(
+		TeeReaderLeafPtr leaf_reader,
+		vector<uint8_t>::iterator start,
+		vector<uint8_t>::iterator end,
+		mio::AsyncIoHandler handler);
+
+	void DoAsyncRead();
+
+	class TeeReaderLeaf :
+		virtual public mio::AsyncReader,
+		public enable_shared_from_this<TeeReaderLeaf> {
+	private:
+		TeeReaderPtr tee_reader_;
+
+	public:
+		TeeReaderLeaf(TeeReaderPtr tee_reader) :
+			tee_reader_ {tee_reader} {};
+
+		error::Error AsyncRead(
+			vector<uint8_t>::iterator start,
+			vector<uint8_t>::iterator end,
+			mio::AsyncIoHandler handler) override;
+
+		void Cancel() override {};
+	};
 };
 
 } // namespace io

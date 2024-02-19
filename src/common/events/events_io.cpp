@@ -137,6 +137,87 @@ mio::ExpectedSize ReaderFromAsyncReader::Read(
 	return read;
 }
 
+TeeReader::TeeReaderLeafPtr TeeReader::MakeAsyncReader() {
+	auto reader = make_shared<TeeReaderLeaf>(shared_from_this());
+	leaf_readers_.insert({reader, TeeReaderRequestedRead {}});
+	return reader;
+}
+
+error::Error TeeReader::ReadyToAsyncRead(
+	TeeReader::TeeReaderLeafPtr leaf_reader,
+	vector<uint8_t>::iterator start,
+	vector<uint8_t>::iterator end,
+	mio::AsyncIoHandler handler) {
+	// The reader must exist in the internal map.
+	auto found = leaf_readers_.find(leaf_reader);
+	AssertOrReturnError(found != leaf_readers_.end());
+
+	leaf_readers_[leaf_reader].start = start;
+	leaf_readers_[leaf_reader].end = end;
+	leaf_readers_[leaf_reader].handler = handler;
+
+	if (++ready_to_read == leaf_readers_.size()) {
+		DoAsyncRead();
+		ready_to_read = 0;
+	}
+
+	return error::NoError;
+}
+
+void TeeReader::CallAllHandlers(mio::ExpectedSize result) {
+	// Makes a copy of the handlers and then calls them sequentially
+	vector<mio::AsyncIoHandler> handlers;
+	for (const auto &it : leaf_readers_) {
+		handlers.push_back(it.second.handler);
+	}
+	for (const auto &h : handlers) {
+		h(result);
+	}
+}
+
+void TeeReader::DoAsyncRead() {
+	auto handler = [this](mio::ExpectedSize result) {
+		if (!result) {
+			CallAllHandlers(result);
+			return;
+		};
+
+		auto start_iterator = leaf_readers_.begin()->second.start;
+		auto read_bytes = result.value();
+		for_each(
+			std::next(leaf_readers_.begin()),
+			leaf_readers_.end(),
+			[start_iterator,
+			 read_bytes](const std::pair<TeeReaderLeafPtr, TeeReaderRequestedRead> r) {
+				std::copy_n(start_iterator, read_bytes, r.second.start);
+			});
+
+		CallAllHandlers(result);
+	};
+
+	auto min_read = std::min_element(
+		leaf_readers_.cbegin(),
+		leaf_readers_.cend(),
+		[](const std::pair<TeeReaderLeafPtr, TeeReaderRequestedRead> r1,
+		   std::pair<TeeReaderLeafPtr, TeeReaderRequestedRead> r2) {
+			return (r1.second.end - r1.second.start) < (r2.second.end - r2.second.start);
+		});
+	auto bytes_to_read = min_read->second.end - min_read->second.start;
+
+	auto err = source_reader_.AsyncRead(
+		leaf_readers_.begin()->second.start,
+		leaf_readers_.begin()->second.start + bytes_to_read,
+		handler);
+	if (err != error::NoError) {
+		handler(expected::unexpected(err));
+	}
+}
+
+error::Error TeeReader::TeeReaderLeaf::AsyncRead(
+	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, mio::AsyncIoHandler handler) {
+	return tee_reader_->ReadyToAsyncRead(shared_from_this(), start, end, handler);
+}
+
 } // namespace io
 } // namespace events
 } // namespace common
