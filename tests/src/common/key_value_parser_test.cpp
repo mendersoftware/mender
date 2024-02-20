@@ -28,6 +28,40 @@ using namespace std;
 TEST(KeyValueParserTests, ValidDistinctItems) {
 	vector<string> items = {"key1=value1", "key2=value2", "key3=value3", "key4="};
 
+	kvp::ExpectedKeyValueMap ret = kvp::ParseKeyValueMap(items);
+	ASSERT_TRUE(ret);
+
+	kvp::KeyValueMap ret_map = ret.value();
+	EXPECT_EQ(ret_map.size(), 4);
+	EXPECT_EQ(ret_map["key1"], "value1");
+	EXPECT_EQ(ret_map["key2"], "value2");
+	EXPECT_EQ(ret_map["key3"], "value3");
+	EXPECT_EQ(ret_map["key4"], "");
+
+	items = {"key1~value1", "key2~value2", "key3~value3", "key4~"};
+
+	ret = kvp::ParseKeyValueMap(items, '~');
+	ASSERT_TRUE(ret);
+
+	ret_map = ret.value();
+	EXPECT_EQ(ret_map.size(), 4);
+	EXPECT_EQ(ret_map["key1"], "value1");
+	EXPECT_EQ(ret_map["key2"], "value2");
+	EXPECT_EQ(ret_map["key3"], "value3");
+	EXPECT_EQ(ret_map["key4"], "");
+}
+
+TEST(KeyValueParserTests, InvalidMultiItems) {
+	vector<string> items = {"key1=value1", "key2=value2", "key3=value3", "key1=value11"};
+
+	kvp::ExpectedKeyValueMap ret = kvp::ParseKeyValueMap(items);
+	ASSERT_FALSE(ret);
+	EXPECT_EQ(ret.error().code, kvp::MakeError(kvp::InvalidDataError, "").code);
+}
+
+TEST(KeyValuesParserTests, ValidDistinctItems) {
+	vector<string> items = {"key1=value1", "key2=value2", "key3=value3", "key4="};
+
 	kvp::ExpectedKeyValuesMap ret = kvp::ParseKeyValues(items);
 	ASSERT_TRUE(ret);
 
@@ -61,7 +95,7 @@ TEST(KeyValueParserTests, ValidDistinctItems) {
 	EXPECT_EQ(ret_map["key4"], vector<string> {""});
 }
 
-TEST(KeyValueParserTests, ValidMultiItems) {
+TEST(KeyValuesParserTests, ValidMultiItems) {
 	vector<string> items = {
 		"key1=value1",
 		"key2=value2",
@@ -84,7 +118,7 @@ TEST(KeyValueParserTests, ValidMultiItems) {
 	EXPECT_EQ(ret_map["key3"], (vector<string> {"value3", "value31"}));
 }
 
-TEST(KeyValueParserTests, ValidMultiAddItems) {
+TEST(KeyValuesParserTests, ValidMultiAddItems) {
 	vector<string> items = {
 		"key1=value1",
 		"key2=value2",
@@ -114,7 +148,7 @@ TEST(KeyValueParserTests, ValidMultiAddItems) {
 	EXPECT_EQ(ret_map["key4"], (vector<string> {"value4"}));
 }
 
-TEST(KeyValueParserTests, InvalidItem) {
+TEST(KeyValuesParserTests, InvalidItem) {
 	vector<string> items = {"key1=value1", "key2=value2", "key3value3"};
 
 	kvp::ExpectedKeyValuesMap ret = kvp::ParseKeyValues(items);
