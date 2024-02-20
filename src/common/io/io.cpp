@@ -617,10 +617,11 @@ ExpectedSize BufferedReader::Read(vector<uint8_t>::iterator start, vector<uint8_
 	return bytes_read;
 }
 
-void BufferedReader::Rewind() {
+size_t BufferedReader::Rewind() {
 	buffer_reader_.Rewind();
 	rewind_done_ = true;
 	rewind_consumed_ = false;
+	return buffer_.size();
 }
 
 void BufferedReader::StopBuffering() {
@@ -663,10 +664,11 @@ error::Error AsyncBufferedReader::AsyncRead(
 	return err;
 }
 
-void AsyncBufferedReader::Rewind() {
+size_t AsyncBufferedReader::Rewind() {
 	buffer_reader_.Rewind();
 	rewind_done_ = true;
 	rewind_consumed_ = false;
+	return buffer_.size();
 }
 
 void AsyncBufferedReader::StopBuffering() {

@@ -791,3 +791,127 @@ TEST(EventsIo, TeeReaderShortReads) {
 	EXPECT_TRUE(eof_reader1);
 	EXPECT_TRUE(eof_reader2);
 }
+
+TEST(EventsIo, TeeReaderBufferedContents) {
+	TestEventLoop loop;
+
+	int fds[2];
+	ASSERT_EQ(pipe(fds), 0);
+
+	events::io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
+
+	const uint8_t data[] = "abcd1efgh1";
+
+	vector<uint8_t> to_send(data, data + sizeof(data));
+
+	vector<uint8_t> buffer1;
+	buffer1.resize(to_send.size());
+
+	vector<uint8_t> buffer2;
+	buffer2.resize(to_send.size());
+
+	events::io::TeeReaderPtr upstream_reader {make_shared<events::io::TeeReader>(reader)};
+
+	auto downstream_reader1 = upstream_reader->MakeAsyncReader();
+
+	bool eof_reader1 {false};
+	bool eof_reader2 {false};
+
+	// Two leaf readers, the second one should succeed in getting all data
+	// TODO: replace reader1 with a simpler reader
+	auto one_reader1 = CountOnesReader(*downstream_reader1, 22);
+	io::AsyncReaderPtr one_reader2;
+	// auto one_reader2 = CountOnesReader(*downstream_reader2, 2);
+
+	// First call, short read
+	auto err = one_reader1.AsyncRead(
+		buffer1.begin(),
+		buffer1.begin() + 5,
+		[&upstream_reader,
+		 &one_reader1,
+		 &one_reader2,
+		 &buffer1,
+		 &buffer2,
+		 &eof_reader1,
+		 &eof_reader2](io::ExpectedSize result) {
+			ASSERT_TRUE(result) << result.error().String();
+			EXPECT_EQ(result.value(), 5);
+
+			// Attach new reader
+			auto downstream_reader2 = upstream_reader->MakeAsyncReader();
+			one_reader2 = make_shared<CountOnesReader>(*downstream_reader2, 2);
+
+			// Second call, remaining data
+			auto err = one_reader1.AsyncRead(
+				buffer1.begin() + 5,
+				buffer1.end(),
+				[&one_reader1, &buffer1, &eof_reader1](io::ExpectedSize result) {
+					ASSERT_TRUE(result) << result.error().String();
+					EXPECT_EQ(result.value(), 6);
+
+					// Third call, EOF
+					auto err = one_reader1.AsyncRead(
+						buffer1.begin(), buffer1.end(), [&eof_reader1](io::ExpectedSize result) {
+							eof_reader1 = true;
+							ASSERT_FALSE(result) << result.value();
+							EXPECT_EQ(result.error().message, "ones mismatch");
+						});
+					ASSERT_EQ(err, error::NoError);
+				});
+			ASSERT_EQ(err, error::NoError);
+
+			// First call for reader2, it shall get the buffered data
+			err = one_reader2->AsyncRead(
+				buffer2.begin(),
+				buffer2.end(),
+				[&one_reader2, &buffer2, &eof_reader2](io::ExpectedSize result) {
+					ASSERT_TRUE(result) << result.error().String();
+					EXPECT_EQ(result.value(), 5);
+
+					// Second call, remaining data
+					auto err = one_reader2->AsyncRead(
+						buffer2.begin() + 5,
+						buffer2.end(),
+						[&one_reader2, &buffer2, &eof_reader2](io::ExpectedSize result) {
+							ASSERT_TRUE(result) << result.error().String();
+							EXPECT_EQ(result.value(), 6);
+
+							// Third call, EOF
+							auto err = one_reader2->AsyncRead(
+								buffer2.begin(),
+								buffer2.end(),
+								[&eof_reader2](io::ExpectedSize result) {
+									eof_reader2 = true;
+									ASSERT_TRUE(result) << result.error().String();
+									EXPECT_EQ(result.value(), 0);
+								});
+							ASSERT_EQ(err, error::NoError);
+						});
+					ASSERT_EQ(err, error::NoError);
+				});
+			ASSERT_EQ(err, error::NoError);
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	// Single write
+	err = writer.AsyncWrite(to_send.begin(), to_send.end(), [&fds](io::ExpectedSize result) {
+		EXPECT_TRUE(result);
+		EXPECT_EQ(result.value(), 11);
+		close(fds[1]);
+	});
+	ASSERT_EQ(err, error::NoError);
+
+	events::Timer timer(loop);
+	timer.AsyncWait(chrono::milliseconds(1), [&loop](error::Error err) {
+		ASSERT_EQ(err, error::NoError);
+		loop.Stop();
+	});
+
+	loop.Run();
+
+	EXPECT_EQ(buffer1, to_send);
+	EXPECT_EQ(buffer2, to_send);
+	EXPECT_TRUE(eof_reader1);
+	EXPECT_TRUE(eof_reader2);
+}

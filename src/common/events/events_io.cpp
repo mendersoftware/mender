@@ -139,7 +139,9 @@ mio::ExpectedSize ReaderFromAsyncReader::Read(
 
 TeeReader::TeeReaderLeafPtr TeeReader::MakeAsyncReader() {
 	auto reader = make_shared<TeeReaderLeaf>(shared_from_this());
-	leaf_readers_.insert({reader, TeeReaderRequestedRead {}});
+	leaf_readers_.insert({reader, TeeReaderLeafContext {}});
+	auto bytes_missing = source_reader_->Rewind();
+	leaf_readers_[reader].buffer_bytes_missing = bytes_missing;
 	return reader;
 }
 
@@ -152,13 +154,29 @@ error::Error TeeReader::ReadyToAsyncRead(
 	auto found = leaf_readers_.find(leaf_reader);
 	AssertOrReturnError(found != leaf_readers_.end());
 
-	leaf_readers_[leaf_reader].start = start;
-	leaf_readers_[leaf_reader].end = end;
-	leaf_readers_[leaf_reader].handler = handler;
+	if (leaf_readers_[leaf_reader].buffer_bytes_missing > 0) {
+		// Special case, reading missing bytes
+		TeeReaderLeafContext &ctx = leaf_readers_[leaf_reader];
+		auto to_read = std::min(ctx.buffer_bytes_missing, (size_t) (end - start));
+		auto handler_wrapper = [handler, &ctx](mio::ExpectedSize result) {
+			if (result) {
+				ctx.buffer_bytes_missing -= result.value();
+			}
+			handler(result);
+		};
 
-	if (++ready_to_read == leaf_readers_.size()) {
-		DoAsyncRead();
-		ready_to_read = 0;
+		auto err = source_reader_->AsyncRead(start, start + to_read, handler_wrapper);
+		if (err != error::NoError) {
+			handler(expected::unexpected(err));
+		}
+	} else {
+		leaf_readers_[leaf_reader].pending_read.start = start;
+		leaf_readers_[leaf_reader].pending_read.end = end;
+		leaf_readers_[leaf_reader].pending_read.handler = handler;
+		if (++ready_to_read == leaf_readers_.size()) {
+			DoAsyncRead();
+			ready_to_read = 0;
+		}
 	}
 
 	return error::NoError;
@@ -168,7 +186,7 @@ void TeeReader::CallAllHandlers(mio::ExpectedSize result) {
 	// Makes a copy of the handlers and then calls them sequentially
 	vector<mio::AsyncIoHandler> handlers;
 	for (const auto &it : leaf_readers_) {
-		handlers.push_back(it.second.handler);
+		handlers.push_back(it.second.pending_read.handler);
 	}
 	for (const auto &h : handlers) {
 		h(result);
@@ -182,14 +200,14 @@ void TeeReader::DoAsyncRead() {
 			return;
 		};
 
-		auto start_iterator = leaf_readers_.begin()->second.start;
+		auto start_iterator = leaf_readers_.begin()->second.pending_read.start;
 		auto read_bytes = result.value();
 		for_each(
 			std::next(leaf_readers_.begin()),
 			leaf_readers_.end(),
 			[start_iterator,
-			 read_bytes](const std::pair<TeeReaderLeafPtr, TeeReaderRequestedRead> r) {
-				std::copy_n(start_iterator, read_bytes, r.second.start);
+			 read_bytes](const std::pair<TeeReaderLeafPtr, TeeReaderLeafContext> r) {
+				std::copy_n(start_iterator, read_bytes, r.second.pending_read.start);
 			});
 
 		CallAllHandlers(result);
@@ -198,18 +216,19 @@ void TeeReader::DoAsyncRead() {
 	auto min_read = std::min_element(
 		leaf_readers_.cbegin(),
 		leaf_readers_.cend(),
-		[](const std::pair<TeeReaderLeafPtr, TeeReaderRequestedRead> r1,
-		   std::pair<TeeReaderLeafPtr, TeeReaderRequestedRead> r2) {
-			return (r1.second.end - r1.second.start) < (r2.second.end - r2.second.start);
+		[](const std::pair<TeeReaderLeafPtr, TeeReaderLeafContext> r1,
+		   std::pair<TeeReaderLeafPtr, TeeReaderLeafContext> r2) {
+			return (r1.second.pending_read.end - r1.second.pending_read.start)
+				   < (r2.second.pending_read.end - r2.second.pending_read.start);
 		});
-	auto bytes_to_read = min_read->second.end - min_read->second.start;
+	auto bytes_to_read = min_read->second.pending_read.end - min_read->second.pending_read.start;
 
-	auto err = source_reader_.AsyncRead(
-		leaf_readers_.begin()->second.start,
-		leaf_readers_.begin()->second.start + bytes_to_read,
+	auto err = source_reader_->AsyncRead(
+		leaf_readers_.begin()->second.pending_read.start,
+		leaf_readers_.begin()->second.pending_read.start + bytes_to_read,
 		handler);
 	if (err != error::NoError) {
-		handler(expected::unexpected(err));
+		CallAllHandlers(expected::unexpected(err));
 	}
 }
 
