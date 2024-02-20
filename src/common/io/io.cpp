@@ -627,6 +627,52 @@ void BufferedReader::StopBuffering() {
 	stop_done_ = true;
 }
 
+error::Error AsyncBufferedReader::AsyncRead(
+	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, AsyncIoHandler handler) {
+	if (rewind_done_ && !rewind_consumed_) {
+		// Read from the buffer
+		auto ex_bytes_read = buffer_reader_.Read(start, end);
+		if (!ex_bytes_read) {
+			handler(ex_bytes_read);
+			return ex_bytes_read.error();
+		}
+
+		Vsize bytes_read_buffer = ex_bytes_read.value();
+		if (bytes_read_buffer > 0) {
+			handler(ex_bytes_read);
+			return error::NoError;
+		}
+		// When EOF, continue with reading from the wrapped reader
+		rewind_consumed_ = true;
+	}
+
+	// Read from the wrapped reader and save copy into the buffer
+	auto wrapper_handler = [this, start, end, handler](ExpectedSize result) {
+		if (!result) {
+			handler(result);
+			return;
+		}
+		if (!stop_done_) {
+			buffer_.insert(buffer_.end(), start, end);
+		} else if (rewind_consumed_) {
+			buffer_.clear();
+		}
+		handler(result);
+	};
+	auto err = wrapped_reader_.AsyncRead(start, end, wrapper_handler);
+	return err;
+}
+
+void AsyncBufferedReader::Rewind() {
+	buffer_reader_.Rewind();
+	rewind_done_ = true;
+	rewind_consumed_ = false;
+}
+
+void AsyncBufferedReader::StopBuffering() {
+	stop_done_ = true;
+}
+
 } // namespace io
 } // namespace common
 } // namespace mender

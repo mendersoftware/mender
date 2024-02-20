@@ -68,6 +68,71 @@ TEST(EventsIo, ReadAndWriteWithPipes) {
 	EXPECT_EQ(to_receive, to_send);
 }
 
+TEST(IO, AsyncBufferedReader) {
+	TestEventLoop loop;
+
+	int fds[2];
+	ASSERT_EQ(pipe(fds), 0);
+
+	events::io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	io::AsyncBufferedReader buffered_reader(reader);
+	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
+
+	const uint8_t data[] = "foobarbaz";
+
+	vector<uint8_t> to_send(data, data + sizeof(data));
+	vector<uint8_t> to_receive;
+	to_receive.resize(to_send.size());
+
+	// Short read
+	auto err = buffered_reader.AsyncRead(
+		to_receive.begin(),
+		to_receive.begin() + 5,
+		[&buffered_reader, &to_receive, &to_send, &loop](io::ExpectedSize result) {
+			EXPECT_TRUE(result);
+			EXPECT_EQ(result.value(), 5);
+			EXPECT_EQ(
+				(vector<uint8_t> {to_send.begin(), to_send.begin() + 5}),
+				(vector<uint8_t> {to_receive.begin(), to_receive.begin() + 5}));
+
+			// Rewind and attempt a long read - it shall read only the buffered data
+			buffered_reader.StopBuffering();
+			buffered_reader.Rewind();
+			to_receive.clear();
+			to_receive.resize(to_send.size());
+			auto err = buffered_reader.AsyncRead(
+				to_receive.begin(),
+				to_receive.end(),
+				[&buffered_reader, &to_receive, &to_send, &loop](io::ExpectedSize result) {
+					EXPECT_TRUE(result);
+					EXPECT_EQ(result.value(), 5);
+					EXPECT_EQ(
+						(vector<uint8_t> {to_send.begin(), to_send.begin() + 5}),
+						(vector<uint8_t> {to_receive.begin(), to_receive.begin() + 5}));
+
+					// Read the remaining data
+					auto err = buffered_reader.AsyncRead(
+						to_receive.begin() + 5, to_receive.end(), [&loop](io::ExpectedSize result) {
+							EXPECT_TRUE(result);
+							EXPECT_EQ(result.value(), 5);
+							loop.Stop();
+						});
+					ASSERT_EQ(err, error::NoError);
+				});
+			ASSERT_EQ(err, error::NoError);
+		});
+	ASSERT_EQ(err, error::NoError);
+	err = writer.AsyncWrite(to_send.begin(), to_send.end(), [](io::ExpectedSize result) {
+		EXPECT_TRUE(result);
+		EXPECT_EQ(result.value(), 10);
+	});
+	ASSERT_EQ(err, error::NoError);
+
+	loop.Run();
+
+	EXPECT_EQ(to_receive, to_send);
+}
+
 TEST(EventsIo, PartialRead) {
 	TestEventLoop loop;
 
