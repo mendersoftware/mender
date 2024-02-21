@@ -293,6 +293,7 @@ error::Error DeploymentClient::PushStatus(
 				log::Debug(
 					"Failed to get content length from the status API response headers: "
 					+ content_length.error().String());
+				body_writer->SetUnlimited(true);
 			} else {
 				auto ex_len = common::StringToLongLong(content_length.value());
 				if (!ex_len) {
@@ -457,6 +458,7 @@ error::Error DeploymentClient::PushLogs(
 				log::Debug(
 					"Failed to get content length from the status API response headers: "
 					+ content_length.error().String());
+				body_writer->SetUnlimited(true);
 			} else {
 				auto ex_len = common::StringToLongLong(content_length.value());
 				if (!ex_len) {
