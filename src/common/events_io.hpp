@@ -164,13 +164,18 @@ private:
 	};
 	std::unordered_map<TeeReaderLeafPtr, TeeReaderLeafContext> leaf_readers_;
 	size_t ready_to_read {0};
+	bool stop_done_ {false};
 
+	void DoAsyncRead();
 	void CallAllHandlers(mio::ExpectedSize);
+	void MaybeDiscardBuffer();
 
 public:
 	TeeReader(mio::AsyncReader &source) {
 		source_reader_.reset(new mio::AsyncBufferedReader(source));
 	};
+
+	~TeeReader();
 
 	ExpectedTeeReaderLeafPtr MakeAsyncReader();
 
@@ -180,16 +185,18 @@ public:
 		vector<uint8_t>::iterator end,
 		mio::AsyncIoHandler handler);
 
-	void DoAsyncRead();
+	void StopBuffering();
+
+	error::Error RemoveReader(TeeReaderLeafPtr leaf_reader);
 
 	class TeeReaderLeaf :
 		virtual public mio::AsyncReader,
 		public enable_shared_from_this<TeeReaderLeaf> {
 	private:
-		TeeReaderPtr tee_reader_;
+		weak_ptr<TeeReader> tee_reader_;
 
 	public:
-		TeeReaderLeaf(TeeReaderPtr tee_reader) :
+		TeeReaderLeaf(weak_ptr<TeeReader> tee_reader) :
 			tee_reader_ {tee_reader} {};
 
 		error::Error AsyncRead(
@@ -197,11 +204,7 @@ public:
 			vector<uint8_t>::iterator end,
 			mio::AsyncIoHandler handler) override;
 
-		void Cancel() override {
-			// TODO: Cancel stuff
-		};
-
-		// TODO: Add StopBuffering() method
+		void Cancel() override;
 	};
 };
 

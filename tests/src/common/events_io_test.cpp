@@ -842,9 +842,10 @@ TEST(EventsIo, TeeReaderBufferedContents) {
 			ASSERT_TRUE(result) << result.error().String();
 			EXPECT_EQ(result.value(), 5);
 
-			// Attach new reader
+			// Attach new reader and stop buffering
 			auto downstream_reader2 = upstream_reader->MakeAsyncReader();
 			ASSERT_TRUE(downstream_reader2) << downstream_reader2.error().String();
+			upstream_reader->StopBuffering();
 			one_reader2 = make_shared<CountOnesReader>(*downstream_reader2.value(), 2);
 
 			// Second call, remaining data
@@ -919,4 +920,71 @@ TEST(EventsIo, TeeReaderBufferedContents) {
 	EXPECT_EQ(buffer2, to_send);
 	EXPECT_TRUE(eof_reader1);
 	EXPECT_TRUE(eof_reader2);
+}
+
+TEST(EventsIo, TeeReaderCancel) {
+	TestEventLoop loop;
+
+	class CancelDetector : public events::io::AsyncFileDescriptorReader {
+	public:
+		CancelDetector(events::EventLoop &loop, int fd) :
+			events::io::AsyncFileDescriptorReader(loop, fd) {};
+
+		void Cancel() override {
+			cancelled_called = true;
+			events::io::AsyncFileDescriptorReader::Cancel();
+		}
+
+		bool cancelled_called {false};
+	};
+
+	int fds[2];
+	ASSERT_EQ(pipe(fds), 0);
+
+	CancelDetector reader(loop, fds[0]);
+	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
+
+	const uint8_t data[] = "abcd1efgh1";
+
+	vector<uint8_t> to_send(data, data + sizeof(data));
+
+	vector<uint8_t> buffer;
+	buffer.resize(to_send.size());
+
+	events::io::TeeReaderPtr upstream_reader {make_shared<events::io::TeeReader>(reader)};
+
+	auto downstream_reader1 = upstream_reader->MakeAsyncReader();
+	ASSERT_TRUE(downstream_reader1) << downstream_reader1.error().String();
+	auto downstream_reader2 = upstream_reader->MakeAsyncReader();
+	ASSERT_TRUE(downstream_reader2) << downstream_reader2.error().String();
+
+	downstream_reader1.value()->Cancel();
+	auto leaf_reader = downstream_reader2.value();
+
+	auto err = leaf_reader->AsyncRead(
+		buffer.begin(), buffer.begin() + 2, [&leaf_reader](io::ExpectedSize result) {
+			ASSERT_TRUE(result) << result.error().String();
+			EXPECT_EQ(result.value(), 2);
+
+			leaf_reader->Cancel();
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	err = writer.AsyncWrite(to_send.begin(), to_send.end(), [&fds](io::ExpectedSize result) {
+		EXPECT_TRUE(result);
+		EXPECT_EQ(result.value(), 11);
+		close(fds[1]);
+	});
+	ASSERT_EQ(err, error::NoError);
+
+	events::Timer timer(loop);
+	timer.AsyncWait(chrono::milliseconds(1), [&loop](error::Error err) {
+		ASSERT_EQ(err, error::NoError);
+		loop.Stop();
+	});
+
+	loop.Run();
+
+	EXPECT_EQ(buffer, (vector<uint8_t> {'a', 'b', 0, 0, 0, 0, 0, 0, 0, 0, 0}));
+	EXPECT_TRUE(reader.cancelled_called);
 }

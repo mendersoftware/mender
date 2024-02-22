@@ -148,6 +148,11 @@ TeeReader::ExpectedTeeReaderLeafPtr TeeReader::MakeAsyncReader() {
 			make_error_condition(errc::io_error), "A Reader is already reading from the buffer"));
 	}
 
+	if (stop_done_) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::io_error), "Buffering stopped, no more readers allowed"));
+	}
+
 	auto ex_bytes_missing = source_reader_->Rewind();
 	if (!ex_bytes_missing) {
 		return expected::unexpected(ex_bytes_missing.error());
@@ -172,11 +177,12 @@ error::Error TeeReader::ReadyToAsyncRead(
 		// Special case, reading missing bytes
 		TeeReaderLeafContext &ctx = leaf_readers_[leaf_reader];
 		auto to_read = std::min(ctx.buffer_bytes_missing, (size_t) (end - start));
-		auto handler_wrapper = [handler, &ctx](mio::ExpectedSize result) {
+		auto handler_wrapper = [this, handler, &ctx](mio::ExpectedSize result) {
 			if (result) {
 				ctx.buffer_bytes_missing -= result.value();
 			}
 			handler(result);
+			MaybeDiscardBuffer();
 		};
 
 		auto err = source_reader_->AsyncRead(start, start + to_read, handler_wrapper);
@@ -246,10 +252,58 @@ void TeeReader::DoAsyncRead() {
 	}
 }
 
+void TeeReader::MaybeDiscardBuffer() {
+	if (stop_done_
+		&& all_of(
+			leaf_readers_.begin(),
+			leaf_readers_.end(),
+			[](const std::pair<TeeReaderLeafPtr, TeeReaderLeafContext> r) {
+				return r.second.buffer_bytes_missing == 0;
+			})) {
+		source_reader_->StopBufferingAndDiscard();
+	}
+}
+
+void TeeReader::StopBuffering() {
+	stop_done_ = true;
+	MaybeDiscardBuffer();
+}
+
+error::Error TeeReader::RemoveReader(TeeReader::TeeReaderLeafPtr leaf_reader) {
+	// The reader must exist in the internal map.
+	auto found = leaf_readers_.find(leaf_reader);
+	AssertOrReturnError(found != leaf_readers_.end());
+
+	leaf_readers_.erase(found);
+
+	if (leaf_readers_.size() == 0) {
+		source_reader_->StopBufferingAndDiscard();
+		source_reader_->Cancel();
+	}
+	return error::NoError;
+}
+
+TeeReader::~TeeReader() {
+	leaf_readers_.clear();
+	source_reader_->StopBufferingAndDiscard();
+	source_reader_->Cancel();
+}
+
 error::Error TeeReader::TeeReaderLeaf::AsyncRead(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, mio::AsyncIoHandler handler) {
-	return tee_reader_->ReadyToAsyncRead(shared_from_this(), start, end, handler);
+	auto p = tee_reader_.lock();
+	if (!p) {
+		return error::Error(make_error_condition(errc::io_error), "TeeReader already destroyed");
+	}
+
+	return p->ReadyToAsyncRead(shared_from_this(), start, end, handler);
 }
+
+void TeeReader::TeeReaderLeaf::Cancel() {
+	auto p = tee_reader_.lock();
+	assert(p);
+	p->RemoveReader(shared_from_this());
+};
 
 } // namespace io
 } // namespace events

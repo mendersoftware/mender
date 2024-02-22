@@ -342,6 +342,7 @@ public:
 		rewind_done_ = false;
 		rewind_consumed_ = false;
 		stop_done_ = false;
+		wrapped_reader_.Cancel();
 	};
 
 	ExpectedSize Rewind();
