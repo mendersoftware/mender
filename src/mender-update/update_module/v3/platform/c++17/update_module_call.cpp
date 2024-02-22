@@ -53,7 +53,7 @@ error::Error UpdateModule::StateRunner::AsyncCallState(
 
 	string state_string = StateToString(state);
 	error_code ec;
-	if (!fs::is_directory(module_work_path, ec) && ec) {
+	if (!fs::is_directory(module_work_path, ec) || ec) {
 		if (state == State::Cleanup) {
 			loop.Post([this, state]() { ProcessFinishedHandler(state, error::NoError); });
 			return error::NoError;
