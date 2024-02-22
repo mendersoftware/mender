@@ -149,6 +149,7 @@ class TeeReader : public enable_shared_from_this<TeeReader> {
 public:
 	class TeeReaderLeaf;
 	using TeeReaderLeafPtr = shared_ptr<TeeReaderLeaf>;
+	using ExpectedTeeReaderLeafPtr = expected::expected<TeeReaderLeafPtr, error::Error>;
 
 private:
 	unique_ptr<mio::AsyncBufferedReader> source_reader_;
@@ -171,7 +172,7 @@ public:
 		source_reader_.reset(new mio::AsyncBufferedReader(source));
 	};
 
-	TeeReaderLeafPtr MakeAsyncReader();
+	ExpectedTeeReaderLeafPtr MakeAsyncReader();
 
 	error::Error ReadyToAsyncRead(
 		TeeReaderLeafPtr leaf_reader,

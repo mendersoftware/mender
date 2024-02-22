@@ -414,13 +414,23 @@ TEST(IO, TestBufferedReaderRewind) {
 
 	vector<uint8_t> vec_write_partial(3);
 
+	// Rewind without reading shall be noop
+	auto ex_bytes_rewind = buffered_reader.Rewind();
+	ASSERT_TRUE(ex_bytes_rewind.has_value()) << ex_bytes_rewind.error().String();
+	EXPECT_EQ(0, ex_bytes_rewind.value());
+	ex_bytes_rewind = buffered_reader.Rewind();
+	ASSERT_TRUE(ex_bytes_rewind.has_value()) << ex_bytes_rewind.error().String();
+	EXPECT_EQ(0, ex_bytes_rewind.value());
+
 	auto ex_bytes_read = buffered_reader.Read(vec_write_partial.begin(), vec_write_partial.end());
 	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
 	ASSERT_EQ(3, ex_bytes_read.value());
 	EXPECT_EQ(vec_write_partial, (vector<uint8_t> {'f', 'o', 'o'}));
 
 	vector<uint8_t> vec_write_full(9);
-	buffered_reader.Rewind();
+	ex_bytes_rewind = buffered_reader.Rewind();
+	ASSERT_TRUE(ex_bytes_rewind.has_value()) << ex_bytes_rewind.error().String();
+	EXPECT_EQ(3, ex_bytes_rewind.value());
 	ex_bytes_read = buffered_reader.Read(vec_write_full.begin(), vec_write_full.end());
 	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
 	ASSERT_EQ(3, ex_bytes_read.value());
@@ -429,14 +439,40 @@ TEST(IO, TestBufferedReaderRewind) {
 	ASSERT_EQ(6, ex_bytes_read.value());
 	EXPECT_EQ(vec_write_full, (vector<uint8_t> {'f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'z'}));
 
-	buffered_reader.Rewind();
+	ex_bytes_rewind = buffered_reader.Rewind();
+	ASSERT_TRUE(ex_bytes_rewind.has_value()) << ex_bytes_rewind.error().String();
+	EXPECT_EQ(9, ex_bytes_rewind.value());
 	ex_bytes_read = buffered_reader.Read(vec_write_full.begin(), vec_write_full.end());
 	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
 	ASSERT_EQ(9, ex_bytes_read.value());
+	ex_bytes_read = buffered_reader.Read(vec_write_full.begin(), vec_write_full.end());
+	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
+	ASSERT_EQ(0, ex_bytes_read.value());
 	EXPECT_EQ(vec_write_full, (vector<uint8_t> {'f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'z'}));
+
+	ex_bytes_rewind = buffered_reader.StopBufferingAndRewind();
+	ASSERT_TRUE(ex_bytes_rewind.has_value()) << ex_bytes_rewind.error().String();
+	EXPECT_EQ(9, ex_bytes_rewind.value());
+
+	// We cannot rewind anymore
+	ex_bytes_rewind = buffered_reader.Rewind();
+	ASSERT_FALSE(ex_bytes_rewind.has_value()) << ex_bytes_rewind.value();
+	ex_bytes_read = buffered_reader.Read(vec_write_full.begin(), vec_write_full.end());
+
+	// But we can read
+	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
+	ASSERT_EQ(9, ex_bytes_read.value());
+	ex_bytes_read = buffered_reader.Read(vec_write_full.begin(), vec_write_full.end());
+	ASSERT_TRUE(ex_bytes_read.has_value()) << ex_bytes_read.error().String();
+	ASSERT_EQ(0, ex_bytes_read.value());
+	EXPECT_EQ(vec_write_full, (vector<uint8_t> {'f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'z'}));
+
+	// No rewind
+	ex_bytes_rewind = buffered_reader.Rewind();
+	ASSERT_FALSE(ex_bytes_rewind.has_value()) << ex_bytes_rewind.value();
 }
 
-TEST(IO, TestBufferedReaderStopBuffering) {
+TEST(IO, TestBufferedReaderDiscard) {
 	class TestBufferedReader : public io::BufferedReader {
 	public:
 		TestBufferedReader(io::Reader &reader) :
@@ -458,24 +494,45 @@ TEST(IO, TestBufferedReaderStopBuffering) {
 		(vector<uint8_t> {'f', 'o', 'o'}));
 	ASSERT_EQ(3, buffered_reader2.GetBufferSize());
 
-	buffered_reader2.StopBuffering();
+	auto ex_bytes_rewind = buffered_reader2.Rewind();
+	ASSERT_TRUE(ex_bytes_rewind.has_value()) << ex_bytes_rewind.error().String();
+	EXPECT_EQ(3, ex_bytes_rewind.value());
 	ASSERT_EQ(3, buffered_reader2.GetBufferSize());
 
 	// Read one byte, the buffer shall not increase
 	ex_bytes_read = buffered_reader2.Read(vec_write_full.begin(), vec_write_full.begin() + 1);
 	ASSERT_EQ(1, ex_bytes_read.value());
 	ASSERT_EQ(3, buffered_reader2.GetBufferSize());
-	// Read rest, the buffer shall not increase
+
+	// Try to discard
+	auto err = buffered_reader2.StopBufferingAndDiscard();
+	ASSERT_NE(error::NoError, err);
+	ASSERT_EQ(3, buffered_reader2.GetBufferSize());
+
+	// Empty the buffer
 	ex_bytes_read = buffered_reader2.Read(vec_write_full.begin() + 1, vec_write_full.end());
-	ASSERT_EQ(5, ex_bytes_read.value());
+	ASSERT_EQ(2, ex_bytes_read.value());
 	ASSERT_EQ(3, buffered_reader2.GetBufferSize());
-	vec_write_full.resize(6);
-	EXPECT_EQ(vec_write_full, (vector<uint8_t> {'b', 'a', 'r', 'b', 'a', 'z'}));
-	ASSERT_EQ(3, buffered_reader2.GetBufferSize());
-	// Rewind and read, the buffer shall be cleared
-	buffered_reader2.Rewind();
-	auto discard_writer = io::Discard {};
-	auto err = Copy(discard_writer, buffered_reader2);
-	EXPECT_EQ(error::NoError, err);
+	// And read at least one more byte from the source
+	ex_bytes_read = buffered_reader2.Read(vec_write_full.begin() + 3, vec_write_full.begin() + 4);
+	ASSERT_EQ(1, ex_bytes_read.value());
+	ASSERT_EQ(4, buffered_reader2.GetBufferSize());
+
+	// Now successfully discard
+	err = buffered_reader2.StopBufferingAndDiscard();
+	ASSERT_EQ(error::NoError, err);
 	ASSERT_EQ(0, buffered_reader2.GetBufferSize());
+	// No rewind anymore
+	ex_bytes_rewind = buffered_reader2.Rewind();
+	ASSERT_FALSE(ex_bytes_rewind.has_value()) << ex_bytes_rewind.value();
+
+	// Read rest
+	ex_bytes_read = buffered_reader2.Read(vec_write_full.begin() + 4, vec_write_full.end());
+	ASSERT_EQ(5, ex_bytes_read.value());
+	ASSERT_EQ(0, buffered_reader2.GetBufferSize());
+	EXPECT_EQ(vec_write_full, (vector<uint8_t> {'f', 'o', 'o', 'b', 'a', 'r', 'b', 'a', 'z'}));
+
+	// No rewind
+	ex_bytes_rewind = buffered_reader2.Rewind();
+	ASSERT_FALSE(ex_bytes_rewind.has_value()) << ex_bytes_rewind.value();
 }

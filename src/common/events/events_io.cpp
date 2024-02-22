@@ -137,11 +137,25 @@ mio::ExpectedSize ReaderFromAsyncReader::Read(
 	return read;
 }
 
-TeeReader::TeeReaderLeafPtr TeeReader::MakeAsyncReader() {
+TeeReader::ExpectedTeeReaderLeafPtr TeeReader::MakeAsyncReader() {
+	if (any_of(
+			leaf_readers_.begin(),
+			leaf_readers_.end(),
+			[](const std::pair<TeeReaderLeafPtr, TeeReaderLeafContext> r) {
+				return r.second.buffer_bytes_missing != 0;
+			})) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::io_error), "A Reader is already reading from the buffer"));
+	}
+
+	auto ex_bytes_missing = source_reader_->Rewind();
+	if (!ex_bytes_missing) {
+		return expected::unexpected(ex_bytes_missing.error());
+	}
+
 	auto reader = make_shared<TeeReaderLeaf>(shared_from_this());
 	leaf_readers_.insert({reader, TeeReaderLeafContext {}});
-	auto bytes_missing = source_reader_->Rewind();
-	leaf_readers_[reader].buffer_bytes_missing = bytes_missing;
+	leaf_readers_[reader].buffer_bytes_missing = ex_bytes_missing.value();
 	return reader;
 }
 

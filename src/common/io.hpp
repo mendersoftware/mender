@@ -308,11 +308,10 @@ public:
 
 	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
 
-	size_t Rewind();
+	ExpectedSize Rewind();
 
-	void StopBuffering();
-
-	// TODO: Add StopBufferingAndDiscard + StopBufferingAndRewind
+	ExpectedSize StopBufferingAndRewind();
+	error::Error StopBufferingAndDiscard();
 };
 using BufferedReaderPtr = shared_ptr<BufferedReader>;
 
@@ -345,9 +344,10 @@ public:
 		stop_done_ = false;
 	};
 
-	size_t Rewind();
+	ExpectedSize Rewind();
 
-	void StopBuffering();
+	ExpectedSize StopBufferingAndRewind();
+	error::Error StopBufferingAndDiscard();
 };
 using AsyncBufferedReaderPtr = shared_ptr<AsyncBufferedReader>;
 

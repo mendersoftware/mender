@@ -610,22 +610,39 @@ ExpectedSize BufferedReader::Read(vector<uint8_t>::iterator start, vector<uint8_
 		return bytes_read;
 	}
 	if (!stop_done_) {
-		buffer_.insert(buffer_.end(), start, end);
+		buffer_.insert(buffer_.end(), start, start + bytes_read.value());
 	} else if (rewind_consumed_) {
 		buffer_.clear();
 	}
 	return bytes_read;
 }
 
-size_t BufferedReader::Rewind() {
+ExpectedSize BufferedReader::Rewind() {
+	if (stop_done_ && rewind_done_) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::io_error), "Buffering was stopped, cannot rewind anymore"));
+	}
 	buffer_reader_.Rewind();
 	rewind_done_ = true;
 	rewind_consumed_ = false;
 	return buffer_.size();
 }
 
-void BufferedReader::StopBuffering() {
+ExpectedSize BufferedReader::StopBufferingAndRewind() {
+	auto result = Rewind();
 	stop_done_ = true;
+	return result;
+}
+
+error::Error BufferedReader::StopBufferingAndDiscard() {
+	if (rewind_done_ && !rewind_consumed_) {
+		return error::Error(
+			make_error_condition(errc::io_error), "Cannot stop buffering, pending rewind read");
+	}
+	stop_done_ = true;
+	rewind_consumed_ = true;
+	buffer_.clear();
+	return error::NoError;
 }
 
 error::Error AsyncBufferedReader::AsyncRead(
@@ -648,13 +665,13 @@ error::Error AsyncBufferedReader::AsyncRead(
 	}
 
 	// Read from the wrapped reader and save copy into the buffer
-	auto wrapper_handler = [this, start, end, handler](ExpectedSize result) {
+	auto wrapper_handler = [this, start, handler](ExpectedSize result) {
 		if (!result) {
 			handler(result);
 			return;
 		}
 		if (!stop_done_) {
-			buffer_.insert(buffer_.end(), start, end);
+			buffer_.insert(buffer_.end(), start, start + result.value());
 		} else if (rewind_consumed_) {
 			buffer_.clear();
 		}
@@ -664,15 +681,32 @@ error::Error AsyncBufferedReader::AsyncRead(
 	return err;
 }
 
-size_t AsyncBufferedReader::Rewind() {
+ExpectedSize AsyncBufferedReader::Rewind() {
+	if (stop_done_ && rewind_done_) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::io_error), "Buffering was stopped, cannot rewind anymore"));
+	}
 	buffer_reader_.Rewind();
 	rewind_done_ = true;
 	rewind_consumed_ = false;
 	return buffer_.size();
 }
 
-void AsyncBufferedReader::StopBuffering() {
+ExpectedSize AsyncBufferedReader::StopBufferingAndRewind() {
+	auto result = Rewind();
 	stop_done_ = true;
+	return result;
+}
+
+error::Error AsyncBufferedReader::StopBufferingAndDiscard() {
+	if (rewind_done_ && !rewind_consumed_) {
+		return error::Error(
+			make_error_condition(errc::io_error), "Cannot stop buffering, pending rewind read");
+	}
+	stop_done_ = true;
+	rewind_consumed_ = true;
+	buffer_.clear();
+	return error::NoError;
 }
 
 } // namespace io
