@@ -16,7 +16,7 @@
 
 #include <filesystem>
 
-#include <lmdb++.h>
+#include <lmdbxx/lmdb++.h>
 
 #include <common/common.hpp>
 #include <common/log.hpp>

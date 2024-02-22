@@ -103,7 +103,7 @@ target_compile_options(common_key_value_database PRIVATE ${PLATFORM_SPECIFIC_COM
 if(MENDER_USE_LMDB)
   target_sources(common_key_value_database PRIVATE key_value_database/platform/lmdb/lmdb.cpp)
   # Note: Use SYSTEM include style, since lmdbxx triggers some of our warnings.
-  target_include_directories(common_key_value_database SYSTEM PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/lmdbxx)
+  target_include_directories(common_key_value_database SYSTEM PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/lmdbxx/include)
   target_link_libraries(common_key_value_database PUBLIC
     lmdb
     common
