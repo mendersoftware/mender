@@ -186,6 +186,17 @@ error::Error Rename(const string &oldname, const string &newname) {
 	return error::NoError;
 }
 
+error::Error FileCopy(const string &what, const string &where) {
+	error_code ec;
+	fs::copy_file(fs::path(what), fs::path(where), fs::copy_options::overwrite_existing, ec);
+	if (ec) {
+		return error::Error(
+			ec.default_error_condition(),
+			"Failed to copy '" + what + "' to '" + where + "'. error: " + ec.message());
+	}
+	return error::NoError;
+}
+
 } // namespace path
 } // namespace common
 } // namespace mender
