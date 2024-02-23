@@ -45,8 +45,14 @@ extern const KeyValueParserErrorCategoryClass KeyValueParserErrorCategory;
 
 error::Error MakeError(KeyValueParserErrorCode code, const string &msg);
 
+using KeyValueMap = unordered_map<string, string>;
+using ExpectedKeyValueMap = expected::expected<KeyValueMap, error::Error>;
 using KeyValuesMap = unordered_map<string, vector<string>>;
 using ExpectedKeyValuesMap = expected::expected<KeyValuesMap, error::Error>;
+
+ExpectedKeyValueMap ParseKeyValueMap(const vector<string> &items, char delimiter = '=');
+error::Error AddParseKeyValueMap(
+	KeyValueMap &base, const vector<string> &items, char delimiter = '=');
 
 ExpectedKeyValuesMap ParseKeyValues(const vector<string> &items, char delimiter = '=');
 error::Error AddParseKeyValues(

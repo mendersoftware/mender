@@ -49,6 +49,37 @@ error::Error MakeError(KeyValueParserErrorCode code, const string &msg) {
 	return error::Error(error_condition(code, KeyValueParserErrorCategory), msg);
 }
 
+ExpectedKeyValueMap ParseKeyValueMap(const vector<string> &items, char delimiter) {
+	KeyValueMap ret;
+	error::Error err = AddParseKeyValueMap(ret, items, delimiter);
+	if (error::NoError != err) {
+		return expected::unexpected(err);
+	} else {
+		return ret;
+	}
+}
+
+error::Error AddParseKeyValueMap(KeyValueMap &base, const vector<string> &items, char delimiter) {
+	for (auto str : items) {
+		auto delim_pos = str.find(delimiter);
+		if (delim_pos == string::npos) {
+			return MakeError(
+				KeyValueParserErrorCode::InvalidDataError, "Invalid data given: '" + str + "'");
+		}
+
+		string key = str.substr(0, delim_pos);
+		string value = str.substr(delim_pos + 1, str.size() - delim_pos - 1);
+		if (base.count(key) != 0) {
+			return MakeError(
+				KeyValueParserErrorCode::InvalidDataError, "Key listed more than once: " + key);
+		} else {
+			base[key] = {std::move(value)};
+		}
+	}
+
+	return error::NoError;
+}
+
 ExpectedKeyValuesMap ParseKeyValues(const vector<string> &items, char delimiter) {
 	KeyValuesMap ret;
 	error::Error err = AddParseKeyValues(ret, items, delimiter);
