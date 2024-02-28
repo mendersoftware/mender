@@ -130,7 +130,7 @@ ExpectedSize Handle::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iter
 	case ARCHIVE_FATAL:
 		return expected::unexpected(MakeError(
 			error::GenericError,
-			"Recieved error code: " + std::to_string(archive_errno(archive_.get()))
+			"Received error code: " + std::to_string(archive_errno(archive_.get()))
 				+ " and error message: " + archive_error_string(archive_.get())));
 	}
 	return read_bytes;
