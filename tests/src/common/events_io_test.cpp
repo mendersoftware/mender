@@ -602,7 +602,8 @@ TEST(EventsIo, TeeReaderSimpleCase) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	events::io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	events::io::AsyncFileDescriptorReaderPtr reader =
+		make_shared<events::io::AsyncFileDescriptorReader>(loop, fds[0]);
 	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
 
 	const uint8_t data[] = "abcd1efgh1";
@@ -690,7 +691,8 @@ TEST(EventsIo, TeeReaderShortReads) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	events::io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	events::io::AsyncFileDescriptorReaderPtr reader =
+		make_shared<events::io::AsyncFileDescriptorReader>(loop, fds[0]);
 	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
 
 	const uint8_t data[] = "abcd1efgh1";
@@ -803,7 +805,8 @@ TEST(EventsIo, TeeReaderBufferedContents) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	events::io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	events::io::AsyncFileDescriptorReaderPtr reader =
+		make_shared<events::io::AsyncFileDescriptorReader>(loop, fds[0]);
 	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
 
 	const uint8_t data[] = "abcd1efgh1";
@@ -941,7 +944,7 @@ TEST(EventsIo, TeeReaderCancel) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	CancelDetector reader(loop, fds[0]);
+	shared_ptr<CancelDetector> reader = make_shared<CancelDetector>(loop, fds[0]);
 	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
 
 	const uint8_t data[] = "abcd1efgh1";
@@ -986,5 +989,5 @@ TEST(EventsIo, TeeReaderCancel) {
 	loop.Run();
 
 	EXPECT_EQ(buffer, (vector<uint8_t> {'a', 'b', 0, 0, 0, 0, 0, 0, 0, 0, 0}));
-	EXPECT_TRUE(reader.cancelled_called);
+	EXPECT_TRUE(reader->cancelled_called);
 }

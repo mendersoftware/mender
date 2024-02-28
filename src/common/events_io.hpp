@@ -152,7 +152,8 @@ public:
 	using ExpectedTeeReaderLeafPtr = expected::expected<TeeReaderLeafPtr, error::Error>;
 
 private:
-	unique_ptr<mio::AsyncBufferedReader> source_reader_;
+	shared_ptr<mio::AsyncReader> upstream_reader_;
+	unique_ptr<mio::AsyncBufferedReader> buffered_reader_;
 
 	struct TeeReaderLeafContext {
 		struct {
@@ -171,8 +172,9 @@ private:
 	void MaybeDiscardBuffer();
 
 public:
-	TeeReader(mio::AsyncReader &source) {
-		source_reader_.reset(new mio::AsyncBufferedReader(source));
+	TeeReader(mio::AsyncReaderPtr source) :
+		upstream_reader_ {source} {
+		buffered_reader_.reset(new mio::AsyncBufferedReader(*upstream_reader_));
 	};
 
 	~TeeReader();

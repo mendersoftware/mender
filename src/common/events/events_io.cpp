@@ -153,7 +153,7 @@ TeeReader::ExpectedTeeReaderLeafPtr TeeReader::MakeAsyncReader() {
 			make_error_condition(errc::io_error), "Buffering stopped, no more readers allowed"));
 	}
 
-	auto ex_bytes_missing = source_reader_->Rewind();
+	auto ex_bytes_missing = buffered_reader_->Rewind();
 	if (!ex_bytes_missing) {
 		return expected::unexpected(ex_bytes_missing.error());
 	}
@@ -185,7 +185,7 @@ error::Error TeeReader::ReadyToAsyncRead(
 			MaybeDiscardBuffer();
 		};
 
-		auto err = source_reader_->AsyncRead(start, start + to_read, handler_wrapper);
+		auto err = buffered_reader_->AsyncRead(start, start + to_read, handler_wrapper);
 		if (err != error::NoError) {
 			handler(expected::unexpected(err));
 		}
@@ -243,7 +243,7 @@ void TeeReader::DoAsyncRead() {
 		});
 	auto bytes_to_read = min_read->second.pending_read.end - min_read->second.pending_read.start;
 
-	auto err = source_reader_->AsyncRead(
+	auto err = buffered_reader_->AsyncRead(
 		leaf_readers_.begin()->second.pending_read.start,
 		leaf_readers_.begin()->second.pending_read.start + bytes_to_read,
 		handler);
@@ -260,7 +260,7 @@ void TeeReader::MaybeDiscardBuffer() {
 			[](const std::pair<TeeReaderLeafPtr, TeeReaderLeafContext> r) {
 				return r.second.buffer_bytes_missing == 0;
 			})) {
-		source_reader_->StopBufferingAndDiscard();
+		buffered_reader_->StopBufferingAndDiscard();
 	}
 }
 
@@ -277,16 +277,16 @@ error::Error TeeReader::RemoveReader(TeeReader::TeeReaderLeafPtr leaf_reader) {
 	leaf_readers_.erase(found);
 
 	if (leaf_readers_.size() == 0) {
-		source_reader_->StopBufferingAndDiscard();
-		source_reader_->Cancel();
+		buffered_reader_->StopBufferingAndDiscard();
+		buffered_reader_->Cancel();
 	}
 	return error::NoError;
 }
 
 TeeReader::~TeeReader() {
 	leaf_readers_.clear();
-	source_reader_->StopBufferingAndDiscard();
-	source_reader_->Cancel();
+	buffered_reader_->StopBufferingAndDiscard();
+	buffered_reader_->Cancel();
 }
 
 error::Error TeeReader::TeeReaderLeaf::AsyncRead(
