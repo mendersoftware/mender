@@ -32,9 +32,6 @@ namespace v3 {
 namespace header {
 namespace meta_data {
 
-const string empty_json_error_message =
-	"[json.exception.parse_error.101] parse error at line 1, column 1: syntax error while parsing value - unexpected end of input; expected '[', '{', or a literal";
-
 namespace json = mender::common::json;
 namespace log = mender::common::log;
 
@@ -44,9 +41,7 @@ ExpectedMetaData Parse(io::Reader &reader) {
 
 	if (!expected_json) {
 		log::Trace("Received json load error: " + expected_json.error().message);
-		bool is_empty_payload_error =
-			expected_json.error().message.find(empty_json_error_message) != string::npos;
-		if (is_empty_payload_error) {
+		if (expected_json.error().code == json::MakeError(json::EmptyError, "").code) {
 			log::Trace("Received an empty Json body. Not treating this as an error");
 			return json::Json();
 		}
