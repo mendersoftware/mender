@@ -271,6 +271,87 @@ public:
 
 using Vsize = vector<uint8_t>::size_type;
 
+class ByteReader : virtual public Reader {
+private:
+	shared_ptr<vector<uint8_t>> emitter_;
+	Vsize bytes_read_ {0};
+
+public:
+	ByteReader(vector<uint8_t> &emitter) :
+		emitter_ {&emitter, [](vector<uint8_t> *vec) {}} {
+	}
+
+	ByteReader(shared_ptr<vector<uint8_t>> emitter) :
+		emitter_ {emitter} {
+	}
+
+	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
+
+	void Rewind();
+};
+
+class BufferedReader : virtual public Reader {
+private:
+	Reader &wrapped_reader_;
+	bool rewind_done_ {false};
+	bool rewind_consumed_ {false};
+	bool stop_done_ {false};
+
+protected:
+	vector<uint8_t> buffer_;
+	ByteReader buffer_reader_;
+
+public:
+	BufferedReader(Reader &reader) :
+		wrapped_reader_ {reader},
+		buffer_reader_ {buffer_} {};
+
+	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
+
+	ExpectedSize Rewind();
+
+	ExpectedSize StopBufferingAndRewind();
+	error::Error StopBufferingAndDiscard();
+};
+using BufferedReaderPtr = shared_ptr<BufferedReader>;
+
+class AsyncBufferedReader : virtual public AsyncReader {
+private:
+	AsyncReader &wrapped_reader_;
+	bool rewind_done_ {false};
+	bool rewind_consumed_ {false};
+	bool stop_done_ {false};
+
+protected:
+	vector<uint8_t> buffer_;
+	ByteReader buffer_reader_;
+
+public:
+	AsyncBufferedReader(AsyncReader &reader) :
+		wrapped_reader_ {reader},
+		buffer_reader_ {buffer_} {};
+
+	error::Error AsyncRead(
+		vector<uint8_t>::iterator start,
+		vector<uint8_t>::iterator end,
+		AsyncIoHandler handler) override;
+
+	void Cancel() override {
+		buffer_.clear();
+		buffer_reader_.Rewind();
+		rewind_done_ = false;
+		rewind_consumed_ = false;
+		stop_done_ = false;
+		wrapped_reader_.Cancel();
+	};
+
+	ExpectedSize Rewind();
+
+	ExpectedSize StopBufferingAndRewind();
+	error::Error StopBufferingAndDiscard();
+};
+using AsyncBufferedReaderPtr = shared_ptr<AsyncBufferedReader>;
+
 class ByteWriter : virtual public Writer {
 private:
 	shared_ptr<vector<uint8_t>> receiver_;
