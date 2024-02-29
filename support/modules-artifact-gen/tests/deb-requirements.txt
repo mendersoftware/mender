@@ -1,2 +1,0 @@
-curl
-python3-pip
