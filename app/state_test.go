@@ -48,27 +48,28 @@ import (
 
 type stateTestController struct {
 	FakeDevice
-	updater                fakeUpdater
-	artifactName           string
-	updatePollIntvl        time.Duration
-	inventPollIntvl        time.Duration
-	retryIntvl             time.Duration
-	retryPollCount         int
-	state                  State
-	updateResp             *datastore.UpdateInfo
-	updateRespErr          menderError
-	authorized             bool
-	authorizeErr           menderError
-	reportError            menderError
-	logSendingError        menderError
-	reportStatus           string
-	reportUpdate           datastore.UpdateInfo
-	logUpdate              datastore.UpdateInfo
-	logs                   []byte
-	inventoryErr           error
-	controlMap             *ControlMapPool
-	installers             []installer.PayloadUpdatePerformer
-	refreshControlMapError error
+	updater                        fakeUpdater
+	artifactName                   string
+	updatePollIntvl                time.Duration
+	inventPollIntvl                time.Duration
+	retryIntvl                     time.Duration
+	retryPollCount                 int
+	state                          State
+	updateResp                     *datastore.UpdateInfo
+	updateRespErr                  menderError
+	authorized                     bool
+	authorizeErr                   menderError
+	reportError                    menderError
+	logSendingError                menderError
+	reportStatus                   string
+	reportUpdate                   datastore.UpdateInfo
+	logUpdate                      datastore.UpdateInfo
+	logs                           []byte
+	inventoryErr                   error
+	controlMap                     *ControlMapPool
+	installers                     []installer.PayloadUpdatePerformer
+	refreshControlMapError         error
+	triggerReadArtifactHeaderError bool
 }
 
 func (s *stateTestController) GetCurrentArtifactName() (string, error) {
@@ -164,6 +165,10 @@ func (s *stateTestController) CheckScriptsCompatibility() error {
 func (s *stateTestController) ReadArtifactHeaders(
 	from io.ReadCloser,
 ) (*installer.Installer, error) {
+	if s.triggerReadArtifactHeaderError {
+		return nil, fmt.Errorf("simulated error reading artifact headers")
+	}
+
 	installerFactories := installer.AllModules{
 		DualRootfs: s.FakeDevice,
 	}
@@ -732,7 +737,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	uis := s.(*updateStoreState)
 	assert.Equal(t, stream, uis.imagein)
 	s, c = transitionState(s, &ctx, sc)
-	assert.IsType(t, &updateStatusReportState{}, s)
+	assert.IsType(t, &updateCleanupState{}, s)
 	assert.False(t, c)
 
 	ud, err := datastore.LoadStateData(ms)
@@ -860,6 +865,14 @@ func TestStateUpdateStore(t *testing.T) {
 	assert.IsType(t, &updateAfterStoreState{}, s)
 	assert.False(t, c)
 	assert.Equal(t, client.StatusDownloading, sc.reportStatus)
+
+	// pretends an error reading the artifact header
+	sc = &stateTestController{
+		triggerReadArtifactHeaderError: true,
+	}
+
+	s, _ = uis.Handle(&ctx, sc)
+	assert.IsType(t, &updateCleanupState{}, s)
 
 	ud, err := datastore.LoadStateData(ms)
 	assert.NoError(t, err)
