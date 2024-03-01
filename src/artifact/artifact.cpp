@@ -54,5 +54,39 @@ ExpectedPayloadHeaderView View(parser::Artifact &artifact, size_t index) {
 			},
 	};
 };
+
+unordered_map<string, string> HeaderView::GetProvides() const {
+	unordered_map<string, string> ret;
+	ret["artifact_name"] = artifact_name;
+	if (artifact_group != "") {
+		ret["artifact_group"] = artifact_group;
+	}
+	if (type_info.artifact_provides) {
+		ret.insert(type_info.artifact_provides->cbegin(), type_info.artifact_provides->cend());
+	}
+
+	return ret;
+}
+
+unordered_map<string, vector<string>> HeaderView::GetDepends() const {
+	unordered_map<string, vector<string>> ret;
+	ret["device_type"] = header_info.depends.device_type;
+	if (header_info.depends.artifact_name) {
+		ret["artifact_name"] = header_info.depends.artifact_name.value();
+	}
+	if (header_info.depends.artifact_group) {
+		ret["artifact_group"] = header_info.depends.artifact_group.value();
+	}
+	if (type_info.artifact_depends) {
+		for (const auto &kv : type_info.artifact_depends.value()) {
+			// type_info.artifact_depends are just <string, string> pairs, we
+			// need <string, vector<string>> pairs
+			ret[kv.first] = vector<string> {kv.second};
+		}
+	}
+
+	return ret;
+}
+
 } // namespace artifact
 } // namespace mender

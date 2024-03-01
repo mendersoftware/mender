@@ -52,6 +52,9 @@ struct HeaderView {
 	HeaderInfo header_info;
 	TypeInfo type_info;
 	json::Json meta_data;
+
+	unordered_map<string, string> GetProvides() const;
+	unordered_map<string, vector<string>> GetDepends() const;
 };
 
 struct PayloadHeaderView {
