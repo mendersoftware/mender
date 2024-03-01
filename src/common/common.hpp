@@ -104,8 +104,9 @@ static inline bool VectorContainsString(const vector<string> &vec, const string 
 	return std::find(vec.begin(), vec.end(), str) != vec.end();
 }
 
+template <typename ValueType>
 static inline bool MapContainsStringKey(
-	const unordered_map<string, string> &map, const string &str) {
+	const unordered_map<string, ValueType> &map, const string &str) {
 	return map.find(str) != map.end();
 }
 
