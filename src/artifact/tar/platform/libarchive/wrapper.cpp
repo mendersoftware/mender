@@ -38,14 +38,14 @@ using ExpectedSize = expected::ExpectedSize;
 // the size of the data blocks returned.
 //
 // - On EOF return 0.
-// - On error return -1.
+// - On error, call archive_set_error and return -1.
 ssize_t reader_callback(archive *archive, void *in_reader_container, const void **buff) {
 	ReaderContainer *p_reader_container = static_cast<ReaderContainer *>(in_reader_container);
 
 	auto ret = p_reader_container->reader_.Read(
 		p_reader_container->buff_.begin(), p_reader_container->buff_.end());
 	if (!ret) {
-		log::Error("Failed to read from the archive stream: Error: " + ret.error().message);
+		archive_set_error(archive, ret.error().code.value(), "%s", ret.error().message.c_str());
 		return -1;
 	}
 
@@ -83,7 +83,7 @@ Error Handle::Init() {
 	if (r != ARCHIVE_OK) {
 		return MakeError(
 			error::GenericError,
-			"Failed to initalize the 'libarchive' C bindings. LibArchive error message: '"
+			"Failed to read from the archive stream: '"
 				+ string(archive_error_string(archive_.get()))
 				+ "' error code: " + std::to_string(archive_errno(archive_.get())));
 	}
