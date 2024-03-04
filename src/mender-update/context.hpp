@@ -154,10 +154,7 @@ private:
 
 // Only here to make testing easier, use MenderContext::MatchesArtifactDepends().
 expected::ExpectedBool ArtifactMatchesContext(
-	const ProvidesData &provides,
-	const string &device_type,
-	const artifact::HeaderInfo &hdr_info,
-	const artifact::TypeInfo &type_info);
+	const ProvidesData &provides, const string &device_type, const artifact::HeaderView &hdr_view);
 
 } // namespace context
 } // namespace update

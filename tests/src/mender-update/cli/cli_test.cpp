@@ -560,7 +560,7 @@ Installation failed. System not modified.
 		EXPECT_THAT(
 			output.GetCerr(),
 			testing::HasSubstr(
-				"'rootfs-image.checksum' artifact type info depends value 'notyourcorrectchecksum' doesn't match provides value 'f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2'"));
+				"Provides value 'f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2' doesn't match any of the 'rootfs-image.checksum' artifact depends"));
 	}
 }
 

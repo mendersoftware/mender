@@ -579,87 +579,86 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 		{"artifact_name", "artifact_name"}, {"artifact_group", "artifact_group"}};
 	string device_type = "device_type";
 
-	artifact::HeaderInfo hdr;
-	artifact::TypeInfo ti;
+	artifact::HeaderView hdr;
 
 	// MATCHES
-	hdr.depends = {{"device_type"}, nullopt, nullopt};
-	auto ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	hdr.header_info.depends = {{"device_type"}, nullopt, nullopt};
+	auto ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_TRUE(ex_match);
 	EXPECT_TRUE(ex_match.value());
 
-	hdr.depends = {
+	hdr.header_info.depends = {
 		{"device_type"},
 		optional<vector<string>>({"artifact_name"}),
 		optional<vector<string>>({"artifact_group"})};
 
-	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_TRUE(ex_match);
 	EXPECT_TRUE(ex_match.value());
 
-	hdr.depends = {
+	hdr.header_info.depends = {
 		{"device_type1", "device_type"},
 		optional<vector<string>>({"artifact_name1", "artifact_name"}),
 		optional<vector<string>>({"artifact_group1", "artifact_group"})};
 
-	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_TRUE(ex_match);
 	EXPECT_TRUE(ex_match.value());
 
-	hdr.depends = {
+	hdr.header_info.depends = {
 		{"device_type1", "device_type"},
 		optional<vector<string>>({"artifact_name1", "artifact_name"}),
 		nullopt};
 
-	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_TRUE(ex_match);
 	EXPECT_TRUE(ex_match.value());
 
-	hdr.depends = {
+	hdr.header_info.depends = {
 		{"device_type1", "device_type"},
 		nullopt,
 		optional<vector<string>>({"artifact_group1", "artifact_group"})};
 
-	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_TRUE(ex_match);
 	EXPECT_TRUE(ex_match.value());
 
 	// Mismatches in device type or artifact name/group
-	hdr.depends = {
+	hdr.header_info.depends = {
 		{"device_type"},
 		optional<vector<string>>({"artifact_name_other"}),
 		optional<vector<string>>({"artifact_group"})};
 
-	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_TRUE(ex_match);
 	EXPECT_FALSE(ex_match.value());
 
-	hdr.depends = {
+	hdr.header_info.depends = {
 		{"device_type"},
 		optional<vector<string>>({"artifact_name"}),
 		optional<vector<string>>({"artifact_group_other"})};
 
-	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_TRUE(ex_match);
 	EXPECT_FALSE(ex_match.value());
 
-	hdr.depends = {
+	hdr.header_info.depends = {
 		{"device_type_other"},
 		optional<vector<string>>({"artifact_name"}),
 		optional<vector<string>>({"artifact_group"})};
 
-	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_TRUE(ex_match);
 	EXPECT_FALSE(ex_match.value());
 
 	// Missing artifact_group
 	provides = {{"artifact_name", "artifact_name"}};
-	hdr.depends = {
+	hdr.header_info.depends = {
 		{"device_type"},
 		optional<vector<string>>({"artifact_name"}),
 		optional<vector<string>>({"artifact_group"})};
 
-	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_TRUE(ex_match);
 	EXPECT_FALSE(ex_match.value());
 
@@ -668,30 +667,30 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 		{"artifact_name", "artifact_name"},
 		{"artifact_group", "artifact_group"},
 		{"something_else", "something_else"}};
-	hdr.depends = {
+	hdr.header_info.depends = {
 		{"device_type"},
 		optional<vector<string>>({"artifact_name"}),
 		optional<vector<string>>({"artifact_group"})};
-	ti.artifact_depends = optional<unordered_map<string, string>>(
+	hdr.type_info.artifact_depends = optional<unordered_map<string, string>>(
 		unordered_map<string, string> {{"something_else", "something_else"}});
 
-	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_TRUE(ex_match);
 	EXPECT_TRUE(ex_match.value());
 
 	// Extra provides/depends mismatch
-	ti.artifact_depends = optional<unordered_map<string, string>>(
+	hdr.type_info.artifact_depends = optional<unordered_map<string, string>>(
 		unordered_map<string, string> {{"something_else", "other_something_else"}});
 
-	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_TRUE(ex_match);
 	EXPECT_FALSE(ex_match.value());
 
 	// Missing extra provides/depends
-	ti.artifact_depends = optional<unordered_map<string, string>>(
+	hdr.type_info.artifact_depends = optional<unordered_map<string, string>>(
 		unordered_map<string, string> {{"other_something_else", "something_else"}});
 
-	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_TRUE(ex_match);
 	EXPECT_FALSE(ex_match.value());
 }
@@ -704,25 +703,26 @@ TEST(ContextArtifactTests, ArtifactMatchesContextErrorsTest) {
 		{"artifact_name", "artifact_name"}, {"artifact_group", "artifact_group"}};
 	string device_type = "device_type";
 
-	artifact::HeaderInfo hdr;
-	artifact::TypeInfo ti;
+	artifact::HeaderView hdr;
 
 	// Missing device type
-	hdr.depends = {{}, nullopt, nullopt};
+	hdr.header_info.depends = {{}, nullopt, nullopt};
 
-	auto ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	auto ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_FALSE(ex_match);
 
 	// Empty artifact names vector
-	hdr.depends = {{"device_type"}, optional<vector<string>>(vector<string>(0)), nullopt};
+	hdr.header_info.depends = {
+		{"device_type"}, optional<vector<string>>(vector<string>(0)), nullopt};
 
-	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_FALSE(ex_match);
 
 	// Empty artifact groups vector
-	hdr.depends = {{"device_type"}, nullopt, optional<vector<string>>(vector<string>(0))};
+	hdr.header_info.depends = {
+		{"device_type"}, nullopt, optional<vector<string>>(vector<string>(0))};
 
-	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
+	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr);
 	ASSERT_FALSE(ex_match);
 #endif
 }

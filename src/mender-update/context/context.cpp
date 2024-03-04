@@ -387,65 +387,43 @@ expected::ExpectedBool MenderContext::MatchesArtifactDepends(const artifact::Hea
 		return expected::unexpected(ex_provides.error());
 	}
 	auto &provides = ex_provides.value();
-	return ArtifactMatchesContext(
-		provides, ex_dev_type.value(), hdr_view.header_info, hdr_view.type_info);
+	return ArtifactMatchesContext(provides, ex_dev_type.value(), hdr_view);
 }
 
 expected::ExpectedBool ArtifactMatchesContext(
-	const ProvidesData &provides,
-	const string &device_type,
-	const artifact::HeaderInfo &hdr_info,
-	const artifact::TypeInfo &type_info) {
-	if (!common::MapContainsStringKey(provides, "artifact_name")) {
+	const ProvidesData &provides, const string &device_type, const artifact::HeaderView &hdr_view) {
+	using common::MapContainsStringKey;
+	if (!MapContainsStringKey(provides, "artifact_name")) {
 		return expected::unexpected(
 			MakeError(ValueError, "Missing artifact_name value in provides"));
 	}
 
-	const auto &hdr_depends = hdr_info.depends;
-	AssertOrReturnUnexpected(hdr_depends.device_type.size() > 0);
-	if (!common::VectorContainsString(hdr_depends.device_type, device_type)) {
+	auto hdr_depends = hdr_view.GetDepends();
+	AssertOrReturnUnexpected(hdr_depends["device_type"].size() > 0);
+	if (!common::VectorContainsString(hdr_depends["device_type"], device_type)) {
 		log::Error("Artifact device type doesn't match");
 		return false;
 	}
+	hdr_depends.erase("device_type");
 
-	if (hdr_depends.artifact_name) {
-		AssertOrReturnUnexpected(hdr_depends.artifact_name->size() > 0);
-		if (!common::VectorContainsString(
-				*hdr_depends.artifact_name, provides.at("artifact_name"))) {
-			log::Error("Artifact name doesn't match");
-			return false;
-		}
-	}
+	AssertOrReturnUnexpected(
+		!MapContainsStringKey(hdr_depends, "artifact_name")
+		|| (hdr_depends["artifact_name"].size() > 0));
 
-	if (hdr_depends.artifact_group) {
-		AssertOrReturnUnexpected(hdr_depends.artifact_group->size() > 0);
-		if (!common::MapContainsStringKey(provides, "artifact_group")) {
-			log::Error(
-				"Missing artifact_group value in provides, required by artifact header info depends");
-			return false;
-		}
-		if (!common::VectorContainsString(
-				*hdr_depends.artifact_group, provides.at("artifact_group"))) {
-			log::Error("Artifact group doesn't match");
-			return false;
-		}
-	}
+	AssertOrReturnUnexpected(
+		!MapContainsStringKey(hdr_depends, "artifact_group")
+		|| (hdr_depends["artifact_group"].size() > 0));
 
-	const auto &ti_depends = type_info.artifact_depends;
-	if (!ti_depends) {
-		// nothing more to check
-		return true;
-	}
-	for (auto it : *ti_depends) {
+	for (auto it : hdr_depends) {
 		if (!common::MapContainsStringKey(provides, it.first)) {
-			log::Error(
-				"Missing '" + it.first + "' in provides, required by artifact type info depends");
+			log::Error("Missing '" + it.first + "' in provides, required by artifact depends");
 			return false;
 		}
-		if (provides.at(it.first) != it.second) {
+		if (!common::VectorContainsString(hdr_depends[it.first], provides.at(it.first))) {
 			log::Error(
-				"'" + it.first + "' artifact type info depends value '" + it.second
-				+ "' doesn't match provides value '" + provides.at(it.first) + "'");
+				"Provides value '" + provides.at(it.first) + "' doesn't match any of the '"
+				+ it.first + "' artifact depends ("
+				+ common::StringVectorToString(hdr_depends[it.first]) + ")");
 			return false;
 		}
 	}
