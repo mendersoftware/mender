@@ -30,6 +30,5 @@ add_dependencies(tests inventory_test)
 
 add_subdirectory(cli)
 add_subdirectory(daemon)
-add_subdirectory(http_resumer)
 add_subdirectory(progress_reader)
 add_subdirectory(update_module)

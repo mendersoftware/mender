@@ -17,7 +17,7 @@
 #include <common/common.hpp>
 #include <client_shared/conf.hpp>
 #include <common/log.hpp>
-#include <mender-update/http_resumer.hpp>
+#include <common/http_resumer.hpp>
 
 namespace mender {
 namespace update {
@@ -26,7 +26,7 @@ namespace daemon {
 namespace common = mender::common;
 namespace conf = mender::client_shared::conf;
 namespace log = mender::common::log;
-namespace http_resumer = mender::update::http_resumer;
+namespace http_resumer = mender::common::http::resumer;
 
 namespace main_context = mender::update::context;
 

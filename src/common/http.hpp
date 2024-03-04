@@ -40,18 +40,14 @@
 #include <common/log.hpp>
 
 namespace mender {
-namespace update {
-namespace http_resumer {
+namespace common {
+namespace http {
+
+namespace resumer {
 class DownloadResumerClient;
 class HeaderHandlerFunctor;
 class BodyHandlerFunctor;
-} // namespace http_resumer
-} // namespace update
-} // namespace mender
-
-namespace mender {
-namespace common {
-namespace http {
+} // namespace resumer
 
 using namespace std;
 
@@ -345,10 +341,10 @@ private:
 	shared_ptr<bool> cancelled_;
 
 	friend class Client;
-	friend class mender::update::http_resumer::DownloadResumerClient;
+	friend class resumer::DownloadResumerClient;
 	// The DownloadResumer's handlers needs to manipulate internals of IncomingResponse
-	friend class mender::update::http_resumer::HeaderHandlerFunctor;
-	friend class mender::update::http_resumer::BodyHandlerFunctor;
+	friend class resumer::HeaderHandlerFunctor;
+	friend class resumer::BodyHandlerFunctor;
 };
 
 class OutgoingResponse :

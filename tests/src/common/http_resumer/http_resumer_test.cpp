@@ -13,7 +13,7 @@
 //    limitations under the License.
 
 #include <common/http.hpp>
-#include <mender-update/http_resumer.hpp>
+#include <common/http_resumer.hpp>
 
 #include <chrono>
 #include <thread>
@@ -30,7 +30,7 @@ using namespace std;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace http = mender::common::http;
-namespace http_resumer = mender::update::http_resumer;
+namespace http_resumer = mender::common::http::resumer;
 namespace io = mender::common::io;
 namespace common = mender::common;
 namespace events = mender::common::events;

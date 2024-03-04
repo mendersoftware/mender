@@ -12,8 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef MENDER_UPDATE_HTTP_RESUMER_HPP
-#define MENDER_UPDATE_HTTP_RESUMER_HPP
+#ifndef MENDER_COMMON_HTTP_RESUMER_HPP
+#define MENDER_COMMON_HTTP_RESUMER_HPP
 
 #include <string>
 #include <memory>
@@ -26,8 +26,9 @@
 #include <common/http.hpp>
 
 namespace mender {
-namespace update {
-namespace http_resumer {
+namespace common {
+namespace http {
+namespace resumer {
 
 using namespace std;
 
@@ -174,8 +175,9 @@ private:
 	friend class BodyHandlerFunctor;
 };
 
-} // namespace http_resumer
-} // namespace update
+} // namespace resumer
+} // namespace http
+} // namespace common
 } // namespace mender
 
-#endif // MENDER_UPDATE_HTTP_RESUMER_HPP
+#endif // MENDER_COMMON_HTTP_RESUMER_HPP
