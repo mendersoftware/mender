@@ -134,3 +134,6 @@ target_link_libraries(dbus_test PUBLIC
 )
 gtest_discover_tests(dbus_test ${MENDER_TEST_FLAGS} NO_PRETTY_VALUES)
 add_dependencies(tests dbus_test)
+
+add_subdirectory(http_resumer)
+

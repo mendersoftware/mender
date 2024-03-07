@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <mender-update/http_resumer.hpp>
+#include <common/http_resumer.hpp>
 
 #include <regex>
 
@@ -20,8 +20,9 @@
 #include <common/expected.hpp>
 
 namespace mender {
-namespace update {
-namespace http_resumer {
+namespace common {
+namespace http {
+namespace resumer {
 
 namespace common = mender::common;
 namespace expected = mender::common::expected;
@@ -498,6 +499,7 @@ void DownloadResumerClient::DoCancel() {
 	cancelled_ = make_shared<bool>(true);
 };
 
-} // namespace http_resumer
-} // namespace update
+} // namespace resumer
+} // namespace http
+} // namespace common
 } // namespace mender

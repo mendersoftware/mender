@@ -217,10 +217,16 @@ endif()
 add_library(common_state_machine INTERFACE)
 target_link_libraries(common_state_machine INTERFACE common_watchdog)
 
-
 if (MENDER_USE_YAML_CPP)
   add_subdirectory(vendor/yaml-cpp)
   add_library(common_yaml STATIC yaml/yaml.cpp yaml/platform/yaml-cpp/yaml.cpp)
   target_link_libraries(common_yaml PUBLIC common common_io common_error yaml-cpp::yaml-cpp)
   target_compile_options(common_yaml PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 endif()
+
+add_library(mender_http_resumer STATIC
+  http/http_resumer.cpp
+)
+target_link_libraries(mender_http_resumer PUBLIC
+  common_http
+)

@@ -55,13 +55,6 @@ target_sources(update_module PRIVATE
 )
 target_compile_options(update_module PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 
-add_library(mender_http_resumer STATIC
-  http_resumer/http_resumer.cpp
-)
-target_link_libraries(mender_http_resumer PUBLIC
-  common_http
-)
-
 add_library(mender_update_standalone STATIC
   standalone/standalone.cpp
 )
