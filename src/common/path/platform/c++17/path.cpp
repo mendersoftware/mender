@@ -51,6 +51,16 @@ string DirName(const string &path) {
 	return fs::path(path).parent_path().string();
 }
 
+expected::ExpectedString Canonical(const string &path) {
+	error_code ec;
+	auto canonical = fs::canonical(path, ec);
+	if (ec) {
+		return expected::unexpected(
+			error::Error(ec.default_error_condition(), "Could not get canonical path"));
+	}
+	return canonical.string();
+}
+
 bool IsAbsolute(const string &path) {
 	return fs::path(path).is_absolute();
 }
