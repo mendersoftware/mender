@@ -107,10 +107,13 @@ static inline bool VectorContainsString(const vector<string> &vec, const string 
 static inline string StringVectorToString(const vector<string> &vec, const string delim = ",") {
 	string ret = "{";
 	auto sz = vec.size();
-	for (decltype(sz) i = 0; i < (sz - 1); i++) {
-		ret += "\"" + vec[i] + "\"" + delim;
+	if (sz > 0) {
+		for (decltype(sz) i = 0; i < (sz - 1); i++) {
+			ret += "\"" + vec[i] + "\"" + delim;
+		}
+		ret += "\"" + vec[sz - 1] + "\"";
 	}
-	ret += "\"" + vec[sz - 1] + "\"" + "}";
+	ret += "}";
 	return ret;
 }
 
