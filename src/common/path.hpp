@@ -59,6 +59,8 @@ string Join(const string &prefix, const Paths &...paths) {
 string BaseName(const string &path);
 string DirName(const string &path);
 
+expected::ExpectedString Canonical(const string &path);
+
 bool IsAbsolute(const string &path);
 
 bool FileExists(const string &path);
