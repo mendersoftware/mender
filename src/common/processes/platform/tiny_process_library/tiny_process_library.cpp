@@ -306,7 +306,7 @@ static void CollectLineData(
 		line_end_idx = bytes_view.find("\n", line_start_idx);
 	}
 
-	if ((line_end_idx == string_view::npos) && (line_start_idx != (len - 1))) {
+	if ((line_end_idx == string_view::npos) && (line_start_idx < len)) {
 		trailing_line += string(bytes_view, line_start_idx, (len - line_start_idx));
 	}
 }
