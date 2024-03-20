@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
@@ -178,6 +178,30 @@ else
   stat -c %a "${file}" > $permissions_file
 fi
 
+# Check the the passthrough_args and potentially modify them
+# to avoid conflicts or to let them override the already args
+# provided to mender-artifact
+passthrough_args_modified=" "
+parse=$(xargs -n 2 printf "%s %s\n" <<< $passthrough_args)
+while read -r flag arg; do
+  case $flag in
+    -T | --type)
+      echo "Error: Conflicting flag '$flag'. Already specified by the script."
+      exit 1
+      ;;
+    -o | --output-path)
+        output_path=$arg
+      ;;
+    -n | --name)
+        artifact_name=$arg
+      ;;
+    *)
+      passthrough_args_modified+="$flag $arg "
+      ;;
+  esac
+done <<< $parse
+echo passthrough_args_modified: $passthrough_args_modified
+
 mender-artifact write module-image \
   -T single-file \
   $device_types \
@@ -187,7 +211,7 @@ mender-artifact write module-image \
   -f "$filename_file" \
   -f "$permissions_file" \
   -f "$file" \
-  $passthrough_args
+  $passthrough_args_modified
 
 rm -rf $tmpdir
 
