@@ -23,6 +23,7 @@
 #include <client_shared/config_parser.hpp>
 #include <common/http.hpp>
 #include <common/path.hpp>
+#include <common/optional.hpp>
 
 namespace mender {
 namespace client_shared {
@@ -234,6 +235,11 @@ public:
 	}
 };
 
+struct CliArgument {
+	string name;
+	bool mandatory;
+};
+
 struct CliOption {
 	string long_option;
 	string short_option;
@@ -245,6 +251,7 @@ struct CliOption {
 struct CliCommand {
 	string name;
 	string description;
+	optional<CliArgument> argument;
 	vector<CliOption> options;
 };
 

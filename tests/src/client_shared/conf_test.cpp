@@ -612,6 +612,38 @@ TEST(ConfTests, CliCliHelpCommandLookup) {
 						},
 				},
 				conf::CliCommand {
+					.name = "command-arg-1",
+					.description = "command with argument",
+					.argument =
+						conf::CliArgument {
+							.name = "arg-one",
+							.mandatory = true,
+						},
+					.options =
+						{
+							conf::CliOption {
+								.long_option = "option-one",
+								.description = "description of option-one",
+							},
+						},
+				},
+				conf::CliCommand {
+					.name = "command-arg-2",
+					.description = "command with argument 2",
+					.argument =
+						conf::CliArgument {
+							.name = "arg-one",
+							.mandatory = false,
+						},
+					.options =
+						{
+							conf::CliOption {
+								.long_option = "option-one",
+								.description = "description of option-one",
+							},
+						},
+				},
+				conf::CliCommand {
 					.name = "command-one",
 					.description = "masked command - it will never show",
 					.options =
@@ -636,9 +668,11 @@ TEST(ConfTests, CliCliHelpCommandLookup) {
 		help_non_existing.str(),
 		testing::HasSubstr(
 			R"(COMMANDS:
-   command-one  command 1 description
-   command-two  command 2 description
-   command-one  masked command - it will never show)"))
+   command-one    command 1 description
+   command-two    command 2 description
+   command-arg-1  command with argument
+   command-arg-2  command with argument 2
+   command-one    masked command - it will never show)"))
 		<< help_non_existing.str();
 
 	std::ostringstream help_command_1;
@@ -646,6 +680,9 @@ TEST(ConfTests, CliCliHelpCommandLookup) {
 	EXPECT_EQ(
 		R"(NAME:
    mender-something command-one - command 1 description
+
+USAGE:
+   mender-something [global options] command-one [command options]
 
 OPTIONS:
    --option-one  description only visible on command 1 help
@@ -661,12 +698,47 @@ OPTIONS:
 		R"(NAME:
    mender-something command-two - command 2 description
 
+USAGE:
+   mender-something [global options] command-two [command options]
+
 OPTIONS:
    --option-two  description only visible on command 2 help
    --help, -h    Show help and exit
 )",
 		help_command_2.str())
 		<< help_command_2.str();
+
+	std::ostringstream help_command_3;
+	conf::PrintCliCommandHelp(cli_lookup, "command-arg-1", help_command_3);
+	EXPECT_EQ(
+		R"(NAME:
+   mender-something command-arg-1 - command with argument
+
+USAGE:
+   mender-something [global options] command-arg-1 [command options] arg-one
+
+OPTIONS:
+   --option-one  description of option-one
+   --help, -h    Show help and exit
+)",
+		help_command_3.str())
+		<< help_command_3.str();
+
+	std::ostringstream help_command_4;
+	conf::PrintCliCommandHelp(cli_lookup, "command-arg-2", help_command_4);
+	EXPECT_EQ(
+		R"(NAME:
+   mender-something command-arg-2 - command with argument 2
+
+USAGE:
+   mender-something [global options] command-arg-2 [command options] [arg-one]
+
+OPTIONS:
+   --option-one  description of option-one
+   --help, -h    Show help and exit
+)",
+		help_command_4.str())
+		<< help_command_4.str();
 }
 
 class TestEnvClearer {

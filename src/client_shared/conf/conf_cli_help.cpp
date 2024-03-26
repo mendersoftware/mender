@@ -147,6 +147,19 @@ void PrintInTwoColumns(
 	}
 }
 
+string PrintArgument(optional<CliArgument> argument, ostream &stream) {
+	string cliarg;
+
+	if (argument.has_value()) {
+		if (argument.value().mandatory) {
+			cliarg = " " + argument.value().name;
+		} else {
+			cliarg = " [" + argument.value().name + "]";
+		}
+	}
+	return cliarg;
+}
+
 void PrintOptions(const vector<CliOption> &options, ostream &stream) {
 	PrintInTwoColumns(
 		options.begin(),
@@ -183,6 +196,10 @@ void PrintCommandHelp(const string &cli_name, const CliCommand &command, ostream
 		stream << " - " << command.description;
 	}
 	stream << endl << endl;
+
+	stream << "USAGE:" << endl;
+	stream << indent << cli_name << " [global options] " << command.name + " [command options]";
+	stream << PrintArgument(command.argument, stream) << endl << endl;
 
 	// Append --help option at the command level
 	vector<CliOption> options_with_help = command.options;
