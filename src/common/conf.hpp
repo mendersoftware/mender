@@ -98,20 +98,28 @@ private:
 	ArgumentsMode mode_ {ArgumentsMode::RejectBareArguments};
 };
 
+const struct {
+	string path_conf_dir = path::Join("/etc", "mender");
+	string conf_file = path::Join(path_conf_dir, "mender.conf");
+	string path_data_dir = path::Join("/usr/share", "mender");
+	string data_store = path::Join("/var/lib", "mender");
+	string fallback_conf_file = path::Join(data_store, "mender.conf");
+} DefaultPaths;
+
 // NOTE - When updating this class - either adding or removing variables. Be
 // sure to update the transitive dependencies also.
 class Paths {
 private:
-	string path_conf_dir = conf::GetEnv("MENDER_CONF_DIR", path::Join("/etc", "mender"));
+	string path_conf_dir = conf::GetEnv("MENDER_CONF_DIR", DefaultPaths.path_conf_dir);
 	string rootfs_scripts_path = path::Join(path_conf_dir, "scripts");
 	string conf_file = path::Join(path_conf_dir, "mender.conf");
 
-	string path_data_dir = conf::GetEnv("MENDER_DATA_DIR", path::Join("/usr/share", "mender"));
+	string path_data_dir = conf::GetEnv("MENDER_DATA_DIR", DefaultPaths.path_data_dir);
 	string modules_path = path::Join(path_data_dir, "modules/v3");
 	string identity_script = path::Join(path_data_dir, "identity", "mender-device-identity");
 	string inventory_scripts_dir = path::Join(path_data_dir, "inventory");
 
-	string data_store = conf::GetEnv("MENDER_DATASTORE_DIR", path::Join("/var/lib", "mender"));
+	string data_store = conf::GetEnv("MENDER_DATASTORE_DIR", DefaultPaths.data_store);
 	string update_log_path = data_store;
 	string artifact_script_path = path::Join(data_store, "scripts");
 	string modules_work_path = path::Join(data_store, "modules/v3");
