@@ -35,8 +35,6 @@ const size_t max_width = 78;
 const string indent = "   ";   // 3 spaces
 const string separator = "  "; // 2 spaces
 
-const Paths default_paths = Paths {};
-
 const CliOption help_option = {
 	.long_option = "help",
 	.short_option = "h",
@@ -48,14 +46,14 @@ const vector<CliOption> common_global_options = {
 		.long_option = "config",
 		.short_option = "c",
 		.description = "Configuration FILE path",
-		.default_value = default_paths.GetConfFile(),
+		.default_value = DefaultPaths.conf_file,
 		.parameter = "FILE",
 	},
 	CliOption {
 		.long_option = "fallback-config",
 		.short_option = "b",
 		.description = "Fallback configuration FILE path",
-		.default_value = default_paths.GetFallbackConfFile(),
+		.default_value = DefaultPaths.fallback_conf_file,
 		.parameter = "FILE",
 	},
 	CliOption {
@@ -67,7 +65,7 @@ const vector<CliOption> common_global_options = {
 		.long_option = "datastore",
 		.short_option = "d",
 		.description = "Mender state data DIRECTORY path",
-		.default_value = default_paths.GetDataStore(),
+		.default_value = DefaultPaths.data_store,
 		.parameter = "DIR",
 	},
 	CliOption {
@@ -107,11 +105,11 @@ const string common_description_append = R"(Global flag remarks:
 
 Environment variables:
    - MENDER_CONF_DIR - configuration (default: )"
-										 + default_paths.GetPathConfDir() + R"().
+										 + DefaultPaths.path_conf_dir + R"().
    - MENDER_DATA_DIR - identity, inventory and update modules (default: )"
-										 + default_paths.GetPathDataDir() + R"().
+										 + DefaultPaths.path_data_dir + R"().
    - MENDER_DATASTORE_DIR - runtime datastore (default: )"
-										 + default_paths.GetDataStore() + R"().)";
+										 + DefaultPaths.data_store + R"().)";
 
 template <typename InputIterator>
 using ColumnFormatter = function<string(typename iterator_traits<InputIterator>::value_type)>;
