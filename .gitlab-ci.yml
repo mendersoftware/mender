@@ -69,7 +69,7 @@ test:backward-compat:
       Pin: release a=buster-backports
       Pin-Priority: 999
       EOF
-    - apt update & apt install -yyq --allow-unauthenticated cmake
+    - apt update && apt install -yyq --allow-unauthenticated cmake
   script:
     - cmake -D MENDER_DOWNLOAD_BOOST=ON .
     - make --jobs=$(nproc --all) --keep-going
