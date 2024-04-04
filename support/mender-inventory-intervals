@@ -1,0 +1,32 @@
+#!/bin/sh
+
+# Returns the different poll intervals from the mender.conf file,
+# this will allow the user to understand how much to wait to make decisions
+
+set -e
+
+json_file="/etc/mender/mender.conf"
+
+# Array of keys to extract
+keys=("InventoryPollIntervalSeconds" "RetryPollIntervalSeconds" "UpdatePollIntervalSeconds" "RetryPollCount")
+
+# Check if the JSON file exists
+if [[ ! -f "$json_file" ]]; then
+  echo "Error: JSON file not found at $json_file"
+  exit 1
+fi
+
+# Extract key-value pairs and convert to kebab-case
+for key in "${keys[@]}"; do
+  line=$(grep -E "\"${key}\":\s*" "$json_file")
+
+  if [[ -n "$line" ]]; then
+    value=$(echo "$line" | sed -E 's/.*:([^,]*)[,]*$/\1/' | awk '{print $1}') 
+
+    # Transform key to kebab-case with dynamic prefix
+    transformed_key=$(echo "$key" | sed -E 's/Inventory|Interval//g; s/^/interval/; s/([A-Z])/-\L\1/g')
+
+    echo "${transformed_key}=$value"  
+  fi
+done
+
