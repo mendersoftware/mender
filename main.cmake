@@ -61,10 +61,8 @@ else()
   set(MENDER_USE_TINY_PROC_LIB 0)
 endif()
 
-add_subdirectory(vendor/expected)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/expected/include)
 
-add_subdirectory(vendor/optional-lite)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/optional-lite/include)
 
 include(cmake/build_mode.cmake)
