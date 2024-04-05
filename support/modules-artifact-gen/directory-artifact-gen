@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 set -e
 
@@ -53,7 +53,7 @@ dest_dir_file="dest_dir"
 file_tree=""
 passthrough_args=""
 
-while (( "$#" )); do
+while [ -n "$1" ]; do
   case "$1" in
     --device-type | -t)
       if [ -z "$2" ]; then
@@ -147,7 +147,7 @@ esac
 # Create tarball, accepts directory.
 if [ -e "${file_tree}" ]; then
   if [ -d "${file_tree}" ]; then
-    if [ "$dest_dir" == "/" ]; then
+    if [ "$dest_dir" = "/" ]; then
       echo "Error: this Update Module does not support file tree deployment at /"
       exit 1
     fi

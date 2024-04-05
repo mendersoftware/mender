@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 set -e
 
@@ -53,7 +53,7 @@ meta_data_file="meta-data.json"
 IMAGES=""
 passthrough_args=""
 
-while (( "$#" )); do
+while [ -n "$1" ]; do
   case "$1" in
     --device-type | -t)
       if [ -z "$2" ]; then
