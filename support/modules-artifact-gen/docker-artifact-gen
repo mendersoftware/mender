@@ -134,17 +134,44 @@ HASHES=$(echo $HASHES | tr ' ' ',')
 
 eval "jq -n --argjson c '[$HASHES]' '{\"containers\": \$c, \"run_args\": \"${run_args}\"}'" > $meta_data_file
 
+# Check the the passthrough_args and potentially modify them
+# to avoid conflicts or to let them override the already args
+# provided to mender-artifact
+# # Runs in a subshell to allow overriding some parameters passed
+# to mender-artifact
+passthrough_args_modified=" "
+echo -n $passthrough_args | xargs -n 2 printf "%s %s\n" | (while read -r flag arg; do
+  if [ -n "$flag" ] && [ -n "$arg" ]; then
+    case $flag in
+      -T | --type | -m | --meta-data)
+        echo "Error: Conflicting flag '$flag'. Already specified by the script."
+        exit 1
+        ;;
+      -o | --output-path)
+        output_path=$arg
+        ;;
+      -n | --name)
+        artifact_name=$arg
+        ;;
+      *)
+        passthrough_args_modified="$passthrough_args_modified $flag $arg"
+        ;;
+    esac
+  fi
+done
+
 mender-artifact write module-image \
   -T docker \
   $device_types \
   -o $output_path \
   -n $artifact_name \
   -m $meta_data_file \
-  $passthrough_args
+  $passthrough_args_modified
 
-rm $meta_data_file
 
 echo "Artifact $output_path generated successfully:"
 mender-artifact read $output_path
-
+# End of subshell
+)
+rm $meta_data_file
 exit 0

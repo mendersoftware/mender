@@ -161,9 +161,34 @@ else
   exit 1
 fi
 
-
 # Create dest_dir file in plain text
 echo "$dest_dir" > $dest_dir_file
+
+# Check the the passthrough_args and potentially modify them
+# to avoid conflicts or to let them override the already args
+# provided to mender-artifact
+# Runs in a subshell to allow overriding some parameters passed
+# to mender-artifact
+passthrough_args_modified=" "
+echo -n $passthrough_args | xargs -n 2 printf "%s %s\n" | (while read -r flag arg; do
+  if [ -n "$flag" ] && [ -n "$arg" ]; then
+    case $flag in
+      -T | --type)
+        echo "Error: Conflicting flag '$flag'. Already specified by the script."
+        exit 1
+        ;;
+      -o | --output-path)
+        output_path=$arg
+        ;;
+      -n | --name)
+        artifact_name=$arg
+        ;;
+      *)
+        passthrough_args_modified="$passthrough_args_modified $flag $arg"
+        ;;
+    esac
+  fi
+done
 
 mender-artifact write module-image \
   -T directory \
@@ -172,12 +197,13 @@ mender-artifact write module-image \
   -n $artifact_name \
   -f $update_files_tar \
   -f $dest_dir_file \
-  $passthrough_args
+  $passthrough_args_modified
 
-rm $update_files_tar
-rm $dest_dir_file
 
 echo "Artifact $output_path generated successfully:"
 mender-artifact read $output_path
-
+# End of subshell
+)
+rm $update_files_tar
+rm $dest_dir_file
 exit 0
