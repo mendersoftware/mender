@@ -25,6 +25,22 @@ else
     SETENV=fw_setenv
 fi
 
+resolve_rootfs() {
+    case "$1" in
+        /dev/root|/dev/disk/by-partlabel/*|/dev/disk/by-partuuid/*)
+            # This is a symlink that points to the regular device
+            # (e.g. /dev/disk/by-partuuid/b3c4f349-1180-45e1-9a3d-0a6697f4960e --> /dev/sda2)
+            echo "$(readlink -f $1)"
+            ;;
+
+        *)
+            # Keep any other path as-is
+            # (cf. https://github.com/mendersoftware/mender/pull/1613#discussion_r1584353642 for the reasoning)
+            echo "$1"
+            ;;
+    esac
+}
+
 parse_conf_file() {
     MENDER_ROOTFS_PART_A=""
     MENDER_ROOTFS_PART_B=""
@@ -63,6 +79,11 @@ parse_conf_file() {
     MENDER_ROOTFS_PART_A="$(echo $MENDER_ROOTFS_PART_A | sed -e 's,^ubi,/dev/ubi,')"
     MENDER_ROOTFS_PART_B="$(echo $MENDER_ROOTFS_PART_B | sed -e 's,^ubi,/dev/ubi,')"
 
+    # Resolve paths if required.
+    MENDER_ROOTFS_PART_A="$(resolve_rootfs $MENDER_ROOTFS_PART_A)"
+    MENDER_ROOTFS_PART_B="$(resolve_rootfs $MENDER_ROOTFS_PART_B)"
+
+    # Extract the partition number from the regular device path (e.g. /dev/sda2 --> 2).
     MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | grep -Eo '[0-9]+$' || true)"
     MENDER_ROOTFS_PART_B_NUMBER="$(echo "$MENDER_ROOTFS_PART_B" | grep -Eo '[0-9]+$' || true)"
 
