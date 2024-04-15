@@ -58,7 +58,7 @@ test:backward-compat:
   before_script:
     - apt update && apt install -yyq ccache g++ git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libboost-regex-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus libsystemd-dev
     # backport CMake
-    - echo "deb http://deb.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/buster-backports_deps.list
+    - echo "deb http://archive.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/buster-backports_deps.list
     - |
       cat <<EOF> /etc/apt/preferences.d/prefer_backports.pref
       Package: cmake*
