@@ -322,6 +322,19 @@ ExpectedLineData Process::GenerateLineData(chrono::nanoseconds timeout) {
 			ProcessesErrorCode::SpawnError, "No arguments given, cannot spawn a process"));
 	}
 
+	// Tiny-process-library doesn't give a good error if the command isn't found (just returns
+	// exit code 1). If the path is absolute, it's pretty easy to check if it exists. This won't
+	// cover all errors (non-absolute or unset executable bit, for example), but helps a little,
+	// at least.
+	if (path::IsAbsolute(args_[0])) {
+		ifstream f(args_[0]);
+		if (!f.good()) {
+			int errnum = errno;
+			return expected::unexpected(error::Error(
+				generic_category().default_error_condition(errnum), "Cannot launch " + args_[0]));
+		}
+	}
+
 	string trailing_line;
 	vector<string> ret;
 	proc_ = make_unique<tpl::Process>(
