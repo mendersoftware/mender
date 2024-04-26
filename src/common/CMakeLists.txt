@@ -35,7 +35,7 @@ endif()
 
 configure_file(config.h.in config.h)
 
-if(${MENDER_USE_NLOHMANN_JSON})
+if(${MENDER_USE_TINY_PROC_LIB})
   add_subdirectory(vendor/tiny-process-library)
 endif()
 
