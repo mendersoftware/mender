@@ -1,4 +1,4 @@
-set(SYSTEMD_UNIT_DIR /lib/systemd/system)
+set(SYSTEMD_UNIT_DIR /lib/systemd/system CACHE STRING "Directory where systemd unit files are installed")
 
 include(GNUInstallDirs)
 
