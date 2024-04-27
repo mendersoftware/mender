@@ -1,0 +1,7 @@
+config MENDER_OTA
+    bool "Mender OTA"
+	select CPP
+	select CPP_EXCEPTIONS
+	select REQUIRES_FULL_LIBCPP
+	help
+	    Mender is an open-source, over-the-air (OTA) update manager for IoT and embedded Linux devices
