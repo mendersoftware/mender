@@ -158,9 +158,8 @@ publish:tests:
     # old component than two.
     - curl -f https://github.com/eddyxu/cpp-coveralls/commit/067c837c04e039e8c70aa53bceda1cded6751408.patch | patch -f /usr/local/lib/python3.11/site-packages/cpp_coveralls/__init__.py
 
-    - export CI_BRANCH=$CI_COMMIT_BRANCH
-    # "TRAVIS_JOB_ID" is hardcoded in cpp-coveralls, but it is semantically the
-    # same as "CI_JOB_ID" would be.
+    # Set "TRAVIS_*" variables based on GitLab ones
+    - export TRAVIS_BRANCH=$CI_COMMIT_BRANCH
     - export TRAVIS_JOB_ID=$CI_PIPELINE_ID
 
   script:
