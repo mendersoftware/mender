@@ -71,6 +71,8 @@ error::Error DeleteRecursively(const string &path);
 
 expected::ExpectedBool IsExecutable(const string &path, const bool warn = true);
 
+expected::ExpectedBool AreFilesIdentical(const string &file_one, const string &file_two);
+
 expected::ExpectedUnorderedSet<string> ListFiles(const string &in, function<bool(string)> matcher);
 
 error::Error CreateDirectory(const string &path);
