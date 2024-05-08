@@ -181,8 +181,14 @@ error::Error TeeReader::ReadyToAsyncRead(
 			if (result) {
 				ctx.buffer_bytes_missing -= result.value();
 			}
+			auto err = MaybeDiscardBuffer();
+			if (err != error::NoError) {
+				if (!result) {
+					err = result.error().FollowedBy(err);
+				}
+				result = expected::unexpected(err);
+			}
 			handler(result);
-			MaybeDiscardBuffer();
 		};
 
 		auto err = buffered_reader_->AsyncRead(start, start + to_read, handler_wrapper);
@@ -252,7 +258,7 @@ void TeeReader::DoAsyncRead() {
 	}
 }
 
-void TeeReader::MaybeDiscardBuffer() {
+error::Error TeeReader::MaybeDiscardBuffer() {
 	if (stop_done_
 		&& all_of(
 			leaf_readers_.begin(),
@@ -260,13 +266,15 @@ void TeeReader::MaybeDiscardBuffer() {
 			[](const std::pair<TeeReaderLeafPtr, TeeReaderLeafContext> r) {
 				return r.second.buffer_bytes_missing == 0;
 			})) {
-		buffered_reader_->StopBufferingAndDiscard();
+		return buffered_reader_->StopBufferingAndDiscard();
 	}
+
+	return error::NoError;
 }
 
-void TeeReader::StopBuffering() {
+error::Error TeeReader::StopBuffering() {
 	stop_done_ = true;
-	MaybeDiscardBuffer();
+	return MaybeDiscardBuffer();
 }
 
 error::Error TeeReader::RemoveReader(TeeReader::TeeReaderLeafPtr leaf_reader) {
