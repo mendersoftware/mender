@@ -277,7 +277,6 @@ error::Error TeeReader::RemoveReader(TeeReader::TeeReaderLeafPtr leaf_reader) {
 	leaf_readers_.erase(found);
 
 	if (leaf_readers_.size() == 0) {
-		buffered_reader_->StopBufferingAndDiscard();
 		buffered_reader_->Cancel();
 	}
 	return error::NoError;
@@ -285,7 +284,6 @@ error::Error TeeReader::RemoveReader(TeeReader::TeeReaderLeafPtr leaf_reader) {
 
 TeeReader::~TeeReader() {
 	leaf_readers_.clear();
-	buffered_reader_->StopBufferingAndDiscard();
 	buffered_reader_->Cancel();
 }
 
