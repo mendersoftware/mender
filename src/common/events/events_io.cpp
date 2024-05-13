@@ -292,7 +292,6 @@ error::Error TeeReader::RemoveReader(TeeReader::TeeReaderLeafPtr leaf_reader) {
 
 TeeReader::~TeeReader() {
 	leaf_readers_.clear();
-	buffered_reader_->Cancel();
 }
 
 error::Error TeeReader::TeeReaderLeaf::AsyncRead(
