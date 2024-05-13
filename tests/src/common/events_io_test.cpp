@@ -848,7 +848,7 @@ TEST(EventsIo, TeeReaderBufferedContents) {
 			// Attach new reader and stop buffering
 			auto downstream_reader2 = upstream_reader->MakeAsyncReader();
 			ASSERT_TRUE(downstream_reader2) << downstream_reader2.error().String();
-			upstream_reader->StopBuffering();
+			ASSERT_EQ(upstream_reader->StopBuffering(), error::NoError);
 			one_reader2 = make_shared<CountOnesReader>(*downstream_reader2.value(), 2);
 
 			// Second call, remaining data

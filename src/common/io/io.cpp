@@ -597,11 +597,22 @@ ExpectedSize BufferedReader::Read(vector<uint8_t>::iterator start, vector<uint8_
 		}
 
 		Vsize bytes_read_buffer = ex_bytes_read.value();
-		if (bytes_read_buffer > 0) {
-			return bytes_read_buffer;
+
+		// Because we track the number of bytes, we should never hit EOF.
+		AssertOrReturnUnexpected(bytes_read_buffer > 0);
+		AssertOrReturnUnexpected(buffer_remaining_ >= bytes_read_buffer);
+
+		buffer_remaining_ -= bytes_read_buffer;
+
+		// When out of bytes, continue with reading from the wrapped reader
+		if (buffer_remaining_ == 0) {
+			rewind_consumed_ = true;
+			if (stop_done_) {
+				buffer_.clear();
+			}
 		}
-		// When EOF, continue with reading from the wrapped reader
-		rewind_consumed_ = true;
+
+		return bytes_read_buffer;
 	}
 
 	// Read from the wrapped reader and save copy into the buffer
@@ -611,8 +622,6 @@ ExpectedSize BufferedReader::Read(vector<uint8_t>::iterator start, vector<uint8_
 	}
 	if (!stop_done_) {
 		buffer_.insert(buffer_.end(), start, start + bytes_read.value());
-	} else if (rewind_consumed_) {
-		buffer_.clear();
 	}
 	return bytes_read;
 }
@@ -624,8 +633,9 @@ ExpectedSize BufferedReader::Rewind() {
 	}
 	buffer_reader_.Rewind();
 	rewind_done_ = true;
-	rewind_consumed_ = false;
-	return buffer_.size();
+	buffer_remaining_ = buffer_.size();
+	rewind_consumed_ = (buffer_remaining_ == 0);
+	return buffer_remaining_;
 }
 
 ExpectedSize BufferedReader::StopBufferingAndRewind() {
@@ -656,12 +666,23 @@ error::Error AsyncBufferedReader::AsyncRead(
 		}
 
 		Vsize bytes_read_buffer = ex_bytes_read.value();
-		if (bytes_read_buffer > 0) {
-			handler(ex_bytes_read);
-			return error::NoError;
+
+		// Because we track the number of bytes, we should never hit EOF.
+		AssertOrReturnError(bytes_read_buffer > 0);
+		AssertOrReturnError(buffer_remaining_ >= bytes_read_buffer);
+
+		buffer_remaining_ -= bytes_read_buffer;
+
+		// When out of bytes, continue with reading from the wrapped reader
+		if (buffer_remaining_ == 0) {
+			rewind_consumed_ = true;
+			if (stop_done_) {
+				buffer_.clear();
+			}
 		}
-		// When EOF, continue with reading from the wrapped reader
-		rewind_consumed_ = true;
+
+		handler(ex_bytes_read);
+		return error::NoError;
 	}
 
 	// Read from the wrapped reader and save copy into the buffer
@@ -672,8 +693,6 @@ error::Error AsyncBufferedReader::AsyncRead(
 		}
 		if (!stop_done_) {
 			buffer_.insert(buffer_.end(), start, start + result.value());
-		} else if (rewind_consumed_) {
-			buffer_.clear();
 		}
 		handler(result);
 	};
@@ -688,8 +707,9 @@ ExpectedSize AsyncBufferedReader::Rewind() {
 	}
 	buffer_reader_.Rewind();
 	rewind_done_ = true;
-	rewind_consumed_ = false;
-	return buffer_.size();
+	buffer_remaining_ = buffer_.size();
+	rewind_consumed_ = (buffer_remaining_ == 0);
+	return buffer_remaining_;
 }
 
 ExpectedSize AsyncBufferedReader::StopBufferingAndRewind() {

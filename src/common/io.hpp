@@ -300,6 +300,7 @@ private:
 protected:
 	vector<uint8_t> buffer_;
 	ByteReader buffer_reader_;
+	size_t buffer_remaining_ {0};
 
 public:
 	BufferedReader(Reader &reader) :
@@ -325,6 +326,7 @@ private:
 protected:
 	vector<uint8_t> buffer_;
 	ByteReader buffer_reader_;
+	size_t buffer_remaining_ {0};
 
 public:
 	AsyncBufferedReader(AsyncReader &reader) :

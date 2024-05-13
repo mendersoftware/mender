@@ -169,7 +169,7 @@ private:
 
 	void DoAsyncRead();
 	void CallAllHandlers(mio::ExpectedSize);
-	void MaybeDiscardBuffer();
+	error::Error MaybeDiscardBuffer();
 
 public:
 	TeeReader(mio::AsyncReaderPtr source) :
@@ -187,7 +187,7 @@ public:
 		vector<uint8_t>::iterator end,
 		mio::AsyncIoHandler handler);
 
-	void StopBuffering();
+	error::Error StopBuffering();
 
 	error::Error RemoveReader(TeeReaderLeafPtr leaf_reader);
 
