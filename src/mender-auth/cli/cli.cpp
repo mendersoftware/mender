@@ -19,7 +19,6 @@
 #include <client_shared/conf.hpp>
 #include <common/expected.hpp>
 #include <common/io.hpp>
-#include <common/setup.hpp>
 
 #include <mender-auth/cli/actions.hpp>
 #include <mender-auth/context.hpp>
@@ -34,7 +33,6 @@ using namespace std;
 namespace conf = mender::client_shared::conf;
 namespace expected = mender::common::expected;
 namespace io = mender::common::io;
-namespace setup = mender::common::setup;
 
 namespace context = mender::auth::context;
 namespace ipc = mender::auth::ipc;
@@ -160,8 +158,6 @@ static ExpectedActionPtr ParseAuthArguments(
 
 error::Error DoMain(
 	const vector<string> &args, function<void(context::MenderContext &ctx)> test_hook) {
-	setup::GlobalSetup();
-
 	conf::MenderConfig config;
 	auto arg_pos = config.ProcessCmdlineArgs(args.begin(), args.end(), cli_mender_auth);
 	if (!arg_pos) {
