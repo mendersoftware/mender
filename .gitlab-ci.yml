@@ -70,7 +70,7 @@ publish:tests:
   before_script:
     # Install dependencies
     - apk add --no-cache git
-    - GO111MODULE=off go get -u github.com/mattn/goveralls
+    - go install github.com/mattn/goveralls@v0.0.12
     # Coveralls env variables:
     #  According to https://docs.coveralls.io/supported-ci-services
     #  we should set CI_NAME, CI_BUILD_NUMBER, etc. But according
