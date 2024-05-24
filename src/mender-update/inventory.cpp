@@ -29,7 +29,6 @@
 #include <common/io.hpp>
 #include <common/json.hpp>
 #include <common/log.hpp>
-#include <common/path.hpp>
 
 namespace mender {
 namespace update {
@@ -48,7 +47,6 @@ namespace inv_parser = mender::client_shared::inventory_parser;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace log = mender::common::log;
-namespace path = mender::common::path;
 
 const InventoryErrorCategoryClass InventoryErrorCategory;
 

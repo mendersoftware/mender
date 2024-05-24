@@ -24,7 +24,6 @@
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/http.hpp>
-#include <common/path.hpp>
 
 #include <api/api.hpp>
 
@@ -45,7 +44,6 @@ namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace http = mender::common::http;
 namespace log = mender::common::log;
-namespace path = mender::common::path;
 
 namespace auth_client = mender::auth::api::auth;
 
