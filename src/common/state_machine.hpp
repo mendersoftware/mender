@@ -22,7 +22,6 @@
 #include <common/common.hpp>
 #include <common/events.hpp>
 #include <common/log.hpp>
-#include <common/watchdog.hpp>
 
 namespace mender {
 namespace common {
@@ -33,7 +32,6 @@ using namespace std;
 namespace common = mender::common;
 namespace events = mender::common::events;
 namespace log = mender::common::log;
-namespace application_watchdog = mender::common::watchdog;
 
 template <typename ContextType, typename EventType>
 class StateMachineRunner;
@@ -120,6 +118,8 @@ public:
 template <typename ContextType, typename EventType>
 class StateMachineRunner : virtual public EventPoster<EventType> {
 public:
+	using IterationCallback = function<void()>;
+
 	StateMachineRunner(ContextType &ctx) :
 		ctx_(ctx) {
 	}
@@ -159,9 +159,15 @@ public:
 		machines_.push_back(&machine);
 	}
 
+	void SetIterationCallback(IterationCallback callback) {
+		iteration_callback_ = callback;
+	}
+
 private:
 	void RunOne() {
-		application_watchdog::Kick();
+		if (iteration_callback_) {
+			iteration_callback_();
+		}
 
 		vector<State<ContextType, EventType> *> to_run;
 
@@ -254,6 +260,8 @@ private:
 	// Would be nice with optional<EventLoop &> reference here, but optional doesn't support
 	// references. Use a pointer with a null deleter instead.
 	shared_ptr<events::EventLoop> event_loop_;
+
+	IterationCallback iteration_callback_;
 };
 
 } // namespace state_machine
