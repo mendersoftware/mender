@@ -211,8 +211,9 @@ error::Error TeeReader::ReadyToAsyncRead(
 void TeeReader::CallAllHandlers(mio::ExpectedSize result) {
 	// Makes a copy of the handlers and then calls them sequentially
 	vector<mio::AsyncIoHandler> handlers;
-	for (const auto &it : leaf_readers_) {
+	for (auto &it : leaf_readers_) {
 		handlers.push_back(it.second.pending_read.handler);
+		it.second.pending_read = {};
 	}
 	for (const auto &h : handlers) {
 		h(result);
@@ -277,12 +278,19 @@ error::Error TeeReader::StopBuffering() {
 	return MaybeDiscardBuffer();
 }
 
-error::Error TeeReader::RemoveReader(TeeReader::TeeReaderLeafPtr leaf_reader) {
+error::Error TeeReader::CancelReader(TeeReader::TeeReaderLeafPtr leaf_reader) {
 	// The reader must exist in the internal map.
 	auto found = leaf_readers_.find(leaf_reader);
 	AssertOrReturnError(found != leaf_readers_.end());
 
+	auto handler = found->second.pending_read.handler;
+
 	leaf_readers_.erase(found);
+
+	if (handler) {
+		handler(expected::unexpected(
+			error::Error(make_error_condition(errc::operation_canceled), "Leaf reader cancelled")));
+	}
 
 	if (leaf_readers_.size() == 0) {
 		buffered_reader_->Cancel();
@@ -292,7 +300,6 @@ error::Error TeeReader::RemoveReader(TeeReader::TeeReaderLeafPtr leaf_reader) {
 
 TeeReader::~TeeReader() {
 	leaf_readers_.clear();
-	buffered_reader_->Cancel();
 }
 
 error::Error TeeReader::TeeReaderLeaf::AsyncRead(
@@ -307,8 +314,15 @@ error::Error TeeReader::TeeReaderLeaf::AsyncRead(
 
 void TeeReader::TeeReaderLeaf::Cancel() {
 	auto p = tee_reader_.lock();
-	assert(p);
-	p->RemoveReader(shared_from_this());
+	if (!p) {
+		// Already disconnected from the tee reader. Nothing to do.
+		return;
+	}
+
+	// Disconnect us from the tee reader. This reader is useless after this.
+	tee_reader_.reset();
+
+	p->CancelReader(shared_from_this());
 };
 
 } // namespace io

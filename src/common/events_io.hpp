@@ -170,6 +170,7 @@ private:
 	void DoAsyncRead();
 	void CallAllHandlers(mio::ExpectedSize);
 	error::Error MaybeDiscardBuffer();
+	error::Error CancelReader(TeeReaderLeafPtr leaf_reader);
 
 public:
 	TeeReader(mio::AsyncReaderPtr source) :
@@ -188,8 +189,6 @@ public:
 		mio::AsyncIoHandler handler);
 
 	error::Error StopBuffering();
-
-	error::Error RemoveReader(TeeReaderLeafPtr leaf_reader);
 
 	class TeeReaderLeaf :
 		virtual public mio::AsyncReader,

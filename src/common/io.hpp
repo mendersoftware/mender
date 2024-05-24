@@ -79,6 +79,13 @@ public:
 	virtual ~Canceller() {
 	}
 
+	/** Cancel() has the following semantics:
+		- When called and there are no asynchronous operations ongoing, it is a no-op.
+		- When called and there are asynchronous operations, the operation should be cancelled,
+		  and the callers should get `errc::operation_canceled`.
+		- If called as part of the destructor, then the operation should be canceled, but
+		  callers should not receive anything (because they may already have been destroyed.
+	 */
 	virtual void Cancel() = 0;
 };
 
