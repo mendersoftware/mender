@@ -13,12 +13,14 @@
 //    limitations under the License.
 
 #include <artifact/v3/payload/payload.hpp>
-#include <artifact/error.hpp>
 
 #include <string>
 #include <vector>
 
 #include <common/io.hpp>
+
+#include <artifact/error.hpp>
+#include <artifact/tar/tar.hpp>
 
 namespace mender {
 namespace artifact {
@@ -26,6 +28,8 @@ namespace v3 {
 namespace payload {
 
 using namespace std;
+
+namespace tar = mender::tar;
 
 
 ExpectedSize Reader::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
