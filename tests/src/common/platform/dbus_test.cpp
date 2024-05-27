@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/dbus.hpp>
+#include <common/platform/dbus.hpp>
 
 // setenv() does not exist in <cstdlib>
 #include <stdlib.h>
@@ -25,7 +25,7 @@
 #include <common/expected.hpp>
 #include <common/processes.hpp>
 #include <common/testing.hpp>
-#include <common/testing_dbus.hpp>
+#include <common/platform/testing_dbus.hpp>
 
 namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;

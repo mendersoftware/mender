@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-#include <common/dbus.hpp>
+#include <common/platform/dbus.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/expected.hpp>

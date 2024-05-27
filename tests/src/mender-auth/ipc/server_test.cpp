@@ -22,7 +22,7 @@
 #include <gtest/gtest.h>
 
 #include <client_shared/conf.hpp>
-#include <common/dbus.hpp>
+#include <common/platform/dbus.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/expected.hpp>
@@ -32,7 +32,7 @@
 #include <common/path.hpp>
 #include <common/processes.hpp>
 #include <common/testing.hpp>
-#include <common/testing_dbus.hpp>
+#include <common/platform/testing_dbus.hpp>
 
 #define TEST_PORT "8001"
 

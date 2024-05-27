@@ -186,7 +186,7 @@ target_link_libraries(common_crypto PUBLIC
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(dbus REQUIRED dbus-1)
-add_library(common_dbus STATIC dbus/dbus.cpp dbus/platform/asio_libdbus/dbus.cpp)
+add_library(common_dbus STATIC platform/dbus/dbus.cpp platform/dbus/asio_libdbus/dbus.cpp)
 target_link_libraries(common_dbus PUBLIC
   common_log
   common_error

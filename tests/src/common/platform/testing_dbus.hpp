@@ -17,7 +17,7 @@
 
 #include <gtest/gtest.h>
 
-#include <common/dbus.hpp>
+#include <common/platform/dbus.hpp>
 #include <common/log.hpp>
 #include <common/processes.hpp>
 #include <common/testing.hpp>

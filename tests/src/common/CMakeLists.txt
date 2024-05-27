@@ -124,7 +124,7 @@ gtest_discover_tests(crypto_test
 )
 add_dependencies(tests crypto_test)
 
-add_executable(dbus_test EXCLUDE_FROM_ALL dbus_test.cpp)
+add_executable(dbus_test EXCLUDE_FROM_ALL platform/dbus_test.cpp)
 target_link_libraries(dbus_test PUBLIC
   common_dbus
   common_testing

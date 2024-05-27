@@ -21,7 +21,7 @@
 
 #include <api/auth.hpp>
 #include <common/common.hpp>
-#include <common/dbus.hpp>
+#include <common/platform/dbus.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/expected.hpp>
@@ -29,7 +29,7 @@
 #include <common/io.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
-#include <common/testing_dbus.hpp>
+#include <common/platform/testing_dbus.hpp>
 
 using namespace std;
 

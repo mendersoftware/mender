@@ -23,9 +23,9 @@
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/expected.hpp>
-#include <common/dbus.hpp>
+#include <common/platform/dbus.hpp>
 #include <common/testing.hpp>
-#include <common/testing_dbus.hpp>
+#include <common/platform/testing_dbus.hpp>
 
 using namespace std;
 
