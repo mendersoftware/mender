@@ -19,22 +19,22 @@
 #include <vector>
 
 #include <common/common.hpp>
+#include <common/dbus.hpp>
 #include <common/error.hpp>
-#include <common/log.hpp>
 #include <common/expected.hpp>
+#include <common/log.hpp>
 
 namespace mender {
 namespace api {
 namespace auth {
 
-
 using namespace std;
-namespace error = mender::common::error;
+
 namespace common = mender::common;
-
-
-namespace mlog = mender::common::log;
+namespace dbus = mender::common::dbus;
+namespace error = mender::common::error;
 namespace expected = mender::common::expected;
+namespace mlog = mender::common::log;
 
 const AuthenticatorErrorCategoryClass AuthenticatorErrorCategory;
 
