@@ -17,7 +17,7 @@
 #include <common/common.hpp>
 #include <common/config.h>
 
-#if MENDER_USE_LMDB
+#ifdef MENDER_USE_LMDB
 #include <common/key_value_database_lmdb.hpp>
 #endif
 
@@ -51,7 +51,7 @@ static vector<KeyValueDatabaseSetup> GenerateDatabaseSetups() {
 	vector<KeyValueDatabaseSetup> ret;
 	KeyValueDatabaseSetup elem;
 
-#if MENDER_USE_LMDB
+#ifdef MENDER_USE_LMDB
 	elem.name = "LMDB";
 	elem.tmpdir = std::make_shared<mender::common::testing::TemporaryDirectory>();
 	auto lmdb_db = std::make_shared<kvdb::KeyValueDatabaseLmdb>();
@@ -193,7 +193,7 @@ TEST_P(KeyValueDatabaseTest, TestReadTransactionFailure) {
 	EXPECT_EQ(db_error, err);
 }
 
-#if MENDER_USE_LMDB
+#ifdef MENDER_USE_LMDB
 TEST(KeyValueDatabaseLmdbTest, TestSomeLmdbExceptionPaths) {
 	kvdb::KeyValueDatabaseLmdb db;
 	auto err = db.Open("/non-existing-junk-path/leaf");
