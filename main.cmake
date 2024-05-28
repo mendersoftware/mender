@@ -45,6 +45,8 @@ if(ENABLE_CCACHE)
   endif()
 endif()
 
+option(MENDER_EMBED_MENDER_AUTH "Build mender-auth into mender-update as one binary (experimental)" OFF)
+
 include(cmake/build_mode.cmake)
 
 if("${STD_FILESYSTEM_LIB_NAME}" STREQUAL "")
