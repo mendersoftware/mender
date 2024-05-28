@@ -35,6 +35,7 @@ using namespace std;
 
 namespace io = mender::common::io;
 namespace error = mender::common::error;
+namespace tar = mender::tar;
 namespace sha = mender::sha;
 namespace expected = mender::common::expected;
 namespace manifest = mender::artifact::v3::manifest;

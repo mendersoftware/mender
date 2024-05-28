@@ -35,35 +35,6 @@ static const size_t SHA_256_digest_length = 32;
 namespace log = mender::common::log;
 namespace io = mender::common::io;
 
-const ErrorCategoryClass ErrorCategory = ErrorCategoryClass();
-
-const char *ErrorCategoryClass::name() const noexcept {
-	return "ShaSumErrorCategory";
-}
-
-string ErrorCategoryClass::message(int code) const {
-	switch (code) {
-	case NoError:
-		return "Success";
-	case InitializationError:
-		return "Initialization error";
-	case ShasumCreationError:
-		return "Shasum creation error";
-	case ShasumMismatchError:
-		return "Shasum mismatch error";
-	default:
-		return "Unknown";
-	}
-}
-
-error::Error MakeError(ErrorCode code, const string &msg) {
-	return error::Error(error_condition(code, ErrorCategory), msg);
-}
-
-
-Reader::Reader(io::Reader &reader) :
-	Reader::Reader {reader, ""} {
-}
 
 Reader::Reader(io::Reader &reader, const std::string &expected_sha) :
 	sha_handle_(EVP_MD_CTX_new(), [](EVP_MD_CTX *ctx) { EVP_MD_CTX_free(ctx); }),
@@ -140,23 +111,6 @@ ExpectedSHA Reader::ShaSum() {
 	}
 
 	return SHA(hash, SHA_256_digest_length);
-}
-
-ExpectedSHA Shasum(const vector<uint8_t> &data) {
-	string in {data.begin(), data.end()};
-
-	io::StringReader is {in};
-
-	Reader r {is};
-
-	auto discard_writer = io::Discard {};
-
-	auto err = io::Copy(discard_writer, r);
-	if (err != error::NoError) {
-		return expected::unexpected(err);
-	}
-
-	return r.ShaSum();
 }
 
 } // namespace sha

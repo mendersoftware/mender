@@ -29,7 +29,6 @@
 #include <common/json.hpp>
 #include <common/log.hpp>
 #include <common/optional.hpp>
-#include <common/path.hpp>
 #include <mender-update/context.hpp>
 
 namespace mender {
@@ -48,7 +47,6 @@ namespace http = mender::common::http;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace log = mender::common::log;
-namespace path = mender::common::path;
 
 const DeploymentsErrorCategoryClass DeploymentsErrorCategory;
 
