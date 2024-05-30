@@ -32,18 +32,6 @@ namespace log = mender::common::log;
 namespace expected = mender::common::expected;
 namespace error = mender::common::error;
 
-ExpectedSize Entry::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
-	ExpectedSize read_bytes = reader_.Read(start, end);
-
-	if (!read_bytes) {
-		return read_bytes;
-	}
-
-	nr_bytes_read_ += read_bytes.value();
-
-	return read_bytes;
-}
-
 
 ExpectedSize Reader::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
 	return this->archive_handle_.Read(start, end);
