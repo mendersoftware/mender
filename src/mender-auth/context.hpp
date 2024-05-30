@@ -47,7 +47,6 @@ public:
 	virtual ~MenderContext() {
 	}
 
-	error::Error Initialize();
 	conf::MenderConfig &GetConfig() {
 		return config_;
 	}
