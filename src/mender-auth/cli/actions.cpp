@@ -89,7 +89,7 @@ error::Error DoAuthenticate(
 		return error::NoError;
 	}
 	mender::common::events::Timer timer {loop};
-	http::Client client {main_context.GetConfig().GetHttpClientConfig(), loop};
+	http::Client client {config.GetHttpClientConfig(), loop};
 	auto err = auth_client::FetchJWTToken(
 		client,
 		config.servers,
