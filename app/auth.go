@@ -676,7 +676,14 @@ func (m *menderAuthManagerService) MakeAuthRequest() (*client.AuthRequest, error
 
 	tentok := strings.TrimSpace(string(m.tenantToken))
 
-	log.Debugf("Tenant token: %s", tentok)
+	tentok4Log := tentok
+
+	// Truncates the tenant token for avoid any leak
+	if len(tentok) > 4 {
+		tentok4Log = tentok[0:2] + "..." + tentok[len(tentok)-2:]
+	}
+
+	log.Debugf("Tenant token: %s", tentok4Log)
 
 	// fill tenant token
 	authd.TenantToken = string(tentok)
