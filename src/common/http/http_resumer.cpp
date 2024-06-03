@@ -413,10 +413,12 @@ io::ExpectedAsyncReaderPtr DownloadResumerClient::MakeBodyAsyncReader(
 
 http::OutgoingRequestPtr DownloadResumerClient::RemainingRangeRequest() const {
 	auto range_req = make_shared<http::OutgoingRequest>(*user_request_);
-	range_req->SetHeader(
-		"Range",
-		"bytes=" + to_string(resumer_state_->offset) + "-"
-			+ to_string(resumer_state_->content_length - 1));
+	if (resumer_state_->content_length > 0) {
+		range_req->SetHeader(
+			"Range",
+			"bytes=" + to_string(resumer_state_->offset) + "-"
+				+ to_string(resumer_state_->content_length - 1));
+	}
 	return range_req;
 };
 

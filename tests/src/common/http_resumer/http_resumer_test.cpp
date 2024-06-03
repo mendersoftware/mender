@@ -1272,3 +1272,89 @@ TEST_F(DownloadResumerTest, CallerDestroysReaderInTheMiddleOfAWait) {
 	err = client->AsyncCall(req, user_header_handler, user_body_handler);
 	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 }
+
+TEST_F(DownloadResumerTest, NoServerResponse) {
+	TestEventLoop loop;
+
+	// Server
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	int server_num_requests = 0;
+
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&server_num_requests](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			// Client should not set the Range header because content length is
+			// unknown for both requests.
+			auto exp_range_header = req->GetHeader("Range");
+			EXPECT_FALSE(exp_range_header)
+				<< "Unexpected range header: " << exp_range_header.value();
+
+			// Only respond to the 2nd request.
+			server_num_requests++;
+			if (server_num_requests == 2) {
+				resp->SetHeader("Content-Length", to_string(RangeBodyOfXes::TARGET_BODY_SIZE));
+				auto full_body = make_shared<RangeBodyOfXes>();
+				resp->SetBodyReader(full_body);
+				resp->SetStatusCodeAndMessage(200, "Success");
+				resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+			}
+		});
+
+	// Request
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+
+	// Client
+	http::ClientConfig client_config;
+	shared_ptr<http_resumer::DownloadResumerClient> client =
+		make_shared<http_resumer::DownloadResumerClient>(client_config, loop);
+	client->SetSmallestWaitInterval(chrono::seconds(1));
+
+	vector<uint8_t> received_body;
+	int user_num_callbacks = 0;
+
+	http::ResponseHandler user_header_handler =
+		[&received_body, &user_num_callbacks](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+
+			user_num_callbacks++;
+
+			ASSERT_EQ(resp->GetStatusCode(), http::StatusOK);
+			auto content_length = resp->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			ASSERT_EQ(content_length.value(), to_string(RangeBodyOfXes::TARGET_BODY_SIZE));
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			body_writer->SetUnlimited(true);
+			resp->SetBodyWriter(body_writer);
+		};
+
+	http::ResponseHandler user_body_handler = [&loop](http::ExpectedIncomingResponsePtr exp_resp) {
+		EXPECT_TRUE(exp_resp);
+		// There was no resuming, the incoming response shall be 200 OK
+		ASSERT_EQ(exp_resp.value()->GetStatusCode(), http::StatusOK);
+		loop.Stop();
+	};
+
+	auto err = client->AsyncCall(req, user_header_handler, user_body_handler);
+	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+
+	loop.Run();
+
+	EXPECT_EQ(server_num_requests, 2);
+	EXPECT_EQ(user_num_callbacks, 1);
+}
