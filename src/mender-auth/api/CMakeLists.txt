@@ -5,3 +5,6 @@ target_link_libraries(mender_auth_api_auth PUBLIC
   client_shared_identity_parser
 )
 
+if(MENDER_EMBED_MENDER_AUTH)
+  target_sources(mender_auth_api_auth PRIVATE auth/embedded_auth.cpp)
+endif()

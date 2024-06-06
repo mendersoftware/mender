@@ -40,9 +40,9 @@ enum CryptoErrorCode {
 };
 
 struct Args {
-	const string private_key_path;
-	const string private_key_passphrase;
-	const string ssl_engine;
+	string private_key_path;
+	string private_key_passphrase;
+	string ssl_engine;
 };
 
 class PrivateKey;

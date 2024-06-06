@@ -23,6 +23,7 @@ else()
   set(POSIX_DEFAULT OFF)
 endif()
 
+option(MENDER_USE_DBUS "Enable DBus to communicate between processes" ${POSIX_DEFAULT})
 option(MENDER_USE_ASIO_LIBDBUS "Use Boost ASIO DBus backend" ${POSIX_DEFAULT})
 option(MENDER_USE_BOOST_ASIO "" ${POSIX_DEFAULT})
 option(MENDER_USE_BOOST_BEAST "" ${POSIX_DEFAULT})
@@ -177,18 +178,26 @@ target_link_libraries(common_crypto PUBLIC
   OpenSSL::Crypto
 )
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(dbus REQUIRED dbus-1)
-add_library(common_dbus STATIC platform/dbus/dbus.cpp platform/dbus/asio_libdbus/dbus.cpp)
-target_link_libraries(common_dbus PUBLIC
-  common_log
-  common_error
-  common_events
-  ${dbus_LDFLAGS}
-  OpenSSL::SSL    # required by ASIO
-  OpenSSL::Crypto # required by ASIO
-)
-target_compile_options(common_dbus PUBLIC ${dbus_CFLAGS})
+if(MENDER_USE_DBUS)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(dbus REQUIRED dbus-1)
+  add_library(common_dbus STATIC platform/dbus/dbus.cpp platform/dbus/asio_libdbus/dbus.cpp)
+  target_link_libraries(common_dbus PUBLIC
+    common_log
+    common_error
+    common_events
+    ${dbus_LDFLAGS}
+  )
+  target_compile_options(common_dbus PUBLIC ${dbus_CFLAGS})
+
+  if(MENDER_USE_ASIO_LIBDBUS)
+    target_sources(common_dbus PRIVATE platform/dbus/asio_libdbus/dbus.cpp)
+    target_link_libraries(common_dbus PUBLIC
+      OpenSSL::SSL
+      OpenSSL::Crypto
+    )
+  endif()
+endif()
 
 add_library(common_watchdog STATIC)
 if (MENDER_USE_SYSTEMD)

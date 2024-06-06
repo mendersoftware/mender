@@ -6,6 +6,7 @@
 #cmakedefine MENDER_USE_TINY_PROC_LIB
 #cmakedefine MENDER_USE_LMDB
 #cmakedefine MENDER_USE_BOOST_ASIO
+#cmakedefine MENDER_USE_DBUS
 #cmakedefine MENDER_USE_ASIO_LIBDBUS
 #cmakedefine MENDER_USE_BOOST_BEAST
 #cmakedefine MENDER_TAR_LIBARCHIVE

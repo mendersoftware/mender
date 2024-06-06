@@ -11,6 +11,10 @@ target_link_libraries(mender_auth_cli PUBLIC
   common_path
   common_setup
   mender_auth_api_auth
-  mender_auth_ipc_server
 )
 
+if(MENDER_USE_DBUS)
+  target_link_libraries(mender_auth_cli PUBLIC
+    mender_auth_ipc_server
+  )
+endif()

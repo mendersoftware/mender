@@ -35,6 +35,10 @@
 #include <mender-update/inventory.hpp>
 #include <mender-update/update_module/v3/update_module.hpp>
 
+#ifdef MENDER_EMBED_MENDER_AUTH
+#include <mender-auth/api/auth.hpp>
+#endif
+
 namespace mender {
 namespace update {
 namespace daemon {
@@ -156,9 +160,11 @@ public:
 	mender::update::context::MenderContext &mender_context;
 	events::EventLoop &event_loop;
 
-private:
-	// This is just a prerequisite for another member, so make it private.
-	auth::Authenticator authenticator;
+#ifdef MENDER_USE_DBUS
+	auth::AuthenticatorDBus authenticator;
+#elif defined(MENDER_EMBED_MENDER_AUTH)
+	mender::auth::api::auth::AuthenticatorHttp authenticator;
+#endif
 
 public:
 	// For polling, and for making status updates.

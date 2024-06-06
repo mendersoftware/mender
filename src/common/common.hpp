@@ -55,6 +55,9 @@ struct def_bool {
 	}
 };
 
+using StringPair = std::pair<string, string>;
+using ExpectedStringPair = expected::expected<StringPair, error::Error>;
+
 inline static vector<uint8_t> ByteVectorFromString(const char *str) {
 	return vector<uint8_t>(
 		reinterpret_cast<const uint8_t *>(str),

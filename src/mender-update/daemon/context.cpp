@@ -151,7 +151,11 @@ Context::Context(
 	mender::update::context::MenderContext &mender_context, events::EventLoop &event_loop) :
 	mender_context(mender_context),
 	event_loop(event_loop),
+#ifdef MENDER_USE_DBUS
 	authenticator(event_loop),
+#elif defined(MENDER_EMBED_MENDER_AUTH)
+	authenticator(event_loop, mender_context.GetConfig()),
+#endif
 	http_client(mender_context.GetConfig().GetHttpClientConfig(), event_loop, authenticator),
 	download_client(make_shared<http_resumer::DownloadResumerClient>(
 		mender_context.GetConfig().GetHttpClientConfig(), event_loop)),
