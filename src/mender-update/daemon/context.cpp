@@ -384,14 +384,19 @@ static error::Error UnmarshalJsonStateDataVersion1(const json::Json &json, State
 	const auto &exp_json_update_info = json.Get("UpdateInfo");
 	SetOrReturnIfError(const auto &json_update_info, exp_json_update_info);
 
+	auto &update_info = state_data.update_info;
+
+	exp_string = json_update_info.Get("ID").and_then(json::ToString);
+	SetOrReturnIfError(update_info.id, exp_string);
+
 	const auto &exp_json_artifact = json_update_info.Get("Artifact");
 	SetOrReturnIfError(const auto &json_artifact, exp_json_artifact);
+
+	auto &artifact = update_info.artifact;
 
 	const auto &exp_json_source = json_artifact.Get("Source");
 	SetOrReturnIfError(const auto &json_source, exp_json_source);
 
-	auto &update_info = state_data.update_info;
-	auto &artifact = update_info.artifact;
 	auto &source = artifact.source;
 
 	exp_string = json_source.Get("URI").and_then(json::ToString);
@@ -406,9 +411,6 @@ static error::Error UnmarshalJsonStateDataVersion1(const json::Json &json, State
 
 	exp_string = json_artifact.Get("artifact_name").and_then(json::ToString);
 	SetOrReturnIfError(artifact.artifact_name, exp_string);
-
-	exp_string = json_update_info.Get("ID").and_then(json::ToString);
-	SetOrReturnIfError(update_info.id, exp_string);
 
 	return error::NoError;
 }
@@ -434,14 +436,19 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 	const auto &exp_json_update_info = json.Get("UpdateInfo");
 	SetOrReturnIfError(const auto &json_update_info, exp_json_update_info);
 
+	auto &update_info = state_data.update_info;
+
+	exp_string = json_update_info.Get("ID").and_then(json::ToString);
+	SetOrReturnIfError(update_info.id, exp_string);
+
 	const auto &exp_json_artifact = json_update_info.Get("Artifact");
 	SetOrReturnIfError(const auto &json_artifact, exp_json_artifact);
+
+	auto &artifact = update_info.artifact;
 
 	const auto &exp_json_source = json_artifact.Get("Source");
 	SetOrReturnIfError(const auto &json_source, exp_json_source);
 
-	auto &update_info = state_data.update_info;
-	auto &artifact = update_info.artifact;
 	auto &source = artifact.source;
 
 	exp_string = json_source.Get("URI").and_then(json::ToString);
@@ -480,9 +487,6 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 	exp_string_vector =
 		json_artifact.Get("clears_artifact_provides").and_then(json::ToStringVector);
 	DefaultOrSetOrReturnIfError(artifact.clears_artifact_provides, exp_string_vector, {});
-
-	exp_string = json_update_info.Get("ID").and_then(json::ToString);
-	SetOrReturnIfError(update_info.id, exp_string);
 
 	exp_string_vector = json_update_info.Get("RebootRequested").and_then(json::ToStringVector);
 	SetOrReturnIfError(update_info.reboot_requested, exp_string_vector);
