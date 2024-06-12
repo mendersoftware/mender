@@ -12,7 +12,7 @@ to_kebab_case() {
     # Remove the word "interval"
     string=$(echo "$string" | sed 's/Interval//g')
     # Replace capital letters with hyphen-lowercase
-    string=$(echo "$string" | sed -E 's/\([A-Z]\)/-\1/g')
+    string=$(echo "$string" | sed 's/\([A-Z]\)/-\1/g')
     # Convert to lowercase
     string=$(echo "$string" | tr '[:upper:]' '[:lower:]')
     # Preppend the "interval" word
