@@ -1,0 +1,46 @@
+#!/bin/sh
+
+json_file="/etc/mender/mender.conf"
+
+if [ ! -f "$json_file" ]; then
+    echo "File not found: $json_file" >&2
+    exit 1
+fi
+
+to_kebab_case() {
+    string="$1"
+    # Remove the word "interval"
+    string=$(echo "$string" | sed 's/Interval//g')
+    # Replace capital letters with hyphen-lowercase
+    string=$(echo "$string" | sed -E 's/\([A-Z]\)/-\1/g')
+    # Convert to lowercase
+    string=$(echo "$string" | tr '[:upper:]' '[:lower:]')
+    # Preppend the "interval" word
+    string=$(echo "$string" | sed -E 's/^/interval/g')
+    echo "$string"
+}
+
+extract_and_print() {
+    key="$1"
+    line="$2"
+    if echo "$line" | grep -q "\"$key\""; then
+        value=$(echo "$line" | sed -E 's/.*"'$key'":\s*([^,}]+).*/\1/')
+        value=$(echo "$value" | sed -E 's/^"|"$//g')
+        key=$(to_kebab_case  "$key")
+        printf "%s=%s\n" "$key" "$value"
+    fi
+}
+
+# Read the JSON file line by line
+while IFS= read -r line; do
+
+    # Extract and print InventoryPollIntervalSeconds
+    extract_and_print "InventoryPollIntervalSeconds" "$line"
+    # Extract and print RetryPollIntervalSeconds
+    extract_and_print "RetryPollIntervalSeconds" "$line"
+    # Extract and print UpdatePollIntervalSeconds
+    extract_and_print "UpdatePollIntervalSeconds" "$line"
+    # Extract and print RetryPollCount
+    extract_and_print "RetryPollCount" "$line"
+
+done < "$json_file"
