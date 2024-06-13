@@ -695,6 +695,110 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 	EXPECT_FALSE(ex_match.value());
 }
 
+struct TestWildCard {
+	std::string to_match;
+	std::string pattern;
+	bool expected;
+};
+
+TEST_F(ContextTests, CheckClearsProvidesTest) {
+	std::vector<TestWildCard> test_wildcard = {
+		{"abc_123_def_456_ghi", "abc_123_def_456_ghi", true},
+		{"abc_123_def_456_ghi", "abc_123_def_456_g", false},
+		{"abc_123_def_456_ghi", "abc*def*ghi", true},
+		{"abc_123_def_456_ghi", "abc*123*def*ghi", true},
+		{"abc_123_def_456_ghi", "*def*456*", true},
+		{"abc_123_def_456_ghi", "abc*789*ghi", false},
+		{"hello_world", "hello*world", true},
+		{"hello_world", "hello*worlds", false},
+		{"a_b_c", "a*_*b*", true},
+		{"a_b_c", "a*c*b", false},
+		{"abc", "*a*bc*", true},
+		{"abcabcabc", "a*c*a*c*", true},
+		{"test_key_1", "test_*", true},
+		{"test_key_1", "test_", false},
+		{"best_test_key_1", "test_*", false},
+		{"test_key_1", "", false},
+		{"", "", true},
+		{"abc", "*", true},
+		{"", "abc", false},
+		{"", "abc*", false},
+		{"", "*", true},
+		{"abc", "xyz", false},
+		{"abc", "abc*", true},
+		{"abc", "*abc", true},
+		{"abc", "a*xyz", false},
+		{"test_string", "test_*test_*", false},
+		{"test_string", "test_*string*", true},
+		{"test_test_key", "***", true}};
+
+
+	for (const auto &test : test_wildcard) {
+		bool result = context::CheckClearsMatch(test.to_match, test.pattern);
+		ASSERT_EQ(result, test.expected) << "Expected '" << test.to_match << "', '" << test.pattern
+										 << "' to return " << test.expected;
+	}
+}
+
+
+TEST_F(ContextTests, ClearsProvides) {
+	context::ProvidesData provides = {
+		{"test_key_1", "type"},
+		{"test_key_2", "type"},
+		{"test_key_test_1", "type"},
+		{"test_key_test_2", "type"},
+	};
+	context::ProvidesData new_provides;
+	context::ProvidesData unmodified_provides = provides;
+	context::ClearsProvidesData clears_provides;
+
+	clears_provides.push_back("");
+	auto ex_matched = context::FilterProvides(new_provides, clears_provides, provides);
+	ASSERT_EQ(provides.size(), 4);
+
+	clears_provides.push_back("*");
+	ex_matched = context::FilterProvides(new_provides, clears_provides, provides);
+	ASSERT_EQ(provides.size(), 0);
+
+	provides = unmodified_provides;
+	clears_provides.clear();
+	clears_provides.push_back("test_key*");
+	ex_matched = context::FilterProvides(new_provides, clears_provides, provides);
+	ASSERT_EQ(provides.size(), 0);
+
+	provides = unmodified_provides;
+	clears_provides.clear();
+	clears_provides.push_back("test_key_test*");
+	ex_matched = context::FilterProvides(new_provides, clears_provides, provides);
+	ASSERT_EQ(provides.size(), 2);
+
+	provides = unmodified_provides;
+	clears_provides.clear();
+	clears_provides.push_back("key*");
+	ex_matched = context::FilterProvides(new_provides, clears_provides, provides);
+	ASSERT_EQ(provides.size(), 4);
+
+	provides = unmodified_provides;
+	clears_provides.clear();
+	clears_provides.push_back("test_key_test_1");
+	ex_matched = context::FilterProvides(new_provides, clears_provides, provides);
+	ASSERT_EQ(provides.size(), 3);
+
+	provides = unmodified_provides;
+	clears_provides.clear();
+	clears_provides.push_back("test_key_");
+	ex_matched = context::FilterProvides(new_provides, clears_provides, provides);
+	ASSERT_EQ(provides.size(), 4);
+
+	provides = unmodified_provides;
+	clears_provides.clear();
+	clears_provides.push_back("*");
+	provides = {{"artifact_name", "name1"}};
+	new_provides = {{"artifact_name", "name1"}};
+	ex_matched = context::FilterProvides(new_provides, clears_provides, provides);
+	ASSERT_EQ(provides.size(), 1);
+}
+
 TEST(ContextArtifactTests, ArtifactMatchesContextErrorsTest) {
 #ifndef NDEBUG
 	GTEST_SKIP() << "requires assert() to be a no-op";
