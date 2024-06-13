@@ -94,6 +94,7 @@ test:backward-compat:
   script:
     - cmake
       -D CMAKE_BUILD_TYPE=${BUILD_TYPE}
+      ${EXTRA_CMAKE_ARGS}
       .
     - make --jobs=$(nproc --all) --keep-going check
   tags:
@@ -117,6 +118,11 @@ test:static:undefinedsan:
 test:static:release:
   variables:
     BUILD_TYPE: Release
+  extends: .test:static-template
+
+test:static:no-dbus:
+  variables:
+    EXTRA_CMAKE_ARGS: -D MENDER_USE_DBUS=OFF -D MENDER_EMBED_MENDER_AUTH=ON
   extends: .test:static-template
 
 test:modules-artifact-gen:
