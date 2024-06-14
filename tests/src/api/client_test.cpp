@@ -21,7 +21,6 @@
 
 #include <api/auth.hpp>
 #include <common/common.hpp>
-#include <common/dbus.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/expected.hpp>
@@ -29,14 +28,17 @@
 #include <common/io.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
-#include <common/testing_dbus.hpp>
+
+#ifdef MENDER_USE_DBUS
+#include <common/platform/dbus.hpp>
+#include <common/platform/testing_dbus.hpp>
+#endif
 
 using namespace std;
 
 namespace api = mender::api;
 namespace auth = mender::api::auth;
 namespace common = mender::common;
-namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
@@ -44,12 +46,17 @@ namespace http = mender::common::http;
 namespace io = mender::common::io;
 namespace path = mender::common::path;
 namespace mtesting = mender::common::testing;
+
+#ifdef MENDER_USE_DBUS
+namespace dbus = mender::common::dbus;
 namespace testing_dbus = mender::common::testing::dbus;
+#endif
 
 using TestEventLoop = mender::common::testing::TestEventLoop;
 
 const string TEST_PORT = "8088";
 
+#ifdef MENDER_USE_DBUS
 class APIClientTests : public testing_dbus::DBusTests {
 protected:
 	mtesting::TemporaryDirectory tmpdir;
@@ -76,8 +83,14 @@ exit 0
 		ASSERT_EQ(ret, 0);
 	}
 };
+#else
+class APIClientTests : public testing::Test {};
+#endif // MENDER_USE_DBUS
 
 TEST_F(APIClientTests, ClientBasicTest) {
+#ifndef MENDER_USE_DBUS
+	GTEST_SKIP();
+#else
 	const string JWT_TOKEN = "FOOBARJWTTOKEN";
 	const string SERVER_URL = "http://127.0.0.1:" + TEST_PORT;
 	const string test_data = "some testing data";
@@ -123,7 +136,7 @@ TEST_F(APIClientTests, ClientBasicTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::Authenticator authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
 	api::HTTPClient client {client_config, loop, authenticator};
@@ -132,7 +145,7 @@ TEST_F(APIClientTests, ClientBasicTest) {
 	req->SetMethod(http::Method::GET);
 	req->SetPath(test_uri);
 
-	auto received_body = make_shared<vector<uint8_t>>();
+	auto received_body = make_shared<vector<uint8_t> >();
 	bool header_handler_called = false;
 	bool body_handler_called = false;
 	auto err = client.AsyncCall(
@@ -164,9 +177,13 @@ TEST_F(APIClientTests, ClientBasicTest) {
 
 	EXPECT_TRUE(header_handler_called);
 	EXPECT_TRUE(body_handler_called);
+#endif // MENDER_USE_DBUS
 }
 
 TEST_F(APIClientTests, TwoClientsTest) {
+#ifndef MENDER_USE_DBUS
+	GTEST_SKIP();
+#else
 	const string JWT_TOKEN = "FOOBARJWTTOKEN";
 	const string SERVER_URL = "http://127.0.0.1:" + TEST_PORT;
 	const string test_data1 = "some testing data 1";
@@ -226,7 +243,7 @@ TEST_F(APIClientTests, TwoClientsTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::Authenticator authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
 	api::HTTPClient client1 {client_config, loop, authenticator};
@@ -235,7 +252,7 @@ TEST_F(APIClientTests, TwoClientsTest) {
 	req1->SetPath(test_uri1);
 	req1->SetMethod(http::Method::GET);
 
-	auto received_body1 = make_shared<vector<uint8_t>>();
+	auto received_body1 = make_shared<vector<uint8_t> >();
 	bool header_handler_called1 = false;
 	bool body_handler_called1 = false;
 	auto err = client1.AsyncCall(
@@ -273,7 +290,7 @@ TEST_F(APIClientTests, TwoClientsTest) {
 	req2->SetPath(test_uri2);
 	req2->SetMethod(http::Method::GET);
 
-	auto received_body2 = make_shared<vector<uint8_t>>();
+	auto received_body2 = make_shared<vector<uint8_t> >();
 	bool header_handler_called2 = false;
 	bool body_handler_called2 = false;
 	err = client2.AsyncCall(
@@ -309,9 +326,13 @@ TEST_F(APIClientTests, TwoClientsTest) {
 	EXPECT_TRUE(body_handler_called1);
 	EXPECT_TRUE(header_handler_called2);
 	EXPECT_TRUE(body_handler_called2);
+#endif // MENDER_USE_DBUS
 }
 
 TEST_F(APIClientTests, ClientReauthenticationTest) {
+#ifndef MENDER_USE_DBUS
+	GTEST_SKIP();
+#else
 	const string JWT_TOKEN1 = "FOOBARJWTTOKEN1";
 	const string JWT_TOKEN2 = "FOOBARJWTTOKEN2";
 	const string SERVER_URL = "http://127.0.0.1:" + TEST_PORT;
@@ -404,7 +425,7 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::Authenticator authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
 	api::HTTPClient client {client_config, loop, authenticator};
@@ -413,7 +434,7 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 	req1->SetPath(test_uri1);
 	req1->SetMethod(http::Method::GET);
 
-	auto received_body1 = make_shared<vector<uint8_t>>();
+	auto received_body1 = make_shared<vector<uint8_t> >();
 	bool header_handler_called1 = false;
 	bool body_handler_called1 = false;
 
@@ -421,7 +442,7 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 	req2->SetPath(test_uri2);
 	req2->SetMethod(http::Method::GET);
 
-	auto received_body2 = make_shared<vector<uint8_t>>();
+	auto received_body2 = make_shared<vector<uint8_t> >();
 	bool header_handler_called2 = false;
 	bool body_handler_called2 = false;
 
@@ -494,9 +515,13 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 	EXPECT_TRUE(body_handler_called1);
 	EXPECT_TRUE(header_handler_called2);
 	EXPECT_TRUE(body_handler_called2);
+#endif // MENDER_USE_DBUS
 }
 
 TEST_F(APIClientTests, ClientEarlyAuthErrorTest) {
+#ifndef MENDER_USE_DBUS
+	GTEST_SKIP();
+#else
 	const string test_uri = "/test/uri";
 	const string SERVER_URL {"http://127.0.0.1:" + TEST_PORT};
 
@@ -504,7 +529,7 @@ TEST_F(APIClientTests, ClientEarlyAuthErrorTest) {
 
 	// no DBus server to handle auth here
 
-	auth::Authenticator authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
 	api::HTTPClient client {client_config, loop, authenticator};
@@ -540,9 +565,13 @@ TEST_F(APIClientTests, ClientEarlyAuthErrorTest) {
 
 	EXPECT_TRUE(header_handler_called);
 	EXPECT_FALSE(body_handler_called);
+#endif // MENDER_USE_DBUS
 }
 
 TEST_F(APIClientTests, ClientAuthenticationTimeoutFailureTest) {
+#ifndef MENDER_USE_DBUS
+	GTEST_SKIP();
+#else
 	const string JWT_TOKEN1 = "FOOBARJWTTOKEN1";
 	const string SERVER_URL = "http://127.0.0.1:" + TEST_PORT;
 	const string test_data1 = "some testing data 1";
@@ -612,7 +641,7 @@ TEST_F(APIClientTests, ClientAuthenticationTimeoutFailureTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::Authenticator authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
 	api::HTTPClient client {client_config, loop, authenticator};
@@ -621,7 +650,7 @@ TEST_F(APIClientTests, ClientAuthenticationTimeoutFailureTest) {
 	req1->SetPath(test_uri1);
 	req1->SetMethod(http::Method::GET);
 
-	auto received_body1 = make_shared<vector<uint8_t>>();
+	auto received_body1 = make_shared<vector<uint8_t> >();
 	bool header_handler_called1 = false;
 	bool body_handler_called1 = false;
 
@@ -697,9 +726,13 @@ TEST_F(APIClientTests, ClientAuthenticationTimeoutFailureTest) {
 	EXPECT_TRUE(body_handler_called1);
 	EXPECT_TRUE(header_handler_called2);
 	EXPECT_FALSE(body_handler_called2);
+#endif // MENDER_USE_DBUS
 }
 
 TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
+#ifndef MENDER_USE_DBUS
+	GTEST_SKIP();
+#else
 	const string JWT_TOKEN1 = "FOOBARJWTTOKEN1";
 	const string SERVER_URL = "http://127.0.0.1:" + TEST_PORT;
 	const string test_data1 = "some testing data 1";
@@ -774,7 +807,7 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::Authenticator authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
 	api::HTTPClient client {client_config, loop, authenticator};
@@ -783,7 +816,7 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 	req1->SetPath(test_uri1);
 	req1->SetMethod(http::Method::GET);
 
-	auto received_body1 = make_shared<vector<uint8_t>>();
+	auto received_body1 = make_shared<vector<uint8_t> >();
 	bool header_handler_called1 = false;
 	bool body_handler_called1 = false;
 
@@ -859,4 +892,5 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 	EXPECT_TRUE(body_handler_called1);
 	EXPECT_TRUE(header_handler_called2);
 	EXPECT_FALSE(body_handler_called2);
+#endif // MENDER_USE_DBUS
 }

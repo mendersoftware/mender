@@ -26,7 +26,9 @@
 #include <common/events.hpp>
 #include <common/log.hpp>
 
+#ifdef MENDER_USE_DBUS
 #include <mender-auth/ipc/server.hpp>
+#endif
 
 namespace mender {
 namespace auth {
@@ -37,8 +39,11 @@ using namespace std;
 namespace auth_client = mender::auth::api::auth;
 namespace events = mender::common::events;
 namespace http = mender::common::http;
-namespace ipc = mender::auth::ipc;
 namespace log = mender::common::log;
+
+#ifdef MENDER_USE_DBUS
+namespace ipc = mender::auth::ipc;
+#endif
 
 shared_ptr<MenderKeyStore> KeystoreFromConfig(
 	const conf::MenderConfig &config, const string &passphrase) {
@@ -115,6 +120,7 @@ error::Error DoAuthenticate(
 	return error::NoError;
 }
 
+#ifdef MENDER_USE_DBUS
 DaemonAction::DaemonAction(shared_ptr<MenderKeyStore> keystore, const bool force_bootstrap) :
 	keystore_(keystore),
 	force_bootstrap_(force_bootstrap) {
@@ -175,6 +181,7 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 
 	return error::NoError;
 }
+#endif // MENDER_USE_DBUS
 
 BootstrapAction::BootstrapAction(shared_ptr<MenderKeyStore> keystore, bool force_bootstrap) :
 	keystore_(keystore),

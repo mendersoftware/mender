@@ -20,7 +20,7 @@
 #include <string>
 
 #include <client_shared/conf.hpp>
-#include <common/dbus.hpp>
+#include <common/platform/dbus.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/http.hpp>

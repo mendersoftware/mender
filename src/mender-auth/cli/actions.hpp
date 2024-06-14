@@ -47,6 +47,10 @@ public:
 using ActionPtr = shared_ptr<Action>;
 using ExpectedActionPtr = expected::expected<ActionPtr, error::Error>;
 
+shared_ptr<MenderKeyStore> KeystoreFromConfig(
+	const conf::MenderConfig &config, const string &passphrase);
+
+#ifdef MENDER_USE_DBUS
 class DaemonAction : virtual public Action {
 public:
 	static ExpectedActionPtr Create(
@@ -58,6 +62,7 @@ private:
 	shared_ptr<MenderKeyStore> keystore_;
 	bool force_bootstrap_;
 };
+#endif // MENDER_USE_DBUS
 
 class BootstrapAction : virtual public Action {
 public:

@@ -14,6 +14,10 @@
 
 #include <mender-update/cli/cli.hpp>
 
+#ifdef MENDER_EMBED_MENDER_AUTH
+#include <mender-auth/cli/cli.hpp>
+#endif
+
 #include <iostream>
 
 #include <client_shared/conf.hpp>
@@ -30,6 +34,13 @@ namespace expected = mender::common::expected;
 
 const int NoUpdateInProgressExitStatus = 2;
 const int RebootExitStatus = 4;
+
+#ifdef MENDER_EMBED_MENDER_AUTH
+const conf::CliCommand cmd_auth {
+	.name = "auth",
+	.description = "Access built-in mender-auth commands (experimental).",
+};
+#endif
 
 const conf::CliCommand cmd_check_update {
 	.name = "check-update",
@@ -92,6 +103,9 @@ const conf::CliApp cli_mender_update = {
    performing tasks performed by the daemon (see list of COMMANDS below).)",
 	.commands =
 		{
+#ifdef MENDER_EMBED_MENDER_AUTH
+			cmd_auth,
+#endif
 			cmd_check_update,
 			cmd_commit,
 			cmd_daemon,
@@ -211,7 +225,16 @@ ExpectedActionPtr ParseUpdateArguments(
 		}
 
 		return make_shared<CheckUpdateAction>();
-	} else {
+	}
+#ifdef MENDER_EMBED_MENDER_AUTH
+	// We do not test for this here, because mender-auth has its own Main() function and
+	// therefore it is inconvenient (it returns int, not an action). So we do it in Main()
+	// below instead, but semantically it is the same as doing it here.
+	//
+	// else if (start[0] == "auth") {
+	// 	...stuff...
+#endif
+	else {
 		return expected::unexpected(
 			conf::MakeError(conf::InvalidOptionsError, "No such action: " + start[0]));
 	}
@@ -257,6 +280,13 @@ static error::Error DoMain(
 int Main(
 	const vector<string> &args,
 	function<void(mender::update::context::MenderContext &ctx)> test_hook) {
+#ifdef MENDER_EMBED_MENDER_AUTH
+	// Early special treatment for "auth" argument.
+	if (args.size() > 0 and args[0] == "auth") {
+		return mender::auth::cli::Main({args.begin() + 1, args.end()});
+	}
+#endif
+
 	auto err = DoMain(args, test_hook);
 
 	if (err.code == context::MakeError(context::NoUpdateInProgressError, "").code) {

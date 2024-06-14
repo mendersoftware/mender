@@ -23,25 +23,39 @@
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/expected.hpp>
-#include <common/dbus.hpp>
 #include <common/testing.hpp>
-#include <common/testing_dbus.hpp>
+
+#ifdef MENDER_USE_DBUS
+#include <common/platform/dbus.hpp>
+#include <common/platform/testing_dbus.hpp>
+#endif
 
 using namespace std;
 
 namespace auth = mender::api::auth;
-namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace mtesting = mender::common::testing;
+
+#ifdef MENDER_USE_DBUS
+namespace dbus = mender::common::dbus;
 namespace testing_dbus = mender::common::testing::dbus;
+#endif
 
 using TestEventLoop = mender::common::testing::TestEventLoop;
 
+#ifdef MENDER_USE_DBUS
 class AuthDBusTests : public testing_dbus::DBusTests {};
+#else
+// Dummy.
+class AuthDBusTests : public testing::Test {};
+#endif
 
 TEST_F(AuthDBusTests, AuthenticatorBasicTest) {
+#ifndef MENDER_USE_DBUS
+	GTEST_SKIP();
+#else
 	const string JWT_TOKEN = "FOOBARJWTTOKEN";
 	const string SERVER_URL = "some.server";
 
@@ -56,7 +70,7 @@ TEST_F(AuthDBusTests, AuthenticatorBasicTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::Authenticator authenticator {loop};
+	auth::AuthenticatorDBus authenticator {loop};
 
 	bool action_called = false;
 	auto err = authenticator.WithToken(
@@ -72,9 +86,13 @@ TEST_F(AuthDBusTests, AuthenticatorBasicTest) {
 
 	loop.Run();
 	EXPECT_TRUE(action_called);
+#endif // MENDER_USE_DBUS
 }
 
 TEST_F(AuthDBusTests, AuthenticatorTwoActionsTest) {
+#ifndef MENDER_USE_DBUS
+	GTEST_SKIP();
+#else
 	const string JWT_TOKEN = "FOOBARJWTTOKEN";
 	const string SERVER_URL = "some.server";
 
@@ -89,7 +107,7 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::Authenticator authenticator {loop};
+	auth::AuthenticatorDBus authenticator {loop};
 
 	bool action1_called = false;
 	bool action2_called = false;
@@ -123,9 +141,13 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsTest) {
 	loop.Run();
 	EXPECT_TRUE(action1_called);
 	EXPECT_TRUE(action2_called);
+#endif // MENDER_USE_DBUS
 }
 
 TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearTest) {
+#ifndef MENDER_USE_DBUS
+	GTEST_SKIP();
+#else
 	const string JWT_TOKEN = "FOOBARJWTTOKEN";
 	const string SERVER_URL = "some.server";
 
@@ -155,7 +177,7 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::Authenticator authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
 
 	bool action1_called = false;
 	bool action2_called = false;
@@ -188,9 +210,13 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearTest) {
 	EXPECT_EQ(n_replies, 2);
 	EXPECT_TRUE(action1_called);
 	EXPECT_TRUE(action2_called);
+#endif // MENDER_USE_DBUS
 }
 
 TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearAndTimeoutTest) {
+#ifndef MENDER_USE_DBUS
+	GTEST_SKIP();
+#else
 	const string JWT_TOKEN = "FOOBARJWTTOKEN";
 	const string SERVER_URL = "some.server";
 
@@ -214,7 +240,7 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearAndTimeoutTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::Authenticator authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
 
 	bool action1_called = false;
 	bool action2_called = false;
@@ -244,9 +270,13 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearAndTimeoutTest) {
 	EXPECT_EQ(n_replies, 2);
 	EXPECT_TRUE(action1_called);
 	EXPECT_TRUE(action2_called);
+#endif // MENDER_USE_DBUS
 }
 
 TEST_F(AuthDBusTests, AuthenticatorBasicRealLifeTest) {
+#ifndef MENDER_USE_DBUS
+	GTEST_SKIP();
+#else
 	const string JWT_TOKEN = "FOOBARJWTTOKEN";
 	const string SERVER_URL = "some.server";
 
@@ -272,7 +302,7 @@ TEST_F(AuthDBusTests, AuthenticatorBasicRealLifeTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::Authenticator authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
 
 	bool action_called = false;
 	auto err = authenticator.WithToken(
@@ -288,13 +318,17 @@ TEST_F(AuthDBusTests, AuthenticatorBasicRealLifeTest) {
 
 	loop.Run();
 	EXPECT_TRUE(action_called);
+#endif // MENDER_USE_DBUS
 }
 
 TEST(AuthNoDBusTests, AuthenticatorAttemptNoDBus) {
+#ifndef MENDER_USE_DBUS
+	GTEST_SKIP();
+#else
 	setenv("DBUS_SYSTEM_BUS_ADDRESS", "dummy-address", 1);
 
 	TestEventLoop loop;
-	auth::Authenticator authenticator {loop};
+	auth::AuthenticatorDBus authenticator {loop};
 
 	int action_called = false;
 	auto err = authenticator.WithToken(
@@ -311,4 +345,5 @@ TEST(AuthNoDBusTests, AuthenticatorAttemptNoDBus) {
 	EXPECT_FALSE(action_called);
 
 	unsetenv("DBUS_SYSTEM_BUS_ADDRESS");
+#endif // MENDER_USE_DBUS
 }

@@ -124,16 +124,18 @@ gtest_discover_tests(crypto_test
 )
 add_dependencies(tests crypto_test)
 
-add_executable(dbus_test EXCLUDE_FROM_ALL dbus_test.cpp)
-target_link_libraries(dbus_test PUBLIC
-  common_dbus
-  common_testing
-  common_processes
-  main_test
-  gmock
-)
-gtest_discover_tests(dbus_test ${MENDER_TEST_FLAGS} NO_PRETTY_VALUES)
-add_dependencies(tests dbus_test)
+if(MENDER_USE_DBUS)
+  add_executable(dbus_test EXCLUDE_FROM_ALL platform/dbus_test.cpp)
+  target_link_libraries(dbus_test PUBLIC
+    common_dbus
+    common_testing
+    common_processes
+    main_test
+    gmock
+  )
+  gtest_discover_tests(dbus_test ${MENDER_TEST_FLAGS} NO_PRETTY_VALUES)
+  add_dependencies(tests dbus_test)
+endif()
 
 add_subdirectory(http_resumer)
 

@@ -19,7 +19,7 @@
 #include <string>
 
 #include <common/crypto.hpp>
-#include <common/dbus.hpp>
+#include <common/platform/dbus.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/log.hpp>

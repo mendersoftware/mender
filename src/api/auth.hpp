@@ -19,7 +19,13 @@
 #include <string>
 #include <vector>
 
-#include <common/dbus.hpp>
+#include <common/config.h>
+
+#ifdef MENDER_USE_DBUS
+#include <common/platform/dbus.hpp>
+#endif
+
+#include <common/common.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/expected.hpp>
@@ -32,7 +38,10 @@ namespace auth {
 
 using namespace std;
 
+#ifdef MENDER_USE_DBUS
 namespace dbus = mender::common::dbus;
+#endif
+
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
@@ -64,27 +73,54 @@ class Authenticator {
 public:
 	Authenticator(events::EventLoop &loop, chrono::seconds auth_timeout = chrono::minutes {1}) :
 		loop_ {loop},
-		dbus_client_ {loop},
 		auth_timeout_ {auth_timeout},
-		auth_timeout_timer_ {loop} {};
+		auth_timeout_timer_ {loop} {
+	}
 
 	void ExpireToken();
 
 	error::Error WithToken(AuthenticatedAction action);
 
-private:
-	void PostPendingActions(ExpectedAuthData &ex_auth_data);
-	error::Error StartWatchingTokenSignal();
-	error::Error RequestNewToken(optional<AuthenticatedAction> opt_action);
+protected:
+	enum class NoTokenAction {
+		Finish,
+		RequestNew,
+	};
+
+	void PostPendingActions(const ExpectedAuthData &ex_auth_data);
+	error::Error RequestNewToken();
+
+	virtual error::Error StartWatchingTokenSignal() = 0;
+	virtual error::Error GetJwtToken() = 0;
+	virtual error::Error FetchJwtToken() = 0;
+
+	void HandleReceivedToken(common::ExpectedStringPair ex_auth_dbus_data, NoTokenAction no_token);
+
+	events::EventLoop &loop_;
 
 	bool token_fetch_in_progress_ = false;
-	events::EventLoop &loop_;
-	dbus::DBusClient dbus_client_;
+	vector<AuthenticatedAction> pending_actions_;
 	chrono::seconds auth_timeout_;
 	events::Timer auth_timeout_timer_;
-	vector<AuthenticatedAction> pending_actions_;
+};
+
+#ifdef MENDER_USE_DBUS
+class AuthenticatorDBus : public Authenticator {
+public:
+	AuthenticatorDBus(events::EventLoop &loop, chrono::seconds auth_timeout = chrono::minutes {1}) :
+		Authenticator(loop, auth_timeout),
+		dbus_client_ {loop} {
+	}
+
+protected:
+	error::Error StartWatchingTokenSignal() override;
+	error::Error GetJwtToken() override;
+	error::Error FetchJwtToken() override;
+
+	dbus::DBusClient dbus_client_;
 	bool watching_token_signal_ {false};
 };
+#endif
 
 } // namespace auth
 } // namespace api

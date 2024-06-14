@@ -20,10 +20,13 @@
 #include <vector>
 
 #include <common/crypto.hpp>
+#include <common/events.hpp>
 #include <common/error.hpp>
 #include <common/http.hpp>
 
 #include <api/auth.hpp>
+
+#include <client_shared/conf.hpp>
 
 namespace mender {
 namespace auth {
@@ -33,7 +36,11 @@ namespace auth {
 using namespace std;
 
 namespace crypto = mender::common::crypto;
+namespace events = mender::common::events;
 namespace error = mender::common::error;
+namespace http = mender::common::http;
+
+namespace conf = mender::client_shared::conf;
 
 enum AuthClientErrorCode {
 	NoError = 0,
@@ -62,6 +69,39 @@ error::Error FetchJWTToken(
 	const string &device_identity_script_path,
 	APIResponseHandler api_handler,
 	const string &tenant_token = "");
+
+#ifdef MENDER_EMBED_MENDER_AUTH
+class AuthenticatorHttp : public mender::api::auth::Authenticator {
+public:
+	AuthenticatorHttp(
+		events::EventLoop &loop,
+		const conf::MenderConfig &config,
+		chrono::seconds auth_timeout = chrono::minutes {1}) :
+		Authenticator {loop, auth_timeout},
+		config_ {config},
+		client_ {config.GetHttpClientConfig(), loop} {
+	}
+
+	void SetCryptoArgs(const crypto::Args &args) {
+		crypto_args_ = args;
+	}
+
+protected:
+	error::Error StartWatchingTokenSignal() override;
+	error::Error GetJwtToken() override;
+	error::Error FetchJwtToken() override;
+
+private:
+	void FetchJwtTokenHandler(APIResponse resp);
+
+	const conf::MenderConfig &config_;
+	http::Client client_;
+	crypto::Args crypto_args_;
+
+	string token_;
+	string server_url_;
+};
+#endif
 
 } // namespace auth
 } // namespace api

@@ -84,6 +84,12 @@ target_link_libraries(mender_update_daemon PUBLIC
   artifact_scripts_executor
   common_state_machine
 )
+if(MENDER_EMBED_MENDER_AUTH)
+  target_link_libraries(mender_update_daemon PUBLIC
+    mender_auth_api_auth
+    mender_auth_cli
+  )
+endif()
 
 add_library(mender_update_cli STATIC
   cli/actions.cpp

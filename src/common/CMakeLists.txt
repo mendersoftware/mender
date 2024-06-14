@@ -18,20 +18,18 @@ option(MENDER_ARTIFACT_ZSTD_COMPRESSION "Enable Zstd compression support when do
 option(MENDER_USE_YAML_CPP "Use Yaml CPP as the Yaml library provider (Default: OFF)" OFF)
 
 if (${PLATFORM} STREQUAL linux_x86)
-  set(MENDER_USE_ASIO_LIBDBUS 1)
-  set(MENDER_USE_BOOST_ASIO 1)
-  set(MENDER_USE_BOOST_BEAST 1)
-  set(MENDER_USE_LMDB 1)
-  set(MENDER_USE_NLOHMANN_JSON 1)
-  set(MENDER_USE_TINY_PROC_LIB 1)
+  set(POSIX_DEFAULT ON)
 else()
-  set(MENDER_USE_ASIO_LIBDBUS 0)
-  set(MENDER_USE_BOOST_ASIO 0)
-  set(MENDER_USE_BOOST_BEAST 0)
-  set(MENDER_USE_LMDB 0)
-  set(MENDER_USE_NLOHMANN_JSON 0)
-  set(MENDER_USE_TINY_PROC_LIB 0)
+  set(POSIX_DEFAULT OFF)
 endif()
+
+option(MENDER_USE_DBUS "Enable DBus to communicate between processes" ${POSIX_DEFAULT})
+option(MENDER_USE_ASIO_LIBDBUS "Use Boost ASIO DBus backend" ${POSIX_DEFAULT})
+option(MENDER_USE_BOOST_ASIO "" ${POSIX_DEFAULT})
+option(MENDER_USE_BOOST_BEAST "" ${POSIX_DEFAULT})
+option(MENDER_USE_LMDB "" ${POSIX_DEFAULT})
+option(MENDER_USE_NLOHMANN_JSON "" ${POSIX_DEFAULT})
+option(MENDER_USE_TINY_PROC_LIB "" ${POSIX_DEFAULT})
 
 configure_file(config.h.in config.h)
 
@@ -87,12 +85,10 @@ if(NOT "${STD_FILESYSTEM_AVAILABLE}" STREQUAL 1)
   target_link_libraries(common_path PUBLIC ${STD_FILESYSTEM_LIB_NAME})
 endif()
 
-set(json_sources "$<$<EQUAL:${MENDER_USE_NLOHMANN_JSON},1>:nlohmann/nlohmann_json.cpp>")
-set(procs_sources "$<$<EQUAL:${MENDER_USE_TINY_PROC_LIB},1>:tiny_process_library/tiny_process_library.cpp>")
-
-add_library(common_json STATIC json/json.cpp json/platform/${json_sources})
+add_library(common_json STATIC json/json.cpp)
 target_compile_options(common_json PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-if(${json_sources} MATCHES ".*nlohmann.*")
+if(MENDER_USE_NLOHMANN_JSON)
+  target_sources(common_json PRIVATE json/platform/nlohmann/nlohmann_json.cpp)
   target_include_directories(common_json PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vendor/json/include/)
   target_link_libraries(common_json PUBLIC common common_io common_error)
 endif()
@@ -118,7 +114,6 @@ add_library(common_events STATIC
   events/platform/boost/events_io.cpp
 )
 target_compile_options(common_events PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-target_compile_definitions(common_events PUBLIC MENDER_USE_BOOST_ASIO=${MENDER_USE_BOOST_ASIO})
 target_link_libraries(common_events PUBLIC common_error common_log)
 target_link_libraries(common_events PUBLIC Boost::asio)
 
@@ -150,7 +145,6 @@ target_link_libraries(common_http PUBLIC
 if ("${CMAKE_SYSTEM_NAME}" STREQUAL "QNX")
   target_link_libraries(common_http PUBLIC socket)
 endif()
-target_compile_definitions(common_http PUBLIC MENDER_USE_BOOST_BEAST=${MENDER_USE_BOOST_BEAST})
 
 add_library(common_log STATIC)
 # Accept the global compiler flags
@@ -158,13 +152,13 @@ target_compile_options(common_log PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_sources(common_log PRIVATE log/platform/boost/boost_log.cpp)
 target_link_libraries(common_log PUBLIC common_error Boost::log)
 
-add_library(common_processes STATIC processes/processes.cpp processes/platform/${procs_sources})
+add_library(common_processes STATIC processes/processes.cpp)
 target_compile_options(common_processes PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(common_processes PUBLIC common_error common_events common_log common)
-if(${procs_sources} MATCHES ".*tiny_process_library.*")
+if(MENDER_USE_TINY_PROC_LIB)
+  target_sources(common_processes PRIVATE processes/platform/tiny_process_library/tiny_process_library.cpp)
   target_include_directories(common_processes PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/tiny-process-library)
   target_link_libraries(common_processes PUBLIC tiny-process-library::tiny-process-library common_path)
-  target_compile_definitions(common_processes PUBLIC MENDER_USE_TINY_PROC_LIB=${MENDER_USE_TINY_PROC_LIB})
 endif()
 
 add_library(common_key_value_parser STATIC key_value_parser/key_value_parser.cpp)
@@ -184,18 +178,26 @@ target_link_libraries(common_crypto PUBLIC
   OpenSSL::Crypto
 )
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(dbus REQUIRED dbus-1)
-add_library(common_dbus STATIC dbus/dbus.cpp dbus/platform/asio_libdbus/dbus.cpp)
-target_link_libraries(common_dbus PUBLIC
-  common_log
-  common_error
-  common_events
-  ${dbus_LDFLAGS}
-  OpenSSL::SSL    # required by ASIO
-  OpenSSL::Crypto # required by ASIO
-)
-target_compile_options(common_dbus PUBLIC ${dbus_CFLAGS})
+if(MENDER_USE_DBUS)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(dbus REQUIRED dbus-1)
+  add_library(common_dbus STATIC platform/dbus/dbus.cpp platform/dbus/asio_libdbus/dbus.cpp)
+  target_link_libraries(common_dbus PUBLIC
+    common_log
+    common_error
+    common_events
+    ${dbus_LDFLAGS}
+  )
+  target_compile_options(common_dbus PUBLIC ${dbus_CFLAGS})
+
+  if(MENDER_USE_ASIO_LIBDBUS)
+    target_sources(common_dbus PRIVATE platform/dbus/asio_libdbus/dbus.cpp)
+    target_link_libraries(common_dbus PUBLIC
+      OpenSSL::SSL
+      OpenSSL::Crypto
+    )
+  endif()
+endif()
 
 add_library(common_watchdog STATIC)
 if (MENDER_USE_SYSTEMD)

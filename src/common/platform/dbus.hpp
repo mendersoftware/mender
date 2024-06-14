@@ -17,6 +17,10 @@
 
 #include <common/config.h>
 
+#ifndef MENDER_USE_DBUS
+#error Cannot include dbus.hpp when MENDER_USE_DBUS is disabled.
+#endif
+
 #include <functional>
 #include <memory>
 #include <string>

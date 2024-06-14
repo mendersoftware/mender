@@ -22,7 +22,10 @@
 
 #include <mender-auth/cli/actions.hpp>
 #include <mender-auth/context.hpp>
+
+#ifdef MENDER_USE_DBUS
 #include <mender-auth/ipc/server.hpp>
+#endif
 
 namespace mender {
 namespace auth {
@@ -35,7 +38,10 @@ namespace expected = mender::common::expected;
 namespace io = mender::common::io;
 
 namespace context = mender::auth::context;
+
+#ifdef MENDER_USE_DBUS
 namespace ipc = mender::auth::ipc;
+#endif
 
 const vector<conf::CliOption> opts_bootstrap_daemon {
 	conf::CliOption {
@@ -149,7 +155,13 @@ static ExpectedActionPtr ParseAuthArguments(
 	if (start[0] == "bootstrap") {
 		return BootstrapAction::Create(config, passphrase, forcebootstrap);
 	} else if (start[0] == "daemon") {
+#ifdef MENDER_USE_DBUS
 		return DaemonAction::Create(config, passphrase, forcebootstrap);
+#else
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::not_supported),
+			"Daemon mode not support when DBus support is compiled out"));
+#endif
 	} else {
 		return expected::unexpected(
 			conf::MakeError(conf::InvalidOptionsError, "No such action: " + start[0]));
