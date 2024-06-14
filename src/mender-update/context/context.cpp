@@ -17,7 +17,6 @@
 #include <cctype>
 
 #include <algorithm>
-#include <regex>
 #include <set>
 
 #include <artifact/artifact.hpp>
@@ -234,39 +233,60 @@ expected::ExpectedString MenderContext::GetDeviceType() {
 	return expected::ExpectedString(ret);
 }
 
-static error::Error FilterProvides(
+bool CheckClearsMatch(const string &to_match, const string &clears_string) {
+	if (clears_string.empty()) {
+		return to_match.empty();
+	}
+
+	vector<std::string> sub_strings;
+	string escaped;
+	for (const auto chr : clears_string) {
+		if (chr == '*') {
+			sub_strings.push_back(escaped);
+			escaped.clear();
+		} else {
+			escaped.push_back(chr);
+		}
+	}
+	sub_strings.push_back(escaped);
+
+	// Make sure that that front of vector starts at index 0
+	if (sub_strings.front() != ""
+		&& to_match.compare(0, sub_strings.front().size(), sub_strings.front()) != 0) {
+		return false;
+	}
+	// Checks if no trailing wildcard
+	if (sub_strings.back() != ""
+		&& to_match.compare(
+			   to_match.size() - sub_strings.back().size(), to_match.size(), sub_strings.back())
+			   != 0) {
+		return false;
+	}
+
+	// Iterate over substrings, set boundary if found to avoid
+	// matching same substring twice
+	size_t boundary = 0;
+	for (const auto &str : sub_strings) {
+		if (!str.empty()) {
+			size_t find = to_match.find(str, boundary);
+			if (find == string::npos) {
+				return false;
+			}
+			boundary = find + str.size();
+		}
+	}
+	return true;
+}
+
+error::Error FilterProvides(
 	const ProvidesData &new_provides,
 	const ClearsProvidesData &clears_provides,
 	ProvidesData &to_modify) {
 	// Use clears_provides to filter out unwanted provides.
 	for (auto to_clear : clears_provides) {
-		string escaped;
-		// Potential to escape every character, though unlikely.
-		escaped.reserve(to_clear.size() * 2);
-		// Notable exception: '*', since it has special handling as a glob character.
-		string meta_characters {".^$+()[]{}|?"};
-		for (const auto chr : to_clear) {
-			if (chr == '*') {
-				// Turn every '*' glob wildcard into '.*' regex wildcard.
-				escaped.push_back('.');
-			} else if (any_of(meta_characters.begin(), meta_characters.end(), [chr](char c) {
-						   return chr == c;
-					   })) {
-				// Escape every regex special character except '*'.
-				escaped.push_back('\\');
-			}
-			escaped.push_back(chr);
-		}
-
-		regex compiled;
-		auto err = error::ExceptionToErrorOrAbort(
-			[&compiled, &escaped]() { compiled.assign(escaped, regex_constants::basic); });
-		// Should not be possible, since the whole regex is escaped.
-		AssertOrReturnError(err == error::NoError);
-
 		set<string> keys;
 		for (auto provide : to_modify) {
-			if (regex_match(provide.first.begin(), provide.first.end(), compiled)) {
+			if (CheckClearsMatch(provide.first, to_clear)) {
 				keys.insert(provide.first);
 			}
 		}

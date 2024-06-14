@@ -156,6 +156,14 @@ private:
 expected::ExpectedBool ArtifactMatchesContext(
 	const ProvidesData &provides, const string &device_type, const artifact::HeaderView &hdr_view);
 
+error::Error FilterProvides(
+	const ProvidesData &new_provides,
+	const ClearsProvidesData &clears_provides,
+	ProvidesData &to_modify);
+
+
+bool CheckClearsMatch(const string &to_match, const string &clears_string);
+
 } // namespace context
 } // namespace update
 } // namespace mender
