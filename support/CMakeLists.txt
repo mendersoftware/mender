@@ -10,6 +10,7 @@ set(IDENTITYSCRIPTS mender-device-identity)
 set(INVENTORYSCRIPTS
   mender-inventory-bootloader-integration
   mender-inventory-hostinfo
+  mender-inventory-intervals
   mender-inventory-network
   mender-inventory-os
   mender-inventory-provides
