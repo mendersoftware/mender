@@ -53,6 +53,7 @@ enum MenderContextErrorCode {
 	NoUpdateInProgressError,
 	UnexpectedHttpResponse,
 	StateDataStoreCountExceededError,
+	WrongOperationError,
 };
 
 class MenderContextErrorCategoryClass : public std::error_category {

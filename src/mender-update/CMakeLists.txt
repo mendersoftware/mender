@@ -56,7 +56,9 @@ target_sources(update_module PRIVATE
 target_compile_options(update_module PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 
 add_library(mender_update_standalone STATIC
+  standalone/context.cpp
   standalone/standalone.cpp
+  standalone/states.cpp
 )
 target_link_libraries(mender_update_standalone PUBLIC
   common_error

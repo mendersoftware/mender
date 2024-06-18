@@ -57,6 +57,18 @@ const conf::CliCommand cmd_daemon {
 	.description = "Start the client as a background service",
 };
 
+const conf::CliOption opt_stop_after {
+	conf::CliOption {
+		.long_option = "stop-after",
+		.description =
+			"Stop after the given state has completed. "
+			"Choices are `Download`, `ArtifactInstall` and `ArtifactCommit`. "
+			"You can later resume the installation by using the `resume` command. "
+			"Note that the client always stops after `ArtifactInstall` if the update module supports rollback.",
+		.parameter = "STATE",
+	},
+};
+
 const conf::CliCommand cmd_install {
 	.name = "install",
 	.description = "Mender Artifact to install - local file or a URL",
@@ -65,12 +77,33 @@ const conf::CliCommand cmd_install {
 			.name = "artifact",
 			.mandatory = true,
 		},
+	.options_w_values =
+		{
+			opt_stop_after,
+		},
 	.options =
 		{
 			conf::CliOption {
 				.long_option = "reboot-exit-code",
 				.description =
-					"Return exit code 4 if a manual reboot is required after the Artifact installation",
+					"Return exit code 4 if a manual reboot is required after the Artifact installation.",
+			},
+		},
+};
+
+const conf::CliCommand cmd_resume {
+	.name = "install",
+	.description = "Resume an interrupted installation",
+	.options_w_values =
+		{
+			opt_stop_after,
+		},
+	.options =
+		{
+			conf::CliOption {
+				.long_option = "reboot-exit-code",
+				.description =
+					"Return exit code 4 if a manual reboot is required after the Artifact installation.",
 			},
 		},
 };
@@ -110,6 +143,7 @@ const conf::CliApp cli_mender_update = {
 			cmd_commit,
 			cmd_daemon,
 			cmd_install,
+			cmd_resume,
 			cmd_rollback,
 			cmd_send_inventory,
 			cmd_show_artifact,
@@ -147,11 +181,15 @@ ExpectedActionPtr ParseUpdateArguments(
 		return make_shared<ShowProvidesAction>();
 	} else if (start[0] == "install") {
 		conf::CmdlineOptionsIterator iter(
-			start + 1, end, {}, conf::CommandOptsSetWithoutValue(cmd_install.options));
+			start + 1,
+			end,
+			conf::CommandOptsSetWithValue(cmd_install.options_w_values),
+			conf::CommandOptsSetWithoutValue(cmd_install.options));
 		iter.SetArgumentsMode(conf::ArgumentsMode::AcceptBareArguments);
 
 		string filename;
 		bool reboot_exit_code = false;
+		string stop_after;
 		while (true) {
 			auto arg = iter.Next();
 			if (!arg) {
@@ -161,6 +199,13 @@ ExpectedActionPtr ParseUpdateArguments(
 			auto value = arg.value();
 			if (value.option == "--reboot-exit-code") {
 				reboot_exit_code = true;
+				continue;
+			} else if (value.option == "--stop-after") {
+				if (value.value == "") {
+					return expected::unexpected(conf::MakeError(
+						conf::InvalidOptionsError, "--stop-after needs an argument"));
+				}
+				stop_after = value.value;
 				continue;
 			} else if (value.option != "") {
 				return expected::unexpected(
@@ -184,7 +229,54 @@ ExpectedActionPtr ParseUpdateArguments(
 			}
 		}
 
-		return make_shared<InstallAction>(filename, reboot_exit_code);
+		auto install_action = make_shared<InstallAction>(filename);
+		install_action->SetRebootExitCode(reboot_exit_code);
+		install_action->SetStopAfter(stop_after);
+		return install_action;
+	} else if (start[0] == "resume") {
+		conf::CmdlineOptionsIterator iter(
+			start + 1,
+			end,
+			conf::CommandOptsSetWithValue(cmd_resume.options_w_values),
+			conf::CommandOptsSetWithoutValue(cmd_resume.options));
+
+		string filename;
+		bool reboot_exit_code = false;
+		string stop_after;
+		while (true) {
+			auto arg = iter.Next();
+			if (!arg) {
+				return expected::unexpected(arg.error());
+			}
+
+			auto value = arg.value();
+			if (value.option == "--reboot-exit-code") {
+				reboot_exit_code = true;
+				continue;
+			} else if (value.option == "--stop-after") {
+				if (value.value == "") {
+					return expected::unexpected(conf::MakeError(
+						conf::InvalidOptionsError, "--stop-after needs an argument"));
+				}
+				stop_after = value.value;
+				continue;
+			} else if (value.option != "") {
+				return expected::unexpected(
+					conf::MakeError(conf::InvalidOptionsError, "No such option: " + value.option));
+			}
+
+			if (value.value != "") {
+				return expected::unexpected(conf::MakeError(
+					conf::InvalidOptionsError, "Too many arguments: " + value.value));
+			} else {
+				break;
+			}
+		}
+
+		auto resume_action = make_shared<ResumeAction>();
+		resume_action->SetRebootExitCode(reboot_exit_code);
+		resume_action->SetStopAfter(stop_after);
+		return resume_action;
 	} else if (start[0] == "commit") {
 		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();

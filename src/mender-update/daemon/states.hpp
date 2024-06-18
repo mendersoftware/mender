@@ -12,8 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef MENDER_UPDATE_STATES_HPP
-#define MENDER_UPDATE_STATES_HPP
+#ifndef MENDER_UPDATE_DAEMON_STATES_HPP
+#define MENDER_UPDATE_DAEMON_STATES_HPP
 
 #include <common/io.hpp>
 #include <common/optional.hpp>
@@ -384,4 +384,4 @@ public:
 } // namespace update
 } // namespace mender
 
-#endif // MENDER_UPDATE_STATES_HPP
+#endif // MENDER_UPDATE_DAEMON_STATES_HPP

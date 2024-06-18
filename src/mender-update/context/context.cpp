@@ -56,7 +56,7 @@ const string MenderContext::update_control_maps {"update-control-maps"};
 const string MenderContext::auth_token_name {"authtoken"};
 const string MenderContext::auth_token_cache_invalidator_name {"auth-token-cache-invalidator"};
 
-const int MenderContext::standalone_data_version {1};
+const int MenderContext::standalone_data_version {2};
 
 const MenderContextErrorCategoryClass MenderContextErrorCategory;
 
@@ -84,6 +84,8 @@ string MenderContextErrorCategoryClass::message(int code) const {
 		return "Unexpected HTTP response";
 	case StateDataStoreCountExceededError:
 		return "State data store count exceeded";
+	case WrongOperationError:
+		return "Operation cannot be done in this state";
 	}
 	assert(false);
 	return "Unknown";
