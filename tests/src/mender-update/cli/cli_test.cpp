@@ -796,6 +796,7 @@ NeedsArtifactReboot
 SupportsRollback
 SupportsRollback
 ArtifactRollback
+ArtifactFailure
 Cleanup
 )"));
 
@@ -851,7 +852,7 @@ Installation failed. Rolled back modifications.
 )");
 		EXPECT_TRUE(VerifyOnlyMessages(
 			output.GetCerr(),
-			{"Installation failed: Process returned non-zero exit status: ArtifactInstall: Process exited with status 1"}));
+			{"Process returned non-zero exit status: ArtifactInstall: Process exited with status 1"}));
 	}
 
 	EXPECT_TRUE(mtesting::FileContainsExactly(
@@ -1487,6 +1488,7 @@ NeedsArtifactReboot
 SupportsRollback
 SupportsRollback
 ArtifactRollback
+ArtifactFailure
 Cleanup
 )"));
 
@@ -1571,7 +1573,7 @@ Cleanup
 
 	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
 rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
-artifact_name=test
+artifact_name=test_INCONSISTENT
 )"));
 }
 
@@ -1936,6 +1938,7 @@ NeedsArtifactReboot
 SupportsRollback
 SupportsRollback
 ArtifactRollback
+ArtifactFailure
 Cleanup
 )"));
 
@@ -2028,6 +2031,199 @@ artifact_name=test
 )"));
 }
 
+TEST(CliTest, StopAfterDownloadThenResume) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"install",
+			"--stop-after",
+			"Download",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Streamed to storage, but not installed/enabled.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installed, but not committed.
+Use 'commit' to update, or 'rollback' to roll back the update.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Committed.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test
+)"));
+}
+
+TEST(CliTest, StopAfterCommitThenResume) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"install",
+			"--stop-after",
+			"ArtifactCommit",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Update Module doesn't support rollback. Committing immediately.
+Installed and committed.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Cleaned up.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test
+)"));
+}
+
 
 using ExitCode = int;
 
@@ -2055,8 +2251,8 @@ vector<StandaloneStateScriptTestCase> standalone_download_script_test_cases {
 				{"ArtifactCommit_Leave_01", ExitCode {0}},
 				{"ArtifactCommit_Error_01", ExitCode {0}},
 			},
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
+ProvidePayloadFileSizes
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -2083,8 +2279,7 @@ Cleanup
 				{"ArtifactCommit_Enter_01", ExitCode {0}},
 				{"ArtifactCommit_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
 Download_Error_01
 Cleanup
 )",
@@ -2103,8 +2298,8 @@ Cleanup
 				{"ArtifactCommit_Leave_01", ExitCode {0}},
 			},
 		.fail_in_state = "Download",
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
+ProvidePayloadFileSizes
 Download
 Download_Error_01
 Cleanup
@@ -2123,8 +2318,7 @@ Cleanup
 				{"ArtifactCommit_Enter_01", ExitCode {0}},
 				{"ArtifactCommit_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
 Download_Error_01
 Download_Error_02
 Cleanup
@@ -2144,8 +2338,8 @@ Cleanup
 				{"ArtifactCommit_Enter_01", ExitCode {0}},
 				{"ArtifactCommit_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
+ProvidePayloadFileSizes
 Download
 Download_Leave_01
 Download_Error_01
@@ -2172,8 +2366,8 @@ vector<StandaloneStateScriptTestCase> standalone_install_script_test_cases {
 				{"ArtifactFailure_Enter_01", ExitCode {0}},
 				{"ArtifactFailure_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
+ProvidePayloadFileSizes
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -2203,8 +2397,8 @@ Cleanup
 				{"ArtifactFailure_Leave_01", ExitCode {0}},
 			},
 		.fail_in_state = "ArtifactInstall",
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
+ProvidePayloadFileSizes
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -2237,8 +2431,8 @@ Cleanup
 				{"ArtifactFailure_Enter_01", ExitCode {0}},
 				{"ArtifactFailure_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
+ProvidePayloadFileSizes
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -2274,8 +2468,8 @@ vector<StandaloneStateScriptTestCase> standalone_commit_script_test_cases {
 				{"ArtifactFailure_Leave_01", ExitCode {0}},
 			},
 
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
+ProvidePayloadFileSizes
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -2312,8 +2506,8 @@ Cleanup
 				{"ArtifactFailure_Leave_01", ExitCode {0}},
 			},
 		.fail_in_state = "ArtifactCommit",
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
+ProvidePayloadFileSizes
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -2351,8 +2545,8 @@ Cleanup
 				{"ArtifactFailure_Enter_01", ExitCode {0}},
 				{"ArtifactFailure_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
+ProvidePayloadFileSizes
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -2364,7 +2558,6 @@ SupportsRollback
 ArtifactCommit_Enter_01
 ArtifactCommit
 ArtifactCommit_Leave_01
-ArtifactCommit_Error_01
 Cleanup
 )",
 	},
@@ -2387,8 +2580,8 @@ Cleanup
 				{"ArtifactFailure_Enter_01", ExitCode {0}},
 				{"ArtifactFailure_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
+ProvidePayloadFileSizes
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -2400,8 +2593,6 @@ SupportsRollback
 ArtifactCommit_Enter_01
 ArtifactCommit
 ArtifactCommit_Leave_01
-ArtifactCommit_Error_01
-ArtifactCommit_Error_02
 Cleanup
 )",
 	}};
@@ -2425,9 +2616,9 @@ vector<StandaloneStateScriptTestCase> standalone_failure_script_test_cases {
 				{"ArtifactFailure_Leave_01", ExitCode {0}},
 				{"ArtifactFailure_Leave_02", ExitCode {0}},
 			},
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
 Download_Enter_02
+ProvidePayloadFileSizes
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -2464,9 +2655,9 @@ Cleanup
 				{"ArtifactFailure_Leave_01", ExitCode {1}}, // Should not matter
 				{"ArtifactFailure_Leave_02", ExitCode {1}}, // Should not matter
 			},
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
 Download_Enter_02
+ProvidePayloadFileSizes
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -2502,11 +2693,11 @@ vector<StandaloneStateScriptTestCase> standalone_rollback_script_test_cases {
 				{"ArtifactCommit_Leave_01", ExitCode {0}},
 				{"ArtifactRollback_Enter_01", ExitCode {0}},
 				{"ArtifactRollback_Leave_01", ExitCode {0}},
-				{"ArtifactFailure_Enter_01", ExitCode {1}}, // Should not matter
-				{"ArtifactFailure_Leave_01", ExitCode {1}}, // Should not matter
+				{"ArtifactFailure_Enter_01", ExitCode {0}},
+				{"ArtifactFailure_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(ProvidePayloadFileSizes
-Download_Enter_01
+		.expected = R"(Download_Enter_01
+ProvidePayloadFileSizes
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -2519,6 +2710,9 @@ SupportsRollback
 ArtifactRollback_Enter_01
 ArtifactRollback
 ArtifactRollback_Leave_01
+ArtifactFailure_Enter_01
+ArtifactFailure
+ArtifactFailure_Leave_01
 Cleanup
 )",
 	},

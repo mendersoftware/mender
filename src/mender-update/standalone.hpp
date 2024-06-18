@@ -26,8 +26,8 @@
 #include <artifact/artifact.hpp>
 
 #include <mender-update/context.hpp>
-
-#include <mender-update/update_module/v3/update_module.hpp>
+#include <mender-update/standalone/context.hpp>
+#include <mender-update/standalone/states.hpp>
 
 namespace mender {
 namespace update {
@@ -42,30 +42,6 @@ namespace json = mender::common::json;
 
 namespace artifact = mender::artifact;
 
-namespace context = mender::update::context;
-
-namespace update_module = mender::update::update_module::v3;
-
-// The keys and data, respectively, of the JSON object living under the `standalone_data_key` entry
-// in the database. Be sure to take into account upgrades when changing this.
-struct StateDataKeys {
-	static const string version;
-	static const string artifact_name;
-	static const string artifact_group;
-	static const string artifact_provides;
-	static const string artifact_clears_provides;
-	static const string payload_types;
-};
-struct StateData {
-	int version;
-	string artifact_name;
-	string artifact_group;
-	optional<unordered_map<string, string>> artifact_provides;
-	optional<vector<string>> artifact_clears_provides;
-	vector<string> payload_types;
-};
-using ExpectedOptionalStateData = expected::expected<optional<StateData>, error::Error>;
-
 // Standalone script states:
 //
 // Download
@@ -73,33 +49,6 @@ using ExpectedOptionalStateData = expected::expected<optional<StateData>, error:
 // ArtifactCommit (Leave - no error handling)
 // ArtifactRollback - no error handling
 // ArtifactFailure - no error handling
-
-enum class Result {
-	InstalledAndCommitted,
-	Installed,
-	InstalledRebootRequired,
-	InstalledAndCommittedRebootRequired,
-	Committed,
-	InstalledButFailedInPostCommit,
-	NoUpdateInProgress,
-	RolledBack,
-	NoRollback,
-	RollbackFailed,
-	FailedNothingDone,
-	FailedAndRolledBack,
-	FailedAndNoRollback,
-	FailedAndRollbackFailed,
-};
-
-struct ResultAndError {
-	Result result;
-	error::Error err;
-};
-
-enum class InstallOptions {
-	None,
-	NoStdout,
-};
 
 // Return true if there is standalone data (indicating that an update is in progress), false if not.
 // Note: StateData is expected to be empty. IOW it will not clear fields that happen to be
@@ -111,39 +60,75 @@ error::Error SaveStateData(database::KeyValueDatabase &db, const StateData &data
 
 error::Error RemoveStateData(database::KeyValueDatabase &db);
 
+class StateMachine {
+public:
+	StateMachine(Context &ctx);
+
+	error::Error SetStartStateFromStateData(const string &completed_state);
+	error::Error SetStopAfterState(const string &state);
+	void StartOnRollback();
+
+	void Run();
+
+private:
+	events::EventLoop loop_;
+
+	Context &context_;
+
+	PrepareDownloadState prepare_download_state_;
+
+	ScriptRunnerState download_enter_state_;
+	DownloadState download_state_;
+	ScriptRunnerState download_leave_state_;
+	ScriptRunnerState download_error_state_;
+
+	StateDataSaveState save_artifact_install_state_;
+	ScriptRunnerState artifact_install_enter_state_;
+	ArtifactInstallState artifact_install_state_;
+	ScriptRunnerState artifact_install_leave_state_;
+	ScriptRunnerState artifact_install_error_state_;
+
+	RebootAndRollbackQueryState reboot_and_rollback_query_state_;
+
+	StateDataSaveState save_artifact_commit_state_;
+	ScriptRunnerState artifact_commit_enter_state_;
+	ArtifactCommitState artifact_commit_state_;
+	StateDataSaveState save_artifact_commit_leave_state_;
+	ScriptRunnerState artifact_commit_leave_state_;
+	ScriptRunnerState artifact_commit_error_state_;
+
+	RollbackQueryState rollback_query_state_;
+
+	StateDataSaveState save_artifact_rollback_state_;
+	ScriptRunnerState artifact_rollback_enter_state_;
+	ArtifactRollbackState artifact_rollback_state_;
+	ScriptRunnerState artifact_rollback_leave_state_;
+
+	StateDataSaveState save_artifact_failure_state_;
+	ScriptRunnerState artifact_failure_enter_state_;
+	ArtifactFailureState artifact_failure_state_;
+	ScriptRunnerState artifact_failure_leave_state_;
+
+	StateDataSaveState save_cleanup_state_;
+	CleanupState cleanup_state_;
+
+	ExitState exit_state_;
+
+	// Will point to one of the states above.
+	StateType *start_state_;
+
+	common::state_machine::StateMachine<Context, StateEvent> state_machine_;
+};
+
 ResultAndError Install(
-	context::MenderContext &main_context,
+	standalone::Context &ctx,
 	const string &src,
 	artifact::config::Signature verify_signature = artifact::config::Signature::Verify,
 	InstallOptions options = InstallOptions::None);
-ResultAndError Commit(context::MenderContext &main_context);
-ResultAndError Rollback(context::MenderContext &main_context);
 
-ResultAndError DoInstallStates(
-	context::MenderContext &main_context,
-	StateData &data,
-	artifact::Artifact &artifact,
-	update_module::UpdateModule &update_module);
-ResultAndError DoCommit(
-	context::MenderContext &main_context,
-	StateData &data,
-	update_module::UpdateModule &update_module);
-ResultAndError DoRollback(
-	context::MenderContext &main_context,
-	StateData &data,
-	update_module::UpdateModule &update_module);
-
-ResultAndError DoEmptyPayloadArtifact(
-	context::MenderContext &main_context,
-	StateData &data,
-	InstallOptions options = InstallOptions::None);
-
-ResultAndError InstallationFailureHandler(
-	context::MenderContext &main_context,
-	StateData &data,
-	update_module::UpdateModule &update_module);
-
-error::Error CommitBrokenArtifact(context::MenderContext &main_context, StateData &data);
+ResultAndError Resume(Context &ctx);
+ResultAndError Commit(Context &ctx);
+ResultAndError Rollback(Context &ctx);
 
 } // namespace standalone
 } // namespace update

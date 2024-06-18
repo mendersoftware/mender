@@ -260,6 +260,7 @@ struct CliCommand {
 	string name;
 	string description;
 	optional<CliArgument> argument;
+	vector<CliOption> options_w_values;
 	vector<CliOption> options;
 };
 

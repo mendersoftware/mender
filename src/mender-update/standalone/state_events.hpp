@@ -12,61 +12,40 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef MENDER_UPDATE_DAEMON_STATE_EVENTS_HPP
-#define MENDER_UPDATE_DAEMON_STATE_EVENTS_HPP
+#ifndef MENDER_UPDATE_STANDALONE_STATE_EVENTS_HPP
+#define MENDER_UPDATE_STANDALONE_STATE_EVENTS_HPP
 
 namespace mender {
 namespace update {
-namespace daemon {
+namespace standalone {
 
 enum class StateEvent {
-	Started,
-	AlwaysSuccess,
 	Success,
 	Failure,
 	NothingToDo,
-	Retry,
-	InventoryPollingTriggered,
-	DeploymentPollingTriggered,
-	StateLoopDetected,
-	DeploymentStarted,
-	DeploymentEnded,
-	RollbackStarted,
+	NeedsInteraction,
+	EmptyPayloadArtifact,
 };
 
 inline std::string StateEventToString(const StateEvent &event) {
 	switch (event) {
-	case StateEvent::Started:
-		return "Started";
-	case StateEvent::AlwaysSuccess:
-		return "AlwaysSuccess";
 	case StateEvent::Success:
 		return "Success";
 	case StateEvent::Failure:
 		return "Failure";
 	case StateEvent::NothingToDo:
 		return "NothingToDo";
-	case StateEvent::Retry:
-		return "Retry";
-	case StateEvent::InventoryPollingTriggered:
-		return "InventoryPollingTriggered";
-	case StateEvent::DeploymentPollingTriggered:
-		return "DeploymentPollingTriggered";
-	case StateEvent::StateLoopDetected:
-		return "StateLoopDetected";
-	case StateEvent::DeploymentStarted:
-		return "DeploymentStarted";
-	case StateEvent::DeploymentEnded:
-		return "DeploymentEnded";
-	case StateEvent::RollbackStarted:
-		return "RollbackStarted";
+	case StateEvent::NeedsInteraction:
+		return "NeedsInteraction";
+	case StateEvent::EmptyPayloadArtifact:
+		return "EmptyPayloadArtifact";
 	}
 	assert(false);
 	return "MissingStateInSwitchStatement";
 }
 
-} // namespace daemon
+} // namespace standalone
 } // namespace update
 } // namespace mender
 
-#endif // MENDER_UPDATE_DAEMON_STATE_EVENTS_HPP
+#endif // MENDER_UPDATE_STANDALONE_STATE_EVENTS_HPP
