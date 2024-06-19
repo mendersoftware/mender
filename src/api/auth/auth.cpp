@@ -137,7 +137,11 @@ void Authenticator::HandleReceivedToken(
 		auto &token = ex_auth_dbus_data.value().first;
 		auto &server_url = ex_auth_dbus_data.value().second;
 
-		mlog::Debug("Got new authentication token for server " + server_url);
+		if (server_url.empty()) {
+			mlog::Debug("Got empty server url /token in the response");
+		} else {
+			mlog::Debug("Got new authentication token for server " + server_url);
+		}
 
 		AuthData auth_data {server_url, token};
 		ex_auth_data = ExpectedAuthData(std::move(auth_data));
