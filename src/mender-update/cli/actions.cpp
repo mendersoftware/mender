@@ -197,7 +197,7 @@ static error::Error ResultHandler(standalone::ResultAndError result) {
 			ss << std::hex << static_cast<int>(result.result);
 			log::Error("Unexpected result value: 0x" + ss.str());
 		}
-	} else if (ResultIs(result.result, Result::RolledBack)) {
+	} else if (ResultContains(result.result, Result::RolledBack)) {
 		cout << "Rolled back." << endl;
 	} else if (ResultIs(result.result, Result::NoUpdateInProgress)) {
 		cout << "No update in progress." << endl;
