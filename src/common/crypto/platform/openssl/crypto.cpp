@@ -32,6 +32,7 @@
 #endif // MENDER_CRYPTO_OPENSSL_LEGACY
 
 #include <openssl/evp.h>
+#include <openssl/conf.h>
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
 
@@ -281,6 +282,11 @@ ExpectedPrivateKey LoadFrom(const Args &args) {
 #endif // ndef MENDER_CRYPTO_OPENSSL_LEGACY
 
 ExpectedPrivateKey PrivateKey::Load(const Args &args) {
+	// Load OpenSSL config
+	if ((CONF_modules_load_file(nullptr, nullptr, 0) != OPENSSL_SUCCESS)) {
+		log::Warning("Failed to load OpenSSL configuration file: " + GetOpenSSLErrorMessage());
+	}
+
 	log::Trace("Loading private key");
 	if (args.ssl_engine != "") {
 		return LoadFromHSMEngine(args);
