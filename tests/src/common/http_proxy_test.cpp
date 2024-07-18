@@ -35,6 +35,8 @@ using namespace std;
 #define TEST_PROXY_PORT "8003"
 #define TEST_TLS_PROXY_PORT "8004"
 #define TEST_CLOSED_PORT "8005"
+#define TEST_PROXY_USER "testuser"
+#define TEST_PROXY_PASSWORD "T3stP433w0rd"
 
 namespace common = mender::common;
 namespace error = mender::common::error;
@@ -93,7 +95,7 @@ public:
 		ASSERT_EQ(error::NoError, err);
 	}
 
-	void StartProxy() {
+	void StartProxy(bool authenticating) {
 		const string tiny_proxy = "/usr/bin/tinyproxy";
 		const string nc = "/bin/nc";
 
@@ -113,6 +115,9 @@ Allow 127.0.0.1
 MaxClients 10
 StartServers 1
 )";
+		if (authenticating) {
+			config << "BasicAuth " TEST_PROXY_USER " " TEST_PROXY_PASSWORD << endl;
+		}
 		ASSERT_TRUE(config.good());
 		config.close();
 
@@ -189,8 +194,8 @@ connect = localhost:)" + connect_port
 		EnsureUp(client);
 	}
 
-	void StartTlsProxy() {
-		StartProxy();
+	void StartTlsProxy(bool authenticating) {
+		StartProxy(authenticating);
 		StartTlsTunnel(TEST_TLS_PROXY_PORT, TEST_PROXY_PORT);
 	}
 
@@ -239,7 +244,7 @@ class HttpProxyHttpTest : public HttpProxyTest {
 public:
 	void SetUp() override {
 		StartPlainServer();
-		StartProxy();
+		StartProxy(false);
 	}
 };
 
@@ -420,7 +425,7 @@ TEST_F(HttpProxyHttpTest, WrongTarget) {
 class HttpProxyHttpsTest : public HttpProxyTest {
 public:
 	void SetUp() override {
-		StartProxy();
+		StartProxy(false);
 		StartTlsServer();
 	}
 };
@@ -627,7 +632,7 @@ class HttpsProxyHttpTest : public HttpProxyTest {
 public:
 	void SetUp() override {
 		StartPlainServer();
-		StartTlsProxy();
+		StartTlsProxy(false);
 	}
 };
 
@@ -795,7 +800,7 @@ class HttpsProxyHttpsTest : public HttpProxyTest {
 public:
 	void SetUp() override {
 		StartTlsServer();
-		StartTlsProxy();
+		StartTlsProxy(false);
 	}
 };
 
@@ -983,4 +988,149 @@ TEST_F(HttpsProxyHttpsTest, WrongCertificate) {
 	loop.Run();
 
 	EXPECT_TRUE(client_hit_header);
+}
+
+class HttpAuthProxyHttpTest : public HttpProxyTest {
+public:
+	void SetUp() override {
+		StartPlainServer();
+		StartProxy(true);
+	}
+};
+
+TEST_F(HttpAuthProxyHttpTest, BasicRequestAndResponse) {
+	bool client_hit_header = false;
+	bool client_hit_body = false;
+
+	http::ClientConfig client_config {
+		.http_proxy =
+			"http://" TEST_PROXY_USER ":" TEST_PROXY_PASSWORD "@127.0.0.1:" TEST_PROXY_PORT,
+	};
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT "/index.html");
+	vector<uint8_t> received;
+	auto err = client.AsyncCall(
+		req,
+		[&client_hit_header, &received](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+			EXPECT_EQ(resp->GetStatusCode(), 200);
+			client_hit_header = true;
+
+			auto body_writer = make_shared<io::ByteWriter>(received);
+			body_writer->SetUnlimited(true);
+			resp->SetBodyWriter(body_writer);
+		},
+		[&client_hit_body, this](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			client_hit_body = true;
+			loop.Stop();
+		});
+	ASSERT_EQ(error::NoError, err);
+
+	loop.Run();
+
+	EXPECT_TRUE(plain_server_hit_header);
+	EXPECT_TRUE(plain_server_hit_body);
+	EXPECT_TRUE(client_hit_header);
+	EXPECT_TRUE(client_hit_body);
+	EXPECT_EQ(common::StringFromByteVector(received), "Test\r\n");
+}
+
+class HttpAuthProxyHttpsTest : public HttpProxyTest {
+public:
+	void SetUp() override {
+		StartProxy(true);
+		StartTlsServer();
+	}
+};
+
+TEST_F(HttpAuthProxyHttpsTest, BasicRequestAndResponse) {
+	bool client_hit_header = false;
+	bool client_hit_body = false;
+
+	http::ClientConfig client_config {
+		.server_cert_path = "server.localhost.crt",
+		.https_proxy =
+			"http://" TEST_PROXY_USER ":" TEST_PROXY_PASSWORD "@localhost:" TEST_PROXY_PORT,
+	};
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("https://localhost:" TEST_TLS_PORT "/index.html");
+	vector<uint8_t> received;
+	auto err = client.AsyncCall(
+		req,
+		[&client_hit_header, &received](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+			EXPECT_EQ(resp->GetStatusCode(), 200);
+			client_hit_header = true;
+
+			auto body_writer = make_shared<io::ByteWriter>(received);
+			body_writer->SetUnlimited(true);
+			resp->SetBodyWriter(body_writer);
+		},
+		[&client_hit_body, this](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			client_hit_body = true;
+			loop.Stop();
+		});
+	ASSERT_EQ(error::NoError, err);
+
+	loop.Run();
+
+	EXPECT_TRUE(client_hit_header);
+	EXPECT_TRUE(client_hit_body);
+	EXPECT_EQ(common::StringFromByteVector(received), "Test\r\n");
+}
+
+class HttpsAuthProxyHttpsTest : public HttpProxyTest {
+public:
+	void SetUp() override {
+		StartTlsServer();
+		StartTlsProxy(true);
+	}
+};
+
+TEST_F(HttpsAuthProxyHttpsTest, BasicRequestAndResponse) {
+	bool client_hit_header = false;
+	bool client_hit_body = false;
+
+	http::ClientConfig client_config {
+		.server_cert_path = "server.localhost.crt",
+		.https_proxy =
+			"https://" TEST_PROXY_USER ":" TEST_PROXY_PASSWORD "@localhost:" TEST_TLS_PROXY_PORT,
+	};
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("https://localhost:" TEST_TLS_PORT "/index.html");
+	vector<uint8_t> received;
+	auto err = client.AsyncCall(
+		req,
+		[&client_hit_header, &received](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+			EXPECT_EQ(resp->GetStatusCode(), 200);
+			client_hit_header = true;
+
+			auto body_writer = make_shared<io::ByteWriter>(received);
+			body_writer->SetUnlimited(true);
+			resp->SetBodyWriter(body_writer);
+		},
+		[&client_hit_body, this](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			client_hit_body = true;
+			loop.Stop();
+		});
+	ASSERT_EQ(error::NoError, err);
+
+	loop.Run();
+
+	EXPECT_TRUE(client_hit_header);
+	EXPECT_TRUE(client_hit_body);
+	EXPECT_EQ(common::StringFromByteVector(received), "Test\r\n");
 }
