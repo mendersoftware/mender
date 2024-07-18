@@ -100,6 +100,59 @@ TEST(URLTest, URLEncode) {
 	EXPECT_EQ(ret, "so%2Fare%2Fslashes");
 }
 
+TEST(URLTest, BreakDownUrl) {
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl("https://easy.example.com/trivial", url);
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(url.protocol, "https");
+		EXPECT_EQ(url.host, "easy.example.com");
+		EXPECT_EQ(url.path, "/trivial");
+	}
+
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl("https://cfengine.example.com:5308/trivial", url);
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(url.protocol, "https");
+		EXPECT_EQ(url.host, "cfengine.example.com");
+		EXPECT_EQ(url.path, "/trivial");
+		EXPECT_EQ(url.port, 5308);
+	}
+
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl("https://admin:admin@cfengine.example.com:5308/trivial", url);
+		ASSERT_NE(err, error::NoError);
+		EXPECT_THAT(err.String(), testing::HasSubstr("Username and password is not supported"));
+	}
+
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl(
+			"https://admin:cfeadmin@cfengine.example.com:5308/trivial", url, true);
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(url.protocol, "https");
+		EXPECT_EQ(url.host, "cfengine.example.com");
+		EXPECT_EQ(url.path, "/trivial");
+		EXPECT_EQ(url.port, 5308);
+		EXPECT_EQ(url.username, "admin");
+		EXPECT_EQ(url.password, "cfeadmin");
+	}
+
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl("https://admin@cfengine.example.com:5308/trivial", url, true);
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(url.protocol, "https");
+		EXPECT_EQ(url.host, "cfengine.example.com");
+		EXPECT_EQ(url.path, "/trivial");
+		EXPECT_EQ(url.port, 5308);
+		EXPECT_EQ(url.username, "admin");
+		EXPECT_EQ(url.password, "");
+	}
+}
+
 void TestBasicRequestAndResponse() {
 	TestEventLoop loop;
 

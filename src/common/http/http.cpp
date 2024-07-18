@@ -92,7 +92,7 @@ string MethodToString(Method method) {
 	return "INVALID_METHOD";
 }
 
-error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
+error::Error BreakDownUrl(const string &url, BrokenDownUrl &address, bool with_auth) {
 	const string url_split {"://"};
 
 	auto split_index = url.find(url_split);
@@ -115,11 +115,24 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
 		address.path = tmp.substr(split_index);
 	}
 
-	if (address.host.find("@") != string::npos) {
-		address = {};
-		return error::Error(
-			make_error_condition(errc::not_supported),
-			"URL Username and password is not supported");
+	auto auth_index = address.host.find("@");
+	if (auth_index != string::npos) {
+		if (!with_auth) {
+			address = {};
+			return error::Error(
+				make_error_condition(errc::not_supported),
+				"URL Username and password is not supported");
+		}
+		auto user_password = address.host.substr(0, auth_index);
+		address.host = address.host.substr(auth_index + 1);
+		auto u_pw_sep_index = user_password.find(":");
+		if (u_pw_sep_index == string::npos) {
+			// no password
+			address.username = std::move(user_password);
+		} else {
+			address.username = user_password.substr(0, u_pw_sep_index);
+			address.password = user_password.substr(u_pw_sep_index + 1);
+		}
 	}
 
 	split_index = address.host.find(":");
@@ -149,7 +162,9 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
 
 	log::Trace(
 		"URL broken down into (protocol: " + address.protocol + "), (host: " + address.host
-		+ "), (port: " + to_string(address.port) + "), (path: " + address.path + ")");
+		+ "), (port: " + to_string(address.port) + "), (path: " + address.path + "),"
+		+ "(username: " + address.username
+		+ "), (password: " + (address.password == "" ? "" : "OMITTED") + ")");
 
 	return error::NoError;
 }
