@@ -443,7 +443,15 @@ static inline error::Error AddProxyAuthHeader(OutgoingRequest &req, BrokenDownUr
 		// nothing to do
 		return error::NoError;
 	}
-	auto creds = proxy_address.username + ":" + proxy_address.password;
+	auto ex_dec_username = URLDecode(proxy_address.username);
+	auto ex_dec_password = URLDecode(proxy_address.password);
+	if (!ex_dec_username) {
+		return ex_dec_username.error();
+	}
+	if (!ex_dec_password) {
+		return ex_dec_password.error();
+	}
+	auto creds = ex_dec_username.value() + ":" + ex_dec_password.value();
 	auto ex_encoded_creds = crypto::EncodeBase64(common::ByteVectorFromString(creds));
 	if (!ex_encoded_creds) {
 		return ex_encoded_creds.error();
