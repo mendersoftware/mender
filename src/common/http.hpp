@@ -134,6 +134,7 @@ struct BrokenDownUrl {
 error::Error BreakDownUrl(const string &url, BrokenDownUrl &address, bool with_auth = false);
 
 string URLEncode(const string &value);
+expected::ExpectedString URLDecode(const string &value);
 
 string JoinOneUrl(const string &prefix, const string &url);
 
