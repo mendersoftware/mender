@@ -115,7 +115,7 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address, bool with_a
 		address.path = tmp.substr(split_index);
 	}
 
-	auto auth_index = address.host.find("@");
+	auto auth_index = address.host.rfind("@");
 	if (auth_index != string::npos) {
 		if (!with_auth) {
 			address = {};
