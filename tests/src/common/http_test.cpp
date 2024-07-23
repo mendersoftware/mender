@@ -149,6 +149,32 @@ TEST(URLTest, BreakDownUrl) {
 		EXPECT_EQ(url.username, "admin");
 		EXPECT_EQ(url.password, "");
 	}
+
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl(
+			"https://admin:cfe@dmin@cfengine.example.com:5308/trivial", url, true);
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(url.protocol, "https");
+		EXPECT_EQ(url.host, "cfengine.example.com");
+		EXPECT_EQ(url.path, "/trivial");
+		EXPECT_EQ(url.port, 5308);
+		EXPECT_EQ(url.username, "admin");
+		EXPECT_EQ(url.password, "cfe@dmin");
+	}
+
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl(
+			"https://admin@cfengine.com:cfe@dmin@cfengine.example.com:5308/trivial", url, true);
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(url.protocol, "https");
+		EXPECT_EQ(url.host, "cfengine.example.com");
+		EXPECT_EQ(url.path, "/trivial");
+		EXPECT_EQ(url.port, 5308);
+		EXPECT_EQ(url.username, "admin@cfengine.com");
+		EXPECT_EQ(url.password, "cfe@dmin");
+	}
 }
 
 void TestBasicRequestAndResponse() {
