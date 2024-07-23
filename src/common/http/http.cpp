@@ -187,6 +187,26 @@ string URLEncode(const string &value) {
 	return escaped.str();
 }
 
+expected::ExpectedString URLDecode(const string &value) {
+	stringstream unescaped;
+
+	auto len = value.length();
+	for (size_t i = 0; i < len; i++) {
+		if (value[i] != '%') {
+			unescaped << value[i];
+		} else {
+			if ((i + 2 >= len) || !isxdigit(value[i + 1]) || !(isxdigit(value[i + 2]))) {
+				return expected::unexpected(MakeError(InvalidUrlError, "Incomplete % sequence in '" + value + "'"));
+			}
+			unsigned int num;
+			sscanf(value.substr(i + 1, 2).c_str(), "%x", &num);
+			unescaped << static_cast<char>(num);
+			i += 2;
+		}
+	}
+	return unescaped.str();
+}
+
 string JoinOneUrl(const string &prefix, const string &suffix) {
 	auto prefix_end = prefix.cend();
 	while (prefix_end != prefix.cbegin() && prefix_end[-1] == '/') {

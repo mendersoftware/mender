@@ -87,15 +87,36 @@ private:
 } // namespace http
 } // namespace mender
 
-TEST(URLTest, URLEncode) {
+TEST(URLTest, URLEncodeDecode) {
 	auto ret = http::URLEncode("all-supported_so~no~change.expected");
 	EXPECT_EQ(ret, "all-supported_so~no~change.expected");
+	auto ex_dec = http::URLDecode(ret);
+	ASSERT_TRUE(ex_dec);
+	EXPECT_EQ(ex_dec.value(), "all-supported_so~no~change.expected");
 
 	ret = http::URLEncode("spaces are bad");
 	EXPECT_EQ(ret, "spaces%20are%20bad");
+	ex_dec = http::URLDecode(ret);
+	ASSERT_TRUE(ex_dec);
+	EXPECT_EQ(ex_dec.value(), "spaces are bad");
 
 	ret = http::URLEncode("so/are/slashes");
 	EXPECT_EQ(ret, "so%2Fare%2Fslashes");
+	ex_dec = http::URLDecode(ret);
+	ASSERT_TRUE(ex_dec);
+	EXPECT_EQ(ex_dec.value(), "so/are/slashes");
+
+	ex_dec = http::URLDecode("notrailing%");
+	ASSERT_FALSE(ex_dec);
+
+	ex_dec = http::URLDecode("notrailingshortcode%2");
+	ASSERT_FALSE(ex_dec);
+
+	ex_dec = http::URLDecode("noshortcode%2somewhere");
+	ASSERT_FALSE(ex_dec);
+
+	ex_dec = http::URLDecode("no%alone");
+	ASSERT_FALSE(ex_dec);
 }
 
 TEST(URLTest, BreakDownUrl) {
