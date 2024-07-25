@@ -89,15 +89,115 @@ private:
 } // namespace common
 } // namespace mender
 
-TEST(URLTest, URLEncode) {
+TEST(URLTest, URLEncodeDecode) {
 	auto ret = http::URLEncode("all-supported_so~no~change.expected");
 	EXPECT_EQ(ret, "all-supported_so~no~change.expected");
+	auto ex_dec = http::URLDecode(ret);
+	ASSERT_TRUE(ex_dec);
+	EXPECT_EQ(ex_dec.value(), "all-supported_so~no~change.expected");
 
 	ret = http::URLEncode("spaces are bad");
 	EXPECT_EQ(ret, "spaces%20are%20bad");
+	ex_dec = http::URLDecode(ret);
+	ASSERT_TRUE(ex_dec);
+	EXPECT_EQ(ex_dec.value(), "spaces are bad");
 
 	ret = http::URLEncode("so/are/slashes");
 	EXPECT_EQ(ret, "so%2Fare%2Fslashes");
+	ex_dec = http::URLDecode(ret);
+	ASSERT_TRUE(ex_dec);
+	EXPECT_EQ(ex_dec.value(), "so/are/slashes");
+
+	ex_dec = http::URLDecode("notrailing%");
+	ASSERT_FALSE(ex_dec);
+
+	ex_dec = http::URLDecode("notrailingshortcode%2");
+	ASSERT_FALSE(ex_dec);
+
+	ex_dec = http::URLDecode("noshortcode%2somewhere");
+	ASSERT_FALSE(ex_dec);
+
+	ex_dec = http::URLDecode("no%alone");
+	ASSERT_FALSE(ex_dec);
+}
+
+TEST(URLTest, BreakDownUrl) {
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl("https://easy.example.com/trivial", url);
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(url.protocol, "https");
+		EXPECT_EQ(url.host, "easy.example.com");
+		EXPECT_EQ(url.path, "/trivial");
+	}
+
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl("https://cfengine.example.com:5308/trivial", url);
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(url.protocol, "https");
+		EXPECT_EQ(url.host, "cfengine.example.com");
+		EXPECT_EQ(url.path, "/trivial");
+		EXPECT_EQ(url.port, 5308);
+	}
+
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl("https://admin:admin@cfengine.example.com:5308/trivial", url);
+		ASSERT_NE(err, error::NoError);
+		EXPECT_THAT(err.String(), testing::HasSubstr("Username and password is not supported"));
+	}
+
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl(
+			"https://admin:cfeadmin@cfengine.example.com:5308/trivial", url, true);
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(url.protocol, "https");
+		EXPECT_EQ(url.host, "cfengine.example.com");
+		EXPECT_EQ(url.path, "/trivial");
+		EXPECT_EQ(url.port, 5308);
+		EXPECT_EQ(url.username, "admin");
+		EXPECT_EQ(url.password, "cfeadmin");
+	}
+
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl("https://admin@cfengine.example.com:5308/trivial", url, true);
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(url.protocol, "https");
+		EXPECT_EQ(url.host, "cfengine.example.com");
+		EXPECT_EQ(url.path, "/trivial");
+		EXPECT_EQ(url.port, 5308);
+		EXPECT_EQ(url.username, "admin");
+		EXPECT_EQ(url.password, "");
+	}
+
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl(
+			"https://admin:cfe@dmin@cfengine.example.com:5308/trivial", url, true);
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(url.protocol, "https");
+		EXPECT_EQ(url.host, "cfengine.example.com");
+		EXPECT_EQ(url.path, "/trivial");
+		EXPECT_EQ(url.port, 5308);
+		EXPECT_EQ(url.username, "admin");
+		EXPECT_EQ(url.password, "cfe@dmin");
+	}
+
+	{
+		http::BrokenDownUrl url;
+		auto err = http::BreakDownUrl(
+			"https://admin@cfengine.com:cfe@dmin@cfengine.example.com:5308/trivial", url, true);
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(url.protocol, "https");
+		EXPECT_EQ(url.host, "cfengine.example.com");
+		EXPECT_EQ(url.path, "/trivial");
+		EXPECT_EQ(url.port, 5308);
+		EXPECT_EQ(url.username, "admin@cfengine.com");
+		EXPECT_EQ(url.password, "cfe@dmin");
+	}
 }
 
 void TestBasicRequestAndResponse() {
