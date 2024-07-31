@@ -438,6 +438,29 @@ error::Error Client::AsyncCall(
 	return error::NoError;
 }
 
+static inline error::Error AddProxyAuthHeader(OutgoingRequest &req, BrokenDownUrl &proxy_address) {
+	if (proxy_address.username == "") {
+		// nothing to do
+		return error::NoError;
+	}
+	auto ex_dec_username = URLDecode(proxy_address.username);
+	auto ex_dec_password = URLDecode(proxy_address.password);
+	if (!ex_dec_username) {
+		return ex_dec_username.error();
+	}
+	if (!ex_dec_password) {
+		return ex_dec_password.error();
+	}
+	auto creds = ex_dec_username.value() + ":" + ex_dec_password.value();
+	auto ex_encoded_creds = crypto::EncodeBase64(common::ByteVectorFromString(creds));
+	if (!ex_encoded_creds) {
+		return ex_encoded_creds.error();
+	}
+	req.SetHeader("Proxy-Authorization", "Basic " + ex_encoded_creds.value());
+
+	return error::NoError;
+}
+
 error::Error Client::HandleProxySetup() {
 	secondary_req_.reset();
 
@@ -447,7 +470,7 @@ error::Error Client::HandleProxySetup() {
 		if (http_proxy_ != "" && !HostNameMatchesNoProxy(request_->address_.host, no_proxy_)) {
 			// Make a modified proxy request.
 			BrokenDownUrl proxy_address;
-			auto err = BreakDownUrl(http_proxy_, proxy_address);
+			auto err = BreakDownUrl(http_proxy_, proxy_address, true);
 			if (err != error::NoError) {
 				return err.WithContext("HTTP proxy URL is invalid");
 			}
@@ -462,6 +485,11 @@ error::Error Client::HandleProxySetup() {
 			request_->address_.host = proxy_address.host;
 			request_->address_.port = proxy_address.port;
 			request_->address_.protocol = proxy_address.protocol;
+
+			err = AddProxyAuthHeader(*request_, proxy_address);
+			if (err != error::NoError) {
+				return err;
+			}
 
 			if (proxy_address.protocol == "https") {
 				socket_mode_ = SocketMode::Tls;
@@ -483,7 +511,7 @@ error::Error Client::HandleProxySetup() {
 			request_ = make_shared<OutgoingRequest>();
 			request_->SetMethod(Method::CONNECT);
 			BrokenDownUrl proxy_address;
-			auto err = BreakDownUrl(https_proxy_, proxy_address);
+			auto err = BreakDownUrl(https_proxy_, proxy_address, true);
 			if (err != error::NoError) {
 				return err.WithContext("HTTPS proxy URL is invalid");
 			}
@@ -497,6 +525,11 @@ error::Error Client::HandleProxySetup() {
 			request_->address_.host = proxy_address.host;
 			request_->address_.port = proxy_address.port;
 			request_->address_.protocol = proxy_address.protocol;
+
+			err = AddProxyAuthHeader(*request_, proxy_address);
+			if (err != error::NoError) {
+				return err;
+			}
 
 			if (proxy_address.protocol == "https") {
 				socket_mode_ = SocketMode::Tls;
