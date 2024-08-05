@@ -245,7 +245,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
 	main_states_.AddTransition(update_failure_state_,                   se::Success,                     ss.failure_leave_update_save_provides_,  tf::Immediate);
 	main_states_.AddTransition(update_failure_state_,                   se::Failure,                     ss.failure_leave_update_save_provides_,  tf::Immediate);
-  main_states_.AddTransition(update_failure_state_,                   se::StateLoopDetected,           state_loop_state_,                       tf::Immediate);
+	main_states_.AddTransition(update_failure_state_,                   se::StateLoopDetected,           state_loop_state_,                       tf::Immediate);
 
 	main_states_.AddTransition(ss.failure_leave_update_save_provides_,  se::Success,                     update_save_provides_state_,             tf::Immediate);
 	main_states_.AddTransition(ss.failure_leave_update_save_provides_,  se::Failure,                     update_save_provides_state_,             tf::Immediate);
