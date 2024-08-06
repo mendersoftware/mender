@@ -108,7 +108,10 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	main_states_.AddTransition(ss.sync_leave_,                          se::Failure,                     ss.sync_error_,                          tf::Immediate);
 
 	main_states_.AddTransition(ss.sync_leave_download_,                 se::Success,                     send_download_status_state_,             tf::Immediate);
-	main_states_.AddTransition(ss.sync_leave_download_,                 se::Failure,                     ss.sync_error_,                          tf::Immediate);
+	main_states_.AddTransition(ss.sync_leave_download_,                 se::Failure,                     ss.sync_error_download_,                 tf::Immediate);
+
+	main_states_.AddTransition(ss.sync_error_download_,                 se::Success,                     end_of_deployment_state_,                tf::Immediate);
+	main_states_.AddTransition(ss.sync_error_download_,                 se::Failure,                     end_of_deployment_state_,                tf::Immediate);
 
 	// Cannot fail due to FailureMode::Ignore.
 	main_states_.AddTransition(send_download_status_state_,             se::Success,                     ss.download_enter_,                      tf::Immediate);
@@ -453,6 +456,19 @@ void StateMachine::StopAfterDeployment() {
 		exit_state_,
 		sm::TransitionFlag::Immediate);
 }
+
+#ifndef NDEBUG
+void StateMachine::StopAfterDeployments(int number) {
+	exit_state_.ExitAfter(number);
+	main_states_.AddTransition(
+		end_of_deployment_state_, StateEvent::Success, exit_state_, sm::TransitionFlag::Immediate);
+	main_states_.AddTransition(
+		exit_state_,
+		StateEvent::Success,
+		state_scripts_.idle_enter_,
+		sm::TransitionFlag::Immediate);
+}
+#endif
 
 } // namespace daemon
 } // namespace update

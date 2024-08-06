@@ -953,7 +953,15 @@ ExitState::ExitState(events::EventLoop &event_loop) :
 }
 
 void ExitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+#ifndef NDEBUG
+	if (--iterations_left_ <= 0) {
+		event_loop_.Stop();
+	} else {
+		poster.PostEvent(StateEvent::Success);
+	}
+#else
 	event_loop_.Stop();
+#endif
 }
 
 namespace deployment_tracking {
