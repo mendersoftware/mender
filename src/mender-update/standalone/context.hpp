@@ -86,17 +86,20 @@ enum class Result {
 	NothingDone = 0x0,
 	NoUpdateInProgress = 0x1,
 	Downloaded = 0x2,
-	Installed = 0x4,
-	RebootRequired = 0x8,
-	Committed = 0x10,
-	Failed = 0x20,
-	FailedInPostCommit = 0x40,
-	NoRollback = 0x80,
-	RolledBack = 0x100,
-	NoRollbackNecessary = 0x200,
-	RollbackFailed = 0x400,
-	Cleaned = 0x800,
-	CleanupFailed = 0x1000,
+	DownloadFailed = 0x4,
+	Installed = 0x8,
+	InstallFailed = 0x10,
+	RebootRequired = 0x20,
+	Committed = 0x40,
+	CommitFailed = 0x80,
+	Failed = 0x100,
+	FailedInPostCommit = 0x200,
+	NoRollback = 0x400,
+	RolledBack = 0x800,
+	NoRollbackNecessary = 0x1000,
+	RollbackFailed = 0x2000,
+	Cleaned = 0x4000,
+	CleanupFailed = 0x8000,
 };
 
 // enum classes cannot ordinarily be used as bit flags, but let's provide some convenience functions
@@ -105,13 +108,16 @@ enum class Result {
 inline Result operator|(Result a, Result b) {
 	return static_cast<Result>(static_cast<int>(a) | static_cast<int>(b));
 }
-
-inline bool ResultIs(Result result, Result flags) {
-	return result == flags;
+inline Result operator~(Result a) {
+	return static_cast<Result>(~static_cast<int>(a));
 }
 
 inline bool ResultContains(Result result, Result flags) {
 	return (static_cast<int>(result) & static_cast<int>(flags)) == static_cast<int>(flags);
+}
+
+inline bool ResultNoneOf(Result result, Result flags) {
+	return (static_cast<int>(result) & static_cast<int>(flags)) == 0;
 }
 
 struct ResultAndError {

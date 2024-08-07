@@ -555,7 +555,8 @@ artifact_name=test
 		EXPECT_EQ(exit_status, 1) << exit_status;
 
 		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
-Installation failed. System not modified.
+Streaming failed.
+System not modified.
 )");
 		EXPECT_THAT(
 			output.GetCerr(),
@@ -848,7 +849,8 @@ exit 0
 		EXPECT_EQ(exit_status, 1) << exit_status;
 
 		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
-Installation failed. Rolled back modifications.
+Installation failed.
+Rolled back.
 )");
 		EXPECT_TRUE(VerifyOnlyMessages(
 			output.GetCerr(),
@@ -914,7 +916,8 @@ exit 0
 		EXPECT_EQ(exit_status, 1) << exit_status;
 
 		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
-Installation failed. System not modified.
+Streaming failed.
+System not modified.
 )");
 		EXPECT_THAT(
 			output.GetCerr(),
@@ -977,7 +980,8 @@ exit 0
 		EXPECT_EQ(exit_status, 1) << exit_status;
 
 		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
-Installation failed, and rollback also failed. System may be in an inconsistent state.
+Installation failed.
+Rollback failed. System may be in an inconsistent state.
 )");
 	}
 
@@ -1036,7 +1040,8 @@ exit 0
 		EXPECT_EQ(exit_status, 1) << exit_status;
 
 		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
-Installation failed, and Update Module does not support rollback. System may be in an inconsistent state.
+Installation failed.
+Update Module does not support rollback. System may be in an inconsistent state.
 )");
 	}
 
@@ -1190,7 +1195,9 @@ exit 0
 			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
 		EXPECT_EQ(exit_status, 1) << exit_status;
 
-		EXPECT_EQ(output.GetCout(), R"(Update Module does not support rollback.
+		EXPECT_EQ(
+			output.GetCout(),
+			R"(Update Module does not support rollback. System may be in an inconsistent state.
 )");
 		EXPECT_EQ(output.GetCerr(), "");
 	}
@@ -1388,7 +1395,7 @@ SupportsRollback
 			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
 		EXPECT_EQ(exit_status, 1) << exit_status;
 
-		EXPECT_EQ(output.GetCout(), R"(Installation failed. System not modified.
+		EXPECT_EQ(output.GetCout(), R"(System not modified.
 )");
 		EXPECT_THAT(
 			output.GetCerr(),
@@ -1553,7 +1560,8 @@ exit 0
 
 		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
 Update Module doesn't support rollback. Committing immediately.
-Installed, but one or more post-commit steps failed.
+Installed and committed.
+Cleanup failed.
 )");
 		EXPECT_THAT(
 			output.GetCerr(),
@@ -1619,7 +1627,8 @@ exit 0
 		EXPECT_EQ(exit_status, 1) << exit_status;
 
 		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
-Installation failed, and rollback also failed. System may be in an inconsistent state.
+Installation failed.
+Rollback failed. System may be in an inconsistent state.
 )");
 	}
 

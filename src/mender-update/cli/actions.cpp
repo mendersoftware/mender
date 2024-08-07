@@ -161,66 +161,87 @@ static error::Error ResultHandler(standalone::ResultAndError result) {
 		result.err = error::MakeError(error::ExitWithFailureError, "");
 	}
 
-	// This tries to capture all things that can happen in a run, but there is a catchall in
-	// case we don't.
-	if (ResultIs(result.result, Result::Cleaned)) {
-		cout << "Cleaned up." << endl;
-	} else if (ResultContains(result.result, Result::Failed | Result::NoRollbackNecessary)) {
-		cout << "Installation failed. System not modified." << endl;
-	} else if (ResultContains(result.result, Result::Failed)) {
-		if (ResultContains(result.result, Result::FailedInPostCommit)) {
-			cout << "Installed, but one or more post-commit steps failed." << endl;
-		} else if (
-			ResultContains(result.result, Result::Downloaded | Result::NoRollback)
-			or ResultContains(result.result, Result::Installed | Result::NoRollback)) {
-			cout
-				<< "Installation failed, and Update Module does not support rollback. System may be in an inconsistent state."
-				<< endl;
-		} else if (ResultContains(result.result, Result::NoRollback)) {
-			cout << "Update Module does not support rollback." << endl;
-		} else if (
-			ResultContains(result.result, Result::Downloaded | Result::RollbackFailed)
-			or ResultContains(result.result, Result::Installed | Result::RollbackFailed)) {
-			cout
-				<< "Installation failed, and rollback also failed. System may be in an inconsistent state."
-				<< endl;
-		} else if (
-			ResultContains(result.result, Result::Downloaded | Result::RolledBack)
-			or ResultContains(result.result, Result::Installed | Result::RolledBack)) {
-			cout << "Installation failed. Rolled back modifications." << endl;
-		} else if (ResultContains(result.result, Result::RollbackFailed)) {
-			cout << "Rollback failed. System may be in an inconsistent state." << endl;
-		} else if (ResultContains(result.result, Result::CleanupFailed)) {
-			cout << "Installed, but one or more post-commit steps failed." << endl;
-		} else {
-			stringstream ss;
-			ss << std::hex << static_cast<int>(result.result);
-			log::Error("Unexpected result value: 0x" + ss.str());
+	using r = Result;
+	auto contains = [&result](r val) { return ResultContains(result.result, val); };
+	auto none_of = [&result](r val) { return ResultNoneOf(result.result, val); };
+	auto add = [](string &str, const string &content) {
+		if (str.size() > 0) {
+			str += " ";
 		}
-	} else if (ResultIs(result.result, Result::RolledBack)) {
-		cout << "Rolled back." << endl;
-	} else if (ResultIs(result.result, Result::NoUpdateInProgress)) {
-		cout << "No update in progress." << endl;
-	} else if (ResultIs(result.result, Result::Downloaded)) {
-		cout << "Streamed to storage, but not installed/enabled." << endl;
-	} else if (ResultContains(result.result, Result::Installed | Result::Committed)) {
-		cout << "Installed and committed." << endl;
-	} else if (ResultContains(result.result, Result::Installed)) {
-		cout << "Installed, but not committed." << endl;
-		cout << "Use 'commit' to update, or 'rollback' to roll back the update." << endl;
-	} else if (ResultContains(result.result, Result::Committed)) {
-		cout << "Committed." << endl;
-	} else {
-		stringstream ss;
-		ss << std::hex << static_cast<int>(result.result);
-		log::Error("Unexpected result value: 0x" + ss.str());
+		str += content;
+	};
+
+	string operation_done;
+	string operation_failure;
+
+	// For failure case, include which attempted operation failed.
+	if (contains(r::DownloadFailed)) {
+		operation_failure = "Streaming failed.";
+	} else if (contains(r::InstallFailed)) {
+		operation_failure = "Installation failed.";
+	} else if (contains(r::CommitFailed)) {
+		operation_failure = "Committing failed.";
 	}
 
-	if (ResultContains(result.result, Result::RebootRequired)) {
-		cout << "At least one payload requested a reboot of the device it updated." << endl;
+	// For done case, include which operation succeded.
+	if (contains(r::Committed) and none_of(r::Installed)) {
+		operation_done = "Committed.";
+	} else if (contains(r::Installed) and none_of(r::Committed)) {
+		operation_done =
+			"Installed, but not committed.\n"
+			"Use 'commit' to update, or 'rollback' to roll back the update.";
+	} else if (contains(r::Downloaded) and none_of(r::Installed)) {
+		operation_done = "Streamed to storage, but not installed/enabled.";
+	} else if (contains(r::Installed | r::Committed)) {
+		operation_done = "Installed and committed.";
+	} else if (contains(r::NoUpdateInProgress)) {
+		operation_done = "No update in progress.";
+	} else if (contains(r::Cleaned) and none_of(~r::Cleaned)) {
+		// Only include this message if it was the only thing done.
+		operation_done = "Cleaned up.";
+	}
+
+	// Pick which one of the done/failure cases to use. If the failure happened after the
+	// commit, we pick the done case, since the operation was still completed.
+	string &operation = (contains(r::Failed) and none_of(r::FailedInPostCommit | r::CleanupFailed))
+							? operation_failure
+							: operation_done;
+
+	string additional;
+
+	if (contains(r::RollbackFailed)) {
+		additional =
+			"Rollback failed. "
+			"System may be in an inconsistent state.";
+	} else if (contains(r::NoRollback)) {
+		additional =
+			"Update Module does not support rollback. "
+			"System may be in an inconsistent state.";
+	} else if (contains(r::NoRollbackNecessary)) {
+		additional = "System not modified.";
+	} else if (contains(r::RolledBack)) {
+		additional = "Rolled back.";
+	}
+
+	if (contains(r::FailedInPostCommit)) {
+		add(additional, "One or more post-commit steps failed.");
+	}
+	if (contains(r::CleanupFailed)) {
+		add(additional, "Cleanup failed.");
+	}
+
+	if (contains(r::RebootRequired)) {
+		add(additional, "At least one payload requested a reboot of the device it updated.");
 		if (result.err == error::NoError) {
 			result.err = context::MakeError(context::RebootRequiredError, "Reboot required");
 		}
+	}
+
+	if (operation.size() > 0) {
+		cout << operation << endl;
+	}
+	if (additional.size() > 0) {
+		cout << additional << endl;
 	}
 
 	return result.err;

@@ -48,7 +48,7 @@ static void UpdateResult(ResultAndError &result, const ResultAndError &update) {
 	result.result = result.result | update.result;
 }
 
-void StateDataSaveState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void SaveState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	ctx.state_data.in_state = state_;
 
 	if (ResultContains(ctx.result_and_error.result, Result::Failed)) {
@@ -126,6 +126,11 @@ static io::ExpectedReaderPtr ReaderFromUrl(
 			reader = exp_reader.value();
 		},
 		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			// Note: Since we stop the event loop above, this handler will not be called
+			// while we are inside the `ReaderFromUrl` stack frame. It will be called
+			// later though, when the reader that we return has finished reading
+			// everything (which includes resuming the loop). So be careful with
+			// captures in this handler.
 			if (!exp_resp) {
 				log::Warning("While reading HTTP body: " + exp_resp.error().String());
 			}
@@ -143,7 +148,150 @@ static io::ExpectedReaderPtr ReaderFromUrl(
 		return expected::unexpected(inner_err);
 	}
 
+	// Should not happen since we have checked both `err` and `inner_err`, but just to be safe.
+	AssertOrReturnUnexpected(reader != nullptr);
+
 	return make_shared<events::io::ReaderFromAsyncReader>(loop, reader);
+}
+
+StateData StateDataFromPayloadHeaderView(const artifact::PayloadHeaderView &header) {
+	StateData dst;
+	dst.version = context::MenderContext::standalone_data_version;
+	dst.artifact_name = header.header.artifact_name;
+	dst.artifact_group = header.header.artifact_group;
+	dst.artifact_provides = header.header.type_info.artifact_provides;
+	dst.artifact_clears_provides = header.header.type_info.clears_artifact_provides;
+	dst.payload_types.clear();
+	dst.payload_types.push_back(header.header.payload_type);
+	return dst;
+}
+
+void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	auto &main_context = ctx.main_context;
+
+	if (ctx.artifact_src.find("http://") == 0 || ctx.artifact_src.find("https://") == 0) {
+		ctx.http_client =
+			make_shared<http::Client>(main_context.GetConfig().GetHttpClientConfig(), ctx.loop);
+		auto reader = ReaderFromUrl(ctx.loop, *ctx.http_client, ctx.artifact_src);
+		if (!reader) {
+			UpdateResult(
+				ctx.result_and_error,
+				{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary,
+				 reader.error()});
+			poster.PostEvent(StateEvent::Failure);
+			return;
+		}
+		ctx.artifact_reader = reader.value();
+	} else {
+		auto stream = io::OpenIfstream(ctx.artifact_src);
+		if (!stream) {
+			UpdateResult(
+				ctx.result_and_error,
+				{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary,
+				 stream.error()});
+			poster.PostEvent(StateEvent::Failure);
+			return;
+		}
+		auto file_stream = make_shared<ifstream>(std::move(stream.value()));
+		ctx.artifact_reader = make_shared<io::StreamReader>(file_stream);
+	}
+
+	string art_scripts_path = main_context.GetConfig().paths.GetArtScriptsPath();
+
+	// Clear the artifact scripts directory so we don't risk old scripts lingering.
+	auto err = path::DeleteRecursively(art_scripts_path);
+	if (err != error::NoError) {
+		UpdateResult(
+			ctx.result_and_error,
+			{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary,
+			 err.WithContext("When preparing to parse artifact")});
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+
+	artifact::config::ParserConfig config {
+		.artifact_scripts_filesystem_path = main_context.GetConfig().paths.GetArtScriptsPath(),
+		.artifact_scripts_version = 3,
+		.artifact_verify_keys = main_context.GetConfig().artifact_verify_keys,
+		.verify_signature = ctx.verify_signature,
+	};
+
+	auto exp_parser = artifact::Parse(*ctx.artifact_reader, config);
+	if (!exp_parser) {
+		UpdateResult(
+			ctx.result_and_error,
+			{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary,
+			 exp_parser.error()});
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+	ctx.parser.reset(new artifact::Artifact(std::move(exp_parser.value())));
+
+	auto exp_header = artifact::View(*ctx.parser, 0);
+	if (!exp_header) {
+		UpdateResult(
+			ctx.result_and_error,
+			{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary,
+			 exp_header.error()});
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+	auto &header = exp_header.value();
+
+	ctx.state_data = StateDataFromPayloadHeaderView(header);
+
+	if (header.header.payload_type == "") {
+		err = DoEmptyPayloadArtifact(ctx);
+		if (err != error::NoError) {
+			UpdateResult(
+				ctx.result_and_error,
+				{Result::DownloadFailed | Result::Failed | Result::FailedInPostCommit, err});
+			poster.PostEvent(StateEvent::Failure);
+			return;
+		}
+		UpdateResult(
+			ctx.result_and_error,
+			{Result::Downloaded | Result::Installed | Result::Committed, error::NoError});
+		poster.PostEvent(StateEvent::EmptyPayloadArtifact);
+		return;
+	}
+
+	ctx.update_module.reset(
+		new update_module::UpdateModule(main_context, header.header.payload_type));
+
+	err = ctx.update_module->CleanAndPrepareFileTree(
+		ctx.update_module->GetUpdateModuleWorkDir(), header);
+	if (err != error::NoError) {
+		UpdateResult(
+			ctx.result_and_error,
+			{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary, err});
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+
+	if (ctx.options != InstallOptions::NoStdout) {
+		cout << "Installing artifact..." << endl;
+	}
+
+	auto exp_matches = main_context.MatchesArtifactDepends(header.header);
+	if (!exp_matches) {
+		UpdateResult(
+			ctx.result_and_error,
+			{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary,
+			 exp_matches.error()});
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	} else if (!exp_matches.value()) {
+		// reasons already logged
+		UpdateResult(
+			ctx.result_and_error,
+			{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary,
+			 error::NoError});
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+
+	poster.PostEvent(StateEvent::Success);
 }
 
 error::Error DoDownloadState(Context &ctx) {
@@ -186,141 +334,13 @@ error::Error DoDownloadState(Context &ctx) {
 	return error::NoError;
 }
 
-StateData StateDataFromPayloadHeaderView(const artifact::PayloadHeaderView &header) {
-	StateData dst;
-	dst.version = context::MenderContext::standalone_data_version;
-	dst.artifact_name = header.header.artifact_name;
-	dst.artifact_group = header.header.artifact_group;
-	dst.artifact_provides = header.header.type_info.artifact_provides;
-	dst.artifact_clears_provides = header.header.type_info.clears_artifact_provides;
-	dst.payload_types.clear();
-	dst.payload_types.push_back(header.header.payload_type);
-	return dst;
-}
-
-void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
-	auto &main_context = ctx.main_context;
-
-	if (ctx.artifact_src.find("http://") == 0 || ctx.artifact_src.find("https://") == 0) {
-		ctx.http_client =
-			make_shared<http::Client>(main_context.GetConfig().GetHttpClientConfig(), ctx.loop);
-		auto reader = ReaderFromUrl(ctx.loop, *ctx.http_client, ctx.artifact_src);
-		if (!reader) {
-			UpdateResult(
-				ctx.result_and_error,
-				{Result::Failed | Result::NoRollbackNecessary, reader.error()});
-			poster.PostEvent(StateEvent::Failure);
-			return;
-		}
-		ctx.artifact_reader = reader.value();
-	} else {
-		auto stream = io::OpenIfstream(ctx.artifact_src);
-		if (!stream) {
-			UpdateResult(
-				ctx.result_and_error,
-				{Result::Failed | Result::NoRollbackNecessary, stream.error()});
-			poster.PostEvent(StateEvent::Failure);
-			return;
-		}
-		auto file_stream = make_shared<ifstream>(std::move(stream.value()));
-		ctx.artifact_reader = make_shared<io::StreamReader>(file_stream);
-	}
-
-	string art_scripts_path = main_context.GetConfig().paths.GetArtScriptsPath();
-
-	// Clear the artifact scripts directory so we don't risk old scripts lingering.
-	auto err = path::DeleteRecursively(art_scripts_path);
-	if (err != error::NoError) {
-		UpdateResult(
-			ctx.result_and_error,
-			{Result::Failed | Result::NoRollbackNecessary,
-			 err.WithContext("When preparing to parse artifact")});
-		poster.PostEvent(StateEvent::Failure);
-		return;
-	}
-
-	artifact::config::ParserConfig config {
-		.artifact_scripts_filesystem_path = main_context.GetConfig().paths.GetArtScriptsPath(),
-		.artifact_scripts_version = 3,
-		.artifact_verify_keys = main_context.GetConfig().artifact_verify_keys,
-		.verify_signature = ctx.verify_signature,
-	};
-
-	auto exp_parser = artifact::Parse(*ctx.artifact_reader, config);
-	if (!exp_parser) {
-		UpdateResult(
-			ctx.result_and_error,
-			{Result::Failed | Result::NoRollbackNecessary, exp_parser.error()});
-		poster.PostEvent(StateEvent::Failure);
-		return;
-	}
-	ctx.parser.reset(new artifact::Artifact(std::move(exp_parser.value())));
-
-	auto exp_header = artifact::View(*ctx.parser, 0);
-	if (!exp_header) {
-		UpdateResult(
-			ctx.result_and_error,
-			{Result::Failed | Result::NoRollbackNecessary, exp_header.error()});
-		poster.PostEvent(StateEvent::Failure);
-		return;
-	}
-	auto &header = exp_header.value();
-
-	if (header.header.payload_type == "") {
-		ctx.state_data = StateDataFromPayloadHeaderView(header);
-		err = DoEmptyPayloadArtifact(ctx);
-		if (err != error::NoError) {
-			UpdateResult(ctx.result_and_error, {Result::Failed | Result::FailedInPostCommit, err});
-			poster.PostEvent(StateEvent::Failure);
-			return;
-		}
-		UpdateResult(
-			ctx.result_and_error,
-			{Result::Downloaded | Result::Installed | Result::Committed, error::NoError});
-		poster.PostEvent(StateEvent::EmptyPayloadArtifact);
-		return;
-	}
-
-	ctx.update_module.reset(
-		new update_module::UpdateModule(main_context, header.header.payload_type));
-
-	err = ctx.update_module->CleanAndPrepareFileTree(
-		ctx.update_module->GetUpdateModuleWorkDir(), header);
-	if (err != error::NoError) {
-		UpdateResult(ctx.result_and_error, {Result::Failed | Result::NoRollbackNecessary, err});
-		poster.PostEvent(StateEvent::Failure);
-		return;
-	}
-
-	ctx.state_data = StateDataFromPayloadHeaderView(header);
-
-	if (ctx.options != InstallOptions::NoStdout) {
-		cout << "Installing artifact..." << endl;
-	}
-
-	auto exp_matches = main_context.MatchesArtifactDepends(header.header);
-	if (!exp_matches) {
-		UpdateResult(
-			ctx.result_and_error,
-			{Result::Failed | Result::NoRollbackNecessary, exp_matches.error()});
-		poster.PostEvent(StateEvent::Failure);
-		return;
-	} else if (!exp_matches.value()) {
-		// reasons already logged
-		UpdateResult(
-			ctx.result_and_error, {Result::Failed | Result::NoRollbackNecessary, error::NoError});
-		poster.PostEvent(StateEvent::Failure);
-		return;
-	}
-
-	poster.PostEvent(StateEvent::Success);
-}
-
 void DownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	auto err = DoDownloadState(ctx);
 	if (err != error::NoError) {
 		log::Error("Streaming failed: " + err.String());
-		UpdateResult(ctx.result_and_error, {Result::Failed | Result::NoRollbackNecessary, err});
+		UpdateResult(
+			ctx.result_and_error,
+			{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary, err});
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	}
@@ -333,7 +353,7 @@ void ArtifactInstallState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	auto err = ctx.update_module->ArtifactInstall();
 	if (err != error::NoError) {
 		log::Error("Installation failed: " + err.String());
-		UpdateResult(ctx.result_and_error, {Result::Failed, err});
+		UpdateResult(ctx.result_and_error, {Result::InstallFailed | Result::Failed, err});
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	}
@@ -376,7 +396,7 @@ void ArtifactCommitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 	auto err = ctx.update_module->ArtifactCommit();
 	if (err != error::NoError) {
 		log::Error("Commit failed: " + err.String());
-		UpdateResult(ctx.result_and_error, {Result::Failed, err});
+		UpdateResult(ctx.result_and_error, {Result::CommitFailed | Result::Failed, err});
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	}

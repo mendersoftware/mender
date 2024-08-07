@@ -228,12 +228,12 @@ StateMachine::StateMachine(Context &ctx) :
 		executor::State::Download,
 		executor::Action::Enter,
 		executor::OnError::Fail,
-		Result::Failed | Result::NoRollbackNecessary},
+		Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary},
 	download_leave_state_ {
 		executor::State::Download,
 		executor::Action::Leave,
 		executor::OnError::Fail,
-		Result::Failed | Result::NoRollbackNecessary},
+		Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary},
 	download_error_state_ {
 		executor::State::Download,
 		executor::Action::Error,
@@ -244,12 +244,12 @@ StateMachine::StateMachine(Context &ctx) :
 		executor::State::ArtifactInstall,
 		executor::Action::Enter,
 		executor::OnError::Fail,
-		Result::Failed},
+		Result::InstallFailed | Result::Failed},
 	artifact_install_leave_state_ {
 		executor::State::ArtifactInstall,
 		executor::Action::Leave,
 		executor::OnError::Fail,
-		Result::Failed},
+		Result::InstallFailed | Result::Failed},
 	artifact_install_error_state_ {
 		executor::State::ArtifactInstall,
 		executor::Action::Error,
@@ -260,13 +260,13 @@ StateMachine::StateMachine(Context &ctx) :
 		executor::State::ArtifactCommit,
 		executor::Action::Enter,
 		executor::OnError::Fail,
-		Result::Failed},
+		Result::CommitFailed | Result::Failed},
 	save_artifact_commit_leave_state_ {"ArtifactCommit_Leave"},
 	artifact_commit_leave_state_ {
 		executor::State::ArtifactCommit,
 		executor::Action::Leave,
 		executor::OnError::Ignore,
-		Result::Failed | Result::FailedInPostCommit},
+		Result::CommitFailed | Result::Failed | Result::FailedInPostCommit},
 	artifact_commit_error_state_ {
 		executor::State::ArtifactCommit,
 		executor::Action::Error,
@@ -448,14 +448,15 @@ void StateMachine::StartOnRollback() {
 }
 
 error::Error PrepareContext(Context &ctx) {
-	const auto &default_paths {ctx.main_context.GetConfig().paths};
+	const auto &conf = ctx.main_context.GetConfig();
+	const auto &paths {conf.paths};
 	ctx.script_runner.reset(new executor::ScriptRunner(
 		ctx.loop,
-		chrono::seconds {ctx.main_context.GetConfig().state_script_timeout_seconds},
-		chrono::seconds {ctx.main_context.GetConfig().state_script_retry_interval_seconds},
-		chrono::seconds {ctx.main_context.GetConfig().state_script_retry_timeout_seconds},
-		default_paths.GetArtScriptsPath(),
-		default_paths.GetRootfsScriptsPath()));
+		chrono::seconds {conf.state_script_timeout_seconds},
+		chrono::seconds {conf.state_script_retry_interval_seconds},
+		chrono::seconds {conf.state_script_retry_timeout_seconds},
+		paths.GetArtScriptsPath(),
+		paths.GetRootfsScriptsPath()));
 
 	return error::NoError;
 }
