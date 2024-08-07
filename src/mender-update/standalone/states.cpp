@@ -208,7 +208,7 @@ void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 		if (!reader) {
 			UpdateResult(
 				ctx.result_and_error,
-				{Result::Failed | Result::NoRollbackNecessary, reader.error()});
+				{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary, reader.error()});
 			poster.PostEvent(StateEvent::Failure);
 			return;
 		}
@@ -218,7 +218,7 @@ void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 		if (!stream) {
 			UpdateResult(
 				ctx.result_and_error,
-				{Result::Failed | Result::NoRollbackNecessary, stream.error()});
+				{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary, stream.error()});
 			poster.PostEvent(StateEvent::Failure);
 			return;
 		}
@@ -233,7 +233,7 @@ void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	if (err != error::NoError) {
 		UpdateResult(
 			ctx.result_and_error,
-			{Result::Failed | Result::NoRollbackNecessary,
+			{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary,
 			 err.WithContext("When preparing to parse artifact")});
 		poster.PostEvent(StateEvent::Failure);
 		return;
@@ -250,7 +250,7 @@ void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	if (!exp_parser) {
 		UpdateResult(
 			ctx.result_and_error,
-			{Result::Failed | Result::NoRollbackNecessary, exp_parser.error()});
+			{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary, exp_parser.error()});
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	}
@@ -260,7 +260,7 @@ void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	if (!exp_header) {
 		UpdateResult(
 			ctx.result_and_error,
-			{Result::Failed | Result::NoRollbackNecessary, exp_header.error()});
+			{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary, exp_header.error()});
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	}
@@ -270,7 +270,7 @@ void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 		ctx.state_data = StateDataFromPayloadHeaderView(header);
 		err = DoEmptyPayloadArtifact(ctx);
 		if (err != error::NoError) {
-			UpdateResult(ctx.result_and_error, {Result::Failed | Result::FailedInPostCommit, err});
+			UpdateResult(ctx.result_and_error, {Result::DownloadFailed | Result::Failed | Result::FailedInPostCommit, err});
 			poster.PostEvent(StateEvent::Failure);
 			return;
 		}
@@ -287,7 +287,7 @@ void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	err = ctx.update_module->CleanAndPrepareFileTree(
 		ctx.update_module->GetUpdateModuleWorkDir(), header);
 	if (err != error::NoError) {
-		UpdateResult(ctx.result_and_error, {Result::Failed | Result::NoRollbackNecessary, err});
+		UpdateResult(ctx.result_and_error, {Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary, err});
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	}
@@ -302,13 +302,13 @@ void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	if (!exp_matches) {
 		UpdateResult(
 			ctx.result_and_error,
-			{Result::Failed | Result::NoRollbackNecessary, exp_matches.error()});
+			{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary, exp_matches.error()});
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	} else if (!exp_matches.value()) {
 		// reasons already logged
 		UpdateResult(
-			ctx.result_and_error, {Result::Failed | Result::NoRollbackNecessary, error::NoError});
+			ctx.result_and_error, {Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary, error::NoError});
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	}
@@ -320,7 +320,7 @@ void DownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	auto err = DoDownloadState(ctx);
 	if (err != error::NoError) {
 		log::Error("Streaming failed: " + err.String());
-		UpdateResult(ctx.result_and_error, {Result::Failed | Result::NoRollbackNecessary, err});
+		UpdateResult(ctx.result_and_error, {Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary, err});
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	}
@@ -333,7 +333,7 @@ void ArtifactInstallState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	auto err = ctx.update_module->ArtifactInstall();
 	if (err != error::NoError) {
 		log::Error("Installation failed: " + err.String());
-		UpdateResult(ctx.result_and_error, {Result::Failed, err});
+		UpdateResult(ctx.result_and_error, {Result::InstallFailed | Result::Failed, err});
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	}
@@ -376,7 +376,7 @@ void ArtifactCommitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 	auto err = ctx.update_module->ArtifactCommit();
 	if (err != error::NoError) {
 		log::Error("Commit failed: " + err.String());
-		UpdateResult(ctx.result_and_error, {Result::Failed, err});
+		UpdateResult(ctx.result_and_error, {Result::CommitFailed | Result::Failed, err});
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	}

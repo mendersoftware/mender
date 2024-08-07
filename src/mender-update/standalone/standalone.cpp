@@ -228,12 +228,12 @@ StateMachine::StateMachine(Context &ctx) :
 		executor::State::Download,
 		executor::Action::Enter,
 		executor::OnError::Fail,
-		Result::Failed | Result::NoRollbackNecessary},
+		Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary},
 	download_leave_state_ {
 		executor::State::Download,
 		executor::Action::Leave,
 		executor::OnError::Fail,
-		Result::Failed | Result::NoRollbackNecessary},
+		Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary},
 	download_error_state_ {
 		executor::State::Download,
 		executor::Action::Error,
@@ -244,12 +244,12 @@ StateMachine::StateMachine(Context &ctx) :
 		executor::State::ArtifactInstall,
 		executor::Action::Enter,
 		executor::OnError::Fail,
-		Result::Failed},
+		Result::InstallFailed | Result::Failed},
 	artifact_install_leave_state_ {
 		executor::State::ArtifactInstall,
 		executor::Action::Leave,
 		executor::OnError::Fail,
-		Result::Failed},
+		Result::InstallFailed | Result::Failed},
 	artifact_install_error_state_ {
 		executor::State::ArtifactInstall,
 		executor::Action::Error,
@@ -260,13 +260,13 @@ StateMachine::StateMachine(Context &ctx) :
 		executor::State::ArtifactCommit,
 		executor::Action::Enter,
 		executor::OnError::Fail,
-		Result::Failed},
+		Result::CommitFailed | Result::Failed},
 	save_artifact_commit_leave_state_ {"ArtifactCommit_Leave"},
 	artifact_commit_leave_state_ {
 		executor::State::ArtifactCommit,
 		executor::Action::Leave,
 		executor::OnError::Ignore,
-		Result::Failed | Result::FailedInPostCommit},
+		Result::CommitFailed | Result::Failed | Result::FailedInPostCommit},
 	artifact_commit_error_state_ {
 		executor::State::ArtifactCommit,
 		executor::Action::Error,
