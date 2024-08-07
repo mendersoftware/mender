@@ -48,7 +48,7 @@ static void UpdateResult(ResultAndError &result, const ResultAndError &update) {
 	result.result = result.result | update.result;
 }
 
-void StateDataSaveState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void SaveState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	ctx.state_data.in_state = state_;
 
 	if (ResultContains(ctx.result_and_error.result, Result::Failed)) {
@@ -126,6 +126,11 @@ static io::ExpectedReaderPtr ReaderFromUrl(
 			reader = exp_reader.value();
 		},
 		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			// Note: Since we stop the event loop above, this handler will not be called
+			// while we are inside the `ReaderFromUrl` stack frame. It will be called
+			// later though, when the reader that we return has finished reading
+			// everything (which includes resuming the loop). So be careful with
+			// captures in this handler.
 			if (!exp_resp) {
 				log::Warning("While reading HTTP body: " + exp_resp.error().String());
 			}
@@ -143,47 +148,10 @@ static io::ExpectedReaderPtr ReaderFromUrl(
 		return expected::unexpected(inner_err);
 	}
 
+	// Should not happen since we have checked both `err` and `inner_err`, but just to be safe.
+	AssertOrReturnUnexpected(reader != nullptr);
+
 	return make_shared<events::io::ReaderFromAsyncReader>(loop, reader);
-}
-
-error::Error DoDownloadState(Context &ctx) {
-	auto payload = ctx.parser->Next();
-	if (!payload) {
-		return payload.error();
-	}
-
-	// ProvidePayloadFileSizes
-	auto with_sizes = ctx.update_module->ProvidePayloadFileSizes();
-	if (!with_sizes) {
-		log::Error("Could not query for provide file sizes: " + with_sizes.error().String());
-		return with_sizes.error();
-	}
-
-	error::Error err;
-	if (with_sizes.value()) {
-		err = ctx.update_module->DownloadWithFileSizes(payload.value());
-	} else {
-		err = ctx.update_module->Download(payload.value());
-	}
-	if (err != error::NoError) {
-		return err;
-	}
-
-	payload = ctx.parser->Next();
-	if (payload) {
-		err = error::Error(
-			make_error_condition(errc::not_supported),
-			"Multiple payloads are not supported in standalone mode");
-	} else if (
-		payload.error().code
-		!= artifact::parser_error::MakeError(artifact::parser_error::EOFError, "").code) {
-		err = payload.error();
-	}
-	if (err != error::NoError) {
-		return err;
-	}
-
-	return error::NoError;
 }
 
 StateData StateDataFromPayloadHeaderView(const artifact::PayloadHeaderView &header) {
@@ -266,8 +234,9 @@ void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	}
 	auto &header = exp_header.value();
 
+	ctx.state_data = StateDataFromPayloadHeaderView(header);
+
 	if (header.header.payload_type == "") {
-		ctx.state_data = StateDataFromPayloadHeaderView(header);
 		err = DoEmptyPayloadArtifact(ctx);
 		if (err != error::NoError) {
 			UpdateResult(ctx.result_and_error, {Result::DownloadFailed | Result::Failed | Result::FailedInPostCommit, err});
@@ -292,8 +261,6 @@ void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 		return;
 	}
 
-	ctx.state_data = StateDataFromPayloadHeaderView(header);
-
 	if (ctx.options != InstallOptions::NoStdout) {
 		cout << "Installing artifact..." << endl;
 	}
@@ -314,6 +281,46 @@ void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	}
 
 	poster.PostEvent(StateEvent::Success);
+}
+
+error::Error DoDownloadState(Context &ctx) {
+	auto payload = ctx.parser->Next();
+	if (!payload) {
+		return payload.error();
+	}
+
+	// ProvidePayloadFileSizes
+	auto with_sizes = ctx.update_module->ProvidePayloadFileSizes();
+	if (!with_sizes) {
+		log::Error("Could not query for provide file sizes: " + with_sizes.error().String());
+		return with_sizes.error();
+	}
+
+	error::Error err;
+	if (with_sizes.value()) {
+		err = ctx.update_module->DownloadWithFileSizes(payload.value());
+	} else {
+		err = ctx.update_module->Download(payload.value());
+	}
+	if (err != error::NoError) {
+		return err;
+	}
+
+	payload = ctx.parser->Next();
+	if (payload) {
+		err = error::Error(
+			make_error_condition(errc::not_supported),
+			"Multiple payloads are not supported in standalone mode");
+	} else if (
+		payload.error().code
+		!= artifact::parser_error::MakeError(artifact::parser_error::EOFError, "").code) {
+		err = payload.error();
+	}
+	if (err != error::NoError) {
+		return err;
+	}
+
+	return error::NoError;
 }
 
 void DownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {

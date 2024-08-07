@@ -30,9 +30,9 @@ namespace sm = mender::common::state_machine;
 
 using StateType = sm::State<Context, StateEvent>;
 
-class StateDataSaveState : virtual public StateType {
+class SaveState : virtual public StateType {
 public:
-	StateDataSaveState(const string &state) :
+	SaveState(const string &state) :
 		state_ {state} {
 	}
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;

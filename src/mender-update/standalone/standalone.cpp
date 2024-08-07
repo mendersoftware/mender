@@ -448,14 +448,15 @@ void StateMachine::StartOnRollback() {
 }
 
 error::Error PrepareContext(Context &ctx) {
-	const auto &default_paths {ctx.main_context.GetConfig().paths};
+	const auto &conf = ctx.main_context.GetConfig();
+	const auto &paths {conf.paths};
 	ctx.script_runner.reset(new executor::ScriptRunner(
 		ctx.loop,
-		chrono::seconds {ctx.main_context.GetConfig().state_script_timeout_seconds},
-		chrono::seconds {ctx.main_context.GetConfig().state_script_retry_interval_seconds},
-		chrono::seconds {ctx.main_context.GetConfig().state_script_retry_timeout_seconds},
-		default_paths.GetArtScriptsPath(),
-		default_paths.GetRootfsScriptsPath()));
+		chrono::seconds {conf.state_script_timeout_seconds},
+		chrono::seconds {conf.state_script_retry_interval_seconds},
+		chrono::seconds {conf.state_script_retry_timeout_seconds},
+		paths.GetArtScriptsPath(),
+		paths.GetRootfsScriptsPath()));
 
 	return error::NoError;
 }
