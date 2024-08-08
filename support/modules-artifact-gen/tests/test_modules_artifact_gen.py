@@ -60,7 +60,7 @@ class TestModulesArtifactGen:
                 "skip_output_asserts": True,
                 "extra_output_asserts": [
                     """Provides:
-	rootfs-image.custom.version: artifact-name""",
+      rootfs-image.custom.version: artifact-name""",
                 ],
             },
             {
@@ -69,7 +69,7 @@ class TestModulesArtifactGen:
                 "skip_output_asserts": True,
                 "extra_output_asserts": [
                     """Provides:
-	rootfs-image.single-file.version: custom""",
+      rootfs-image.single-file.version: custom""",
                 ],
             },
             {
@@ -78,7 +78,7 @@ class TestModulesArtifactGen:
                 "skip_output_asserts": True,
                 "extra_output_asserts": [
                     """Provides:
-	custom.single-file.version: artifact-name""",
+      custom.single-file.version: artifact-name""",
                 ],
             },
             {
@@ -87,14 +87,14 @@ class TestModulesArtifactGen:
                 "skip_output_asserts": True,
                 "extra_output_asserts": [
                     """Provides:
-	custom1.custom2.version: custom3""",
+      custom1.custom2.version: custom3""",
                 ],
             },
             {
                 "name": "extra device type",
                 "append_args": " -t other-device-type",
                 "extra_output_asserts": [
-                    "Compatible devices: '[device-type other-device-type]'",
+                    "Compatible devices: [device-type, other-device-type]",
                 ],
             },
             {
@@ -102,9 +102,9 @@ class TestModulesArtifactGen:
                 "append_args": " -- --provides some:other --provides thing:else --provides-group group-to-provide",
                 "extra_output_asserts": [
                     """Provides:
-	rootfs-image.single-file.version: artifact-name
-	some: other
-	thing: else""",
+      rootfs-image.single-file.version: artifact-name
+      some: other
+      thing: else""",
                     "Provides group: group-to-provide",
                 ],
             },
@@ -113,8 +113,8 @@ class TestModulesArtifactGen:
                 "append_args": " -- --depends some:other --depends thing:else --depends-groups group-to-depend",
                 "extra_output_asserts": [
                     """Depends:
-	some: other
-	thing: else""",
+      some: other
+      thing: else""",
                     "Depends on one of group(s): [group-to-depend]",
                 ],
             },
@@ -165,21 +165,17 @@ class TestModulesArtifactGen:
             # Check output
             if not "skip_output_asserts" in tc or not tc["skip_output_asserts"]:
                 assert "Name: artifact-name" in output, output
-                assert "Compatible devices: '[device-type" in output, output
-                assert "Type:   single-file" in output, output
+                assert "Compatible devices: [device-type" in output, output
+                assert "Type: single-file" in output, output
                 assert (
                     """Provides:
-	rootfs-image.single-file.version: artifact-name"""
+      rootfs-image.single-file.version: artifact-name"""
                     in output
                 ), output
-                assert (
-                    """Files:
-      name:     dest_dir"""
-                    in output
-                ), output
-                assert "name:     filename" in output, output
-                assert "name:     permissions" in output, output
-                assert "name:     my-file" in output, output
+                assert "name: dest_dir" in output, output
+                assert "name: filename" in output, output
+                assert "name: permissions" in output, output
+                assert "name: my-file" in output, output
             if "extra_output_asserts" in tc:
                 for output_assert in tc["extra_output_asserts"]:
                     assert output_assert in output, output
