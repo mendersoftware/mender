@@ -264,8 +264,18 @@ public:
 
 	error::Error exit_error;
 
+#ifndef NDEBUG
+	void ExitAfter(int number) {
+		iterations_left_ = number;
+	}
+#endif
+
 private:
 	events::EventLoop &event_loop_;
+
+#ifndef NDEBUG
+	int iterations_left_ {1};
+#endif
 };
 
 

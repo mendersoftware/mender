@@ -11,6 +11,7 @@ Group=root
 ExecStart=/usr/bin/mender-update daemon
 Restart=always
 WatchdogSec=86400
+KillMode=mixed
 
 [Install]
 WantedBy=multi-user.target

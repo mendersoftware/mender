@@ -104,6 +104,7 @@ struct StateTransitionsTestCase {
 	bool generate_idle_sync_scripts {false};
 	// Set it to the string that the database should contain.
 	string update_control_string;
+	int stop_after_n_deployments {1};
 };
 
 
@@ -366,6 +367,65 @@ vector<StateTransitionsTestCase> idle_and_sync_test_cases {
 		.install_outcome = InstallOutcome::SuccessfulInstall,
 		.error_states = {"Sync_Leave_00"},
 		.generate_idle_sync_scripts = true,
+	},
+
+	StateTransitionsTestCase {
+		.case_name = "Sync_Leave_Error_multiple_deployments",
+		.state_chain =
+			{
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				"Sync_Enter_00", // <- Only fails the first time, during inventory
+				// Start of inventory.
+				"Sync_Error_00",
+				// End of inventory.
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				"Sync_Enter_00",
+				// Start of deployment.
+				"Sync_Leave_00", // <- Only fails the second time, during deployment
+				"Sync_Error_00",
+				// End of deployment.
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				// Start of inventory.
+				"Sync_Enter_00",
+				"Sync_Leave_00",
+				// End of inventory.
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				// Start of deployment.
+				"Sync_Enter_00",
+				"Sync_Leave_00",
+				"Download_Enter_00",
+				"ProvidePayloadFileSizes",
+				"Download",
+				"Download_Leave_00",
+				"ArtifactInstall_Enter_00",
+				"ArtifactInstall",
+				"ArtifactInstall_Leave_00",
+				"ArtifactReboot_Enter_00",
+				"ArtifactReboot",
+				"ArtifactVerifyReboot",
+				"ArtifactReboot_Leave_00",
+				"ArtifactCommit_Enter_00",
+				"ArtifactCommit",
+				"ArtifactCommit_Leave_00",
+				"Cleanup",
+				// End of deployment.
+			},
+		.status_log =
+			{
+				"downloading",
+				"installing",
+				"rebooting",
+				"installing",
+				"success",
+			},
+		.install_outcome = InstallOutcome::SuccessfulInstall,
+		.error_states = {"Sync_Enter_00", "Sync_Leave_00"},
+		.generate_idle_sync_scripts = true,
+		.stop_after_n_deployments = 2,
 	},
 };
 
@@ -3588,6 +3648,7 @@ void StateTransitionsTestSubProcess(
 	// exit handlers which should not be invoked while these objects are still alive.
 	{
 		conf::MenderConfig config {};
+		config.update_poll_interval_seconds = 1;
 		config.module_timeout_seconds = 2;
 		config.paths.SetDataStore(tmpdir);
 		config.paths.SetArtScriptsPath(path::Join(tmpdir, "artifact-scripts"));
@@ -3648,7 +3709,13 @@ void StateTransitionsTestSubProcess(
 			test.GetParam().fail_status_report_status,
 			test.GetParam().fail_status_aborted);
 
-		state_machine.StopAfterDeployment();
+		if (test.GetParam().stop_after_n_deployments > 1) {
+#ifndef NDEBUG
+			state_machine.StopAfterDeployments(test.GetParam().stop_after_n_deployments);
+#endif
+		} else {
+			state_machine.StopAfterDeployment();
+		}
 		err = state_machine.Run();
 		ASSERT_IN_DEATH_TEST(err == error::NoError) << err.String();
 	}
@@ -3685,6 +3752,12 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 	// multiple runs. See "Death Test Styles" in the Googletest documentation for more
 	// information.
 	GTEST_FLAG_SET(death_test_style, "fast");
+
+#ifdef NDEBUG
+	if (GetParam().stop_after_n_deployments > 1) {
+		GTEST_SKIP() << "Stopping after N deployments requires debug mode";
+	}
+#endif
 
 	{
 		ofstream f(path::Join(tmpdir.Path(), "device_type"));
