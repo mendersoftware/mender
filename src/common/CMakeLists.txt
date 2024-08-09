@@ -218,7 +218,6 @@ endif()
 
 # Header-only.
 add_library(common_state_machine INTERFACE)
-target_link_libraries(common_state_machine INTERFACE common_watchdog)
 
 if (MENDER_USE_YAML_CPP)
   add_subdirectory(vendor/yaml-cpp)
