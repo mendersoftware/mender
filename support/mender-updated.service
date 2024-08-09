@@ -10,6 +10,7 @@ User=root
 Group=root
 ExecStart=/usr/bin/mender-update daemon
 Restart=always
+KillMode=mixed
 
 [Install]
 WantedBy=multi-user.target
