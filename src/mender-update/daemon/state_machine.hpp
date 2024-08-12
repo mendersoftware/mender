@@ -48,6 +48,9 @@ public:
 
 	// Mainly for tests.
 	void StopAfterDeployment();
+#ifndef NDEBUG
+	void StopAfterDeployments(int number);
+#endif
 
 private:
 	Context &ctx_;
@@ -189,6 +192,16 @@ private:
 				rootfs_script_path,
 				script_executor::OnError::Fail),
 			sync_error_(
+				loop,
+				script_executor::State::Sync,
+				script_executor::Action::Error,
+				script_timeout,
+				retry_interval,
+				retry_timeout,
+				artifact_script_path,
+				rootfs_script_path,
+				script_executor::OnError::Ignore),
+			sync_error_download_(
 				loop,
 				script_executor::State::Sync,
 				script_executor::Action::Error,
@@ -458,6 +471,7 @@ private:
 		StateScriptState sync_leave_;
 		StateScriptState sync_leave_download_;
 		StateScriptState sync_error_;
+		StateScriptState sync_error_download_;
 
 		SaveStateScriptState download_enter_;
 		StateScriptState download_leave_;
