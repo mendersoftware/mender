@@ -626,8 +626,8 @@ ResultAndError Rollback(Context &ctx) {
 			Result::Failed,
 			context::MakeError(
 				context::WrongOperationError,
-				"Cannot commit from this state. "
-				"Make sure that the `install` command has run successfully and the device is expecting a commit.")};
+				"Cannot roll back from this state. "
+				"Use `resume` to complete the current install in order to start a new one.")};
 	}
 
 	auto err = PrepareContext(ctx);
