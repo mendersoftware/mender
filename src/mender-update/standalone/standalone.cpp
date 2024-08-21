@@ -218,10 +218,6 @@ error::Error SaveStateData(database::KeyValueDatabase &db, const StateData &data
 	return db.Write(context::MenderContext::standalone_state_key, bytedata);
 }
 
-error::Error RemoveStateData(database::KeyValueDatabase &db) {
-	return db.Remove(context::MenderContext::standalone_state_key);
-}
-
 StateMachine::StateMachine(Context &ctx) :
 	context_ {ctx},
 	download_enter_state_ {

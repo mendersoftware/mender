@@ -58,8 +58,6 @@ ExpectedOptionalStateData LoadStateData(database::KeyValueDatabase &db);
 StateData StateDataFromPayloadHeaderView(const artifact::PayloadHeaderView &header);
 error::Error SaveStateData(database::KeyValueDatabase &db, const StateData &data);
 
-error::Error RemoveStateData(database::KeyValueDatabase &db);
-
 class StateMachine {
 public:
 	StateMachine(Context &ctx);
