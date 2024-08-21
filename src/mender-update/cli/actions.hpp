@@ -56,13 +56,13 @@ public:
 		reboot_exit_code_ = val;
 	}
 
-	void SetStopAfter(const string &val) {
-		stop_after_ = val;
+	void SetStopAfter(vector<string> val) {
+		stop_after_ = std::move(val);
 	}
 
 protected:
 	bool reboot_exit_code_ {false};
-	string stop_after_;
+	vector<string> stop_after_;
 };
 
 class InstallAction : public BaseInstallAction {
@@ -82,12 +82,12 @@ public:
 	error::Error Execute(context::MenderContext &main_context) override;
 };
 
-class CommitAction : virtual public Action {
+class CommitAction : public BaseInstallAction {
 public:
 	error::Error Execute(context::MenderContext &main_context) override;
 };
 
-class RollbackAction : virtual public Action {
+class RollbackAction : public BaseInstallAction {
 public:
 	error::Error Execute(context::MenderContext &main_context) override;
 };

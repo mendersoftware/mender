@@ -286,6 +286,7 @@ error::Error ResumeAction::Execute(context::MenderContext &main_context) {
 error::Error CommitAction::Execute(context::MenderContext &main_context) {
 	events::EventLoop loop;
 	standalone::Context ctx {main_context, loop};
+	ctx.stop_after = std::move(stop_after_);
 	auto result = standalone::Commit(ctx);
 	return ResultHandler(result);
 }
@@ -293,6 +294,7 @@ error::Error CommitAction::Execute(context::MenderContext &main_context) {
 error::Error RollbackAction::Execute(context::MenderContext &main_context) {
 	events::EventLoop loop;
 	standalone::Context ctx {main_context, loop};
+	ctx.stop_after = std::move(stop_after_);
 	auto result = standalone::Rollback(ctx);
 	return ResultHandler(result);
 }

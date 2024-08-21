@@ -2071,7 +2071,7 @@ exit 0
 			tmpdir.Path(),
 			"install",
 			"--stop-after",
-			"Download",
+			"Download_Leave",
 			artifact,
 		};
 
@@ -2230,6 +2230,404 @@ Cleanup
 	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
 rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
 artifact_name=test
+)"));
+}
+
+TEST(CliTest, StopAfterCommitCommandThenResume) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string scripts_dir = path::Join(tmpdir.Path(), "scripts");
+	string commit_leave_run = path::Join(tmpdir.Path(), "ArtifactCommit_Leave_run");
+	{
+		auto err = path::CreateDirectories(scripts_dir);
+		ASSERT_EQ(err, error::NoError);
+
+		ofstream f(path::Join(scripts_dir, "ArtifactCommit_Leave_00"));
+		f << R"(#!/bin/bash
+touch )" << commit_leave_run
+		  << "\n";
+	}
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact, "test", scripts_dir));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"install",
+			"--stop-after",
+			"ArtifactInstall_Leave",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installed, but not committed.
+Use 'commit' to update, or 'rollback' to roll back the update.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"commit",
+			"--stop-after",
+			"ArtifactCommit",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Committed.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+ArtifactCommit
+)"));
+
+	// Make sure that ArtifactCommit_Leave has not yet been run.
+	EXPECT_FALSE(path::FileExists(commit_leave_run));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Cleaned up.
+)");
+		EXPECT_THAT(output.GetCerr(), testing::HasSubstr("ArtifactCommit_Leave_00"));
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+ArtifactCommit
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test
+)"));
+
+	// Now ArtifactCommit_Leave should have been run.
+	EXPECT_TRUE(path::FileExists(commit_leave_run));
+}
+
+TEST(CliTest, StopAfterCommitCommandThenRollback) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string scripts_dir = path::Join(tmpdir.Path(), "scripts");
+	string commit_leave_run = path::Join(tmpdir.Path(), "ArtifactCommit_Leave_run");
+	{
+		auto err = path::CreateDirectories(scripts_dir);
+		ASSERT_EQ(err, error::NoError);
+
+		ofstream f(path::Join(scripts_dir, "ArtifactCommit_Leave_00"));
+		f << R"(#!/bin/bash
+touch )" << commit_leave_run
+		  << "\n";
+	}
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact, "test", scripts_dir));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+if [ "$1" = "SupportsRollback" ]; then
+    echo "Yes"
+fi
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"install",
+			"--stop-after",
+			"ArtifactInstall_Leave",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installed, but not committed.
+Use 'commit' to update, or 'rollback' to roll back the update.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"commit",
+			"--stop-after",
+			"ArtifactCommit",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Committed.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+ArtifactCommit
+)"));
+
+	// Make sure that ArtifactCommit_Leave has not been run.
+	EXPECT_FALSE(path::FileExists(commit_leave_run));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"rollback",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Rolled back.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+ArtifactCommit
+SupportsRollback
+ArtifactRollback
+ArtifactFailure
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=previous
+rootfs-image.checksum=46ca895be3a18fb50c1c6b5a3bd2e97fb637b35a22924c2f3dea3cf09e9e2e74
+artifact_name=previous
+)"));
+
+	// Make sure that ArtifactCommit_Leave still has not been run.
+	EXPECT_FALSE(path::FileExists(commit_leave_run));
+}
+
+TEST(CliTest, StopAfterArtifactInstallFailure) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+if [ "$1" = "SupportsRollback" ]; then
+    echo "Yes"
+elif [ "$1" = "ArtifactInstall" ]; then
+    exit 1
+fi
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"install",
+			"--stop-after",
+			"ArtifactInstall_Leave",
+			"--stop-after",
+			"ArtifactInstall_Error",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installation failed.
+)");
+		EXPECT_THAT(
+			output.GetCerr(), testing::HasSubstr("ArtifactInstall: Process exited with status 1"));
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+SupportsRollback
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"rollback",
+			"--stop-after",
+			"ArtifactRollback_Leave",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Rolled back.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+SupportsRollback
+SupportsRollback
+ArtifactRollback
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-after",
+			"ArtifactFailure_Leave",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Rolled back.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+SupportsRollback
+SupportsRollback
+ArtifactRollback
+ArtifactFailure
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Rolled back.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+SupportsRollback
+SupportsRollback
+ArtifactRollback
+ArtifactFailure
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=previous
+rootfs-image.checksum=46ca895be3a18fb50c1c6b5a3bd2e97fb637b35a22924c2f3dea3cf09e9e2e74
+artifact_name=previous
 )"));
 }
 

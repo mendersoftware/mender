@@ -57,8 +57,6 @@ struct StateDataKeys {
 
 	// Introduced in version 2, not valid in version 1.
 
-	// This just uses the official user facing state names, with one special case for
-	// "ArtifactCommit_Leave".
 	static const string in_state;
 
 	static const string failed;
@@ -74,8 +72,17 @@ struct StateData {
 	vector<string> payload_types;
 
 	string in_state;
+
 	bool failed {false};
 	bool rolled_back {false};
+
+	static const string kInStateArtifactInstall_Enter;
+	static const string kInStateArtifactCommit_Enter;
+	static const string kInStatePostArtifactCommit;
+	static const string kInStateArtifactCommit_Leave;
+	static const string kInStateArtifactRollback_Enter;
+	static const string kInStateArtifactFailure_Enter;
+	static const string kInStateCleanup;
 };
 using ExpectedOptionalStateData = expected::expected<optional<StateData>, error::Error>;
 
@@ -142,7 +149,7 @@ struct Context {
 
 	StateData state_data;
 
-	string stop_after;
+	vector<string> stop_after;
 
 	string artifact_src;
 

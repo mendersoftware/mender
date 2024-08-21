@@ -57,13 +57,14 @@ ExpectedOptionalStateData LoadStateData(database::KeyValueDatabase &db);
 
 StateData StateDataFromPayloadHeaderView(const artifact::PayloadHeaderView &header);
 error::Error SaveStateData(database::KeyValueDatabase &db, const StateData &data);
+error::Error SaveStateData(database::Transaction &txn, const StateData &data);
 
 class StateMachine {
 public:
 	StateMachine(Context &ctx);
 
 	error::Error SetStartStateFromStateData(const string &completed_state);
-	error::Error SetStopAfterState(const string &state);
+	error::Error AddStopAfterState(const string &state);
 	void StartOnRollback();
 
 	void Run();
@@ -91,6 +92,7 @@ private:
 	SaveState save_artifact_commit_state_;
 	ScriptRunnerState artifact_commit_enter_state_;
 	ArtifactCommitState artifact_commit_state_;
+	SaveState save_post_artifact_commit_state_;
 	SaveState save_artifact_commit_leave_state_;
 	ScriptRunnerState artifact_commit_leave_state_;
 	ScriptRunnerState artifact_commit_error_state_;

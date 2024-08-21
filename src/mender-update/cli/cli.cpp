@@ -47,16 +47,6 @@ const conf::CliCommand cmd_check_update {
 	.description = "Force update check",
 };
 
-const conf::CliCommand cmd_commit {
-	.name = "commit",
-	.description = "Commit current Artifact. Returns (2) if no update in progress",
-};
-
-const conf::CliCommand cmd_daemon {
-	.name = "daemon",
-	.description = "Start the client as a background service",
-};
-
 const conf::CliOption opt_stop_after {
 	conf::CliOption {
 		.long_option = "stop-after",
@@ -67,6 +57,20 @@ const conf::CliOption opt_stop_after {
 			"Note that the client always stops after `ArtifactInstall` if the update module supports rollback.",
 		.parameter = "STATE",
 	},
+};
+
+const conf::CliCommand cmd_commit {
+	.name = "commit",
+	.description = "Commit current Artifact. Returns (2) if no update in progress",
+	.options_w_values =
+		{
+			opt_stop_after,
+		},
+};
+
+const conf::CliCommand cmd_daemon {
+	.name = "daemon",
+	.description = "Start the client as a background service",
 };
 
 const conf::CliCommand cmd_install {
@@ -111,6 +115,10 @@ const conf::CliCommand cmd_resume {
 const conf::CliCommand cmd_rollback {
 	.name = "rollback",
 	.description = "Rollback current Artifact. Returns (2) if no update in progress",
+	.options_w_values =
+		{
+			opt_stop_after,
+		},
 };
 
 const conf::CliCommand cmd_send_inventory {
@@ -189,7 +197,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		string filename;
 		bool reboot_exit_code = false;
-		string stop_after;
+		vector<string> stop_after;
 		while (true) {
 			auto arg = iter.Next();
 			if (!arg) {
@@ -205,7 +213,7 @@ ExpectedActionPtr ParseUpdateArguments(
 					return expected::unexpected(conf::MakeError(
 						conf::InvalidOptionsError, "--stop-after needs an argument"));
 				}
-				stop_after = value.value;
+				stop_after.push_back(value.value);
 				continue;
 			} else if (value.option != "") {
 				return expected::unexpected(
@@ -231,7 +239,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		auto install_action = make_shared<InstallAction>(filename);
 		install_action->SetRebootExitCode(reboot_exit_code);
-		install_action->SetStopAfter(stop_after);
+		install_action->SetStopAfter(std::move(stop_after));
 		return install_action;
 	} else if (start[0] == "resume") {
 		conf::CmdlineOptionsIterator iter(
@@ -242,7 +250,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		string filename;
 		bool reboot_exit_code = false;
-		string stop_after;
+		vector<string> stop_after;
 		while (true) {
 			auto arg = iter.Next();
 			if (!arg) {
@@ -258,7 +266,7 @@ ExpectedActionPtr ParseUpdateArguments(
 					return expected::unexpected(conf::MakeError(
 						conf::InvalidOptionsError, "--stop-after needs an argument"));
 				}
-				stop_after = value.value;
+				stop_after.push_back(value.value);
 				continue;
 			} else if (value.option != "") {
 				return expected::unexpected(
@@ -275,24 +283,78 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		auto resume_action = make_shared<ResumeAction>();
 		resume_action->SetRebootExitCode(reboot_exit_code);
-		resume_action->SetStopAfter(stop_after);
+		resume_action->SetStopAfter(std::move(stop_after));
 		return resume_action;
 	} else if (start[0] == "commit") {
-		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
-		auto arg = iter.Next();
-		if (!arg) {
-			return expected::unexpected(arg.error());
+		conf::CmdlineOptionsIterator iter(
+			start + 1, end, conf::CommandOptsSetWithValue(cmd_commit.options_w_values), {});
+
+		vector<string> stop_after;
+		while (true) {
+			auto arg = iter.Next();
+			if (!arg) {
+				return expected::unexpected(arg.error());
+			}
+
+			auto value = arg.value();
+			if (value.option == "--stop-after") {
+				if (value.value == "") {
+					return expected::unexpected(conf::MakeError(
+						conf::InvalidOptionsError, "--stop-after needs an argument"));
+				}
+				stop_after.push_back(value.value);
+				continue;
+			} else if (value.option != "") {
+				return expected::unexpected(
+					conf::MakeError(conf::InvalidOptionsError, "No such option: " + value.option));
+			}
+
+			if (value.value != "") {
+				return expected::unexpected(conf::MakeError(
+					conf::InvalidOptionsError, "Too many arguments: " + value.value));
+			} else {
+				break;
+			}
 		}
 
-		return make_shared<CommitAction>();
+		auto commit_action = make_shared<CommitAction>();
+		commit_action->SetStopAfter(std::move(stop_after));
+		return commit_action;
 	} else if (start[0] == "rollback") {
-		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
-		auto arg = iter.Next();
-		if (!arg) {
-			return expected::unexpected(arg.error());
+		conf::CmdlineOptionsIterator iter(
+			start + 1, end, conf::CommandOptsSetWithValue(cmd_rollback.options_w_values), {});
+
+		vector<string> stop_after;
+		while (true) {
+			auto arg = iter.Next();
+			if (!arg) {
+				return expected::unexpected(arg.error());
+			}
+
+			auto value = arg.value();
+			if (value.option == "--stop-after") {
+				if (value.value == "") {
+					return expected::unexpected(conf::MakeError(
+						conf::InvalidOptionsError, "--stop-after needs an argument"));
+				}
+				stop_after.push_back(value.value);
+				continue;
+			} else if (value.option != "") {
+				return expected::unexpected(
+					conf::MakeError(conf::InvalidOptionsError, "No such option: " + value.option));
+			}
+
+			if (value.value != "") {
+				return expected::unexpected(conf::MakeError(
+					conf::InvalidOptionsError, "Too many arguments: " + value.value));
+			} else {
+				break;
+			}
 		}
 
-		return make_shared<RollbackAction>();
+		auto rollback_action = make_shared<RollbackAction>();
+		rollback_action->SetStopAfter(std::move(stop_after));
+		return rollback_action;
 	} else if (start[0] == "daemon") {
 		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();

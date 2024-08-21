@@ -519,6 +519,34 @@ void ScriptRunnerState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poste
 }
 
 void ExitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	auto err =
+		ctx.main_context.GetMenderStoreDB().WriteTransaction([&ctx](database::Transaction &txn) {
+			auto exp_bytes = txn.Read(context::MenderContext::standalone_state_key);
+			if (!exp_bytes) {
+				if (exp_bytes.error().code == database::MakeError(database::KeyError, "").code) {
+					// If the stata data is not saved, just do nothing here.
+					return error::NoError;
+				} else {
+					return exp_bytes.error();
+				}
+			}
+
+			// If there is state data, resave it with `failed` set to false. The rationale
+			// behind this is that if we have already recorded failure for this run, it will be
+			// returned in the error code. That does not mean that we should record error for
+			// the next run, which is independent. An example is rollback, if we are somewhere
+			// in the rollback flow, we are likely to have a failure here, because the *install*
+			// failed. But when we now exit, and then later resume the rollback, the rollback
+			// should return success, not failure.
+			ctx.state_data.failed = false;
+			return SaveStateData(txn, ctx.state_data);
+		});
+	if (err != error::NoError) {
+		UpdateResult(ctx.result_and_error, {Result::Failed, err});
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+
 	loop_.Stop();
 }
 
