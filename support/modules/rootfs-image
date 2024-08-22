@@ -195,6 +195,7 @@ case "$STATE" in
             ubiupdatevol $passive --size=$size $file
         else
             cat "$file" > $passive
+            sync
         fi
         if [ "$(cat stream-next)" != "" ]; then
             echo "More than one file in payload" 1>&2
