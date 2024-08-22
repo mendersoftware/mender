@@ -102,6 +102,7 @@ set_upgrade_vars() {
         passive=$MENDER_ROOTFS_PART_A
         passive_num=$MENDER_ROOTFS_PART_A_NUMBER
     fi
+    active_num_hex=$(printf '%x' $active_num)
     passive_num_hex=$(printf '%x' $passive_num)
     upgrade_available="$(${PRINTENV} upgrade_available)"
     upgrade_available="${upgrade_available#upgrade_available=}"
@@ -206,6 +207,14 @@ case "$STATE" in
     ArtifactInstall)
         check_requirements
 
+        cat > "$FILES/tmp/orig-part.tmp" <<EOF
+orig_part_num=$active_num
+orig_part_num_hex=$active_num_hex
+EOF
+        sync
+        mv "$FILES/tmp/orig-part.tmp" "$FILES/tmp/orig-part"
+        sync
+
         if [ "$upgrade_available" != 0 ]; then
             echo "Unexpected \`upgrade_available=$upgrade_available\` in $STATE." 1>&2
             exit 1
@@ -272,6 +281,13 @@ EOF
             ${SETENV} -s - <<EOF
 mender_boot_part=$passive_num
 mender_boot_part_hex=$passive_num_hex
+upgrade_available=0
+EOF
+        elif [ -f "$FILES/tmp/orig-part" ]; then
+            . "$FILES/tmp/orig-part"
+            ${SETENV} -s - <<EOF
+mender_boot_part=$orig_part_num
+mender_boot_part_hex=$orig_part_num_hex
 upgrade_available=0
 EOF
         fi
