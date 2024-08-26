@@ -211,9 +211,9 @@ case "$STATE" in
 orig_part_num=$active_num
 orig_part_num_hex=$active_num_hex
 EOF
-        sync
+        sync "$FILES/tmp/orig-part.tmp"
         mv "$FILES/tmp/orig-part.tmp" "$FILES/tmp/orig-part"
-        sync
+        sync "$FILES/tmp"
 
         if [ "$upgrade_available" != 0 ]; then
             echo "Unexpected \`upgrade_available=$upgrade_available\` in $STATE." 1>&2
