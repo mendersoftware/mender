@@ -159,6 +159,50 @@ const conf::CliApp cli_mender_update = {
 		},
 };
 
+static error::Error CommonInstallFlagsHandler(
+	conf::CmdlineOptionsIterator &iter,
+	string *filename,
+	bool *reboot_exit_code,
+	vector<string> *stop_after) {
+	while (true) {
+		auto arg = iter.Next();
+		if (!arg) {
+			return arg.error();
+		}
+
+		auto value = arg.value();
+		if (reboot_exit_code != nullptr and value.option == "--reboot-exit-code") {
+			*reboot_exit_code = true;
+			continue;
+		} else if (stop_after != nullptr and value.option == "--stop-after") {
+			if (value.value == "") {
+				return conf::MakeError(conf::InvalidOptionsError, "--stop-after needs an argument");
+			}
+			stop_after->push_back(value.value);
+			continue;
+		} else if (value.option != "") {
+			return conf::MakeError(conf::InvalidOptionsError, "No such option: " + value.option);
+		}
+
+		if (value.value != "") {
+			if (filename == nullptr or *filename != "") {
+				return conf::MakeError(
+					conf::InvalidOptionsError, "Too many arguments: " + value.value);
+			} else {
+				*filename = value.value;
+			}
+		} else {
+			if (filename != nullptr and *filename == "") {
+				return conf::MakeError(conf::InvalidOptionsError, "Need a path to an artifact");
+			} else {
+				break;
+			}
+		}
+	}
+
+	return error::NoError;
+}
+
 ExpectedActionPtr ParseUpdateArguments(
 	vector<string>::const_iterator start, vector<string>::const_iterator end) {
 	if (start == end) {
@@ -198,43 +242,9 @@ ExpectedActionPtr ParseUpdateArguments(
 		string filename;
 		bool reboot_exit_code = false;
 		vector<string> stop_after;
-		while (true) {
-			auto arg = iter.Next();
-			if (!arg) {
-				return expected::unexpected(arg.error());
-			}
-
-			auto value = arg.value();
-			if (value.option == "--reboot-exit-code") {
-				reboot_exit_code = true;
-				continue;
-			} else if (value.option == "--stop-after") {
-				if (value.value == "") {
-					return expected::unexpected(conf::MakeError(
-						conf::InvalidOptionsError, "--stop-after needs an argument"));
-				}
-				stop_after.push_back(value.value);
-				continue;
-			} else if (value.option != "") {
-				return expected::unexpected(
-					conf::MakeError(conf::InvalidOptionsError, "No such option: " + value.option));
-			}
-
-			if (value.value != "") {
-				if (filename != "") {
-					return expected::unexpected(conf::MakeError(
-						conf::InvalidOptionsError, "Too many arguments: " + value.value));
-				} else {
-					filename = value.value;
-				}
-			} else {
-				if (filename == "") {
-					return expected::unexpected(
-						conf::MakeError(conf::InvalidOptionsError, "Need a path to an artifact"));
-				} else {
-					break;
-				}
-			}
+		auto err = CommonInstallFlagsHandler(iter, &filename, &reboot_exit_code, &stop_after);
+		if (err != error::NoError) {
+			return expected::unexpected(err);
 		}
 
 		auto install_action = make_shared<InstallAction>(filename);
@@ -248,37 +258,11 @@ ExpectedActionPtr ParseUpdateArguments(
 			conf::CommandOptsSetWithValue(cmd_resume.options_w_values),
 			conf::CommandOptsSetWithoutValue(cmd_resume.options));
 
-		string filename;
 		bool reboot_exit_code = false;
 		vector<string> stop_after;
-		while (true) {
-			auto arg = iter.Next();
-			if (!arg) {
-				return expected::unexpected(arg.error());
-			}
-
-			auto value = arg.value();
-			if (value.option == "--reboot-exit-code") {
-				reboot_exit_code = true;
-				continue;
-			} else if (value.option == "--stop-after") {
-				if (value.value == "") {
-					return expected::unexpected(conf::MakeError(
-						conf::InvalidOptionsError, "--stop-after needs an argument"));
-				}
-				stop_after.push_back(value.value);
-				continue;
-			} else if (value.option != "") {
-				return expected::unexpected(
-					conf::MakeError(conf::InvalidOptionsError, "No such option: " + value.option));
-			}
-
-			if (value.value != "") {
-				return expected::unexpected(conf::MakeError(
-					conf::InvalidOptionsError, "Too many arguments: " + value.value));
-			} else {
-				break;
-			}
+		auto err = CommonInstallFlagsHandler(iter, nullptr, &reboot_exit_code, &stop_after);
+		if (err != error::NoError) {
+			return expected::unexpected(err);
 		}
 
 		auto resume_action = make_shared<ResumeAction>();
@@ -290,31 +274,9 @@ ExpectedActionPtr ParseUpdateArguments(
 			start + 1, end, conf::CommandOptsSetWithValue(cmd_commit.options_w_values), {});
 
 		vector<string> stop_after;
-		while (true) {
-			auto arg = iter.Next();
-			if (!arg) {
-				return expected::unexpected(arg.error());
-			}
-
-			auto value = arg.value();
-			if (value.option == "--stop-after") {
-				if (value.value == "") {
-					return expected::unexpected(conf::MakeError(
-						conf::InvalidOptionsError, "--stop-after needs an argument"));
-				}
-				stop_after.push_back(value.value);
-				continue;
-			} else if (value.option != "") {
-				return expected::unexpected(
-					conf::MakeError(conf::InvalidOptionsError, "No such option: " + value.option));
-			}
-
-			if (value.value != "") {
-				return expected::unexpected(conf::MakeError(
-					conf::InvalidOptionsError, "Too many arguments: " + value.value));
-			} else {
-				break;
-			}
+		auto err = CommonInstallFlagsHandler(iter, nullptr, nullptr, &stop_after);
+		if (err != error::NoError) {
+			return expected::unexpected(err);
 		}
 
 		auto commit_action = make_shared<CommitAction>();
@@ -325,31 +287,9 @@ ExpectedActionPtr ParseUpdateArguments(
 			start + 1, end, conf::CommandOptsSetWithValue(cmd_rollback.options_w_values), {});
 
 		vector<string> stop_after;
-		while (true) {
-			auto arg = iter.Next();
-			if (!arg) {
-				return expected::unexpected(arg.error());
-			}
-
-			auto value = arg.value();
-			if (value.option == "--stop-after") {
-				if (value.value == "") {
-					return expected::unexpected(conf::MakeError(
-						conf::InvalidOptionsError, "--stop-after needs an argument"));
-				}
-				stop_after.push_back(value.value);
-				continue;
-			} else if (value.option != "") {
-				return expected::unexpected(
-					conf::MakeError(conf::InvalidOptionsError, "No such option: " + value.option));
-			}
-
-			if (value.value != "") {
-				return expected::unexpected(conf::MakeError(
-					conf::InvalidOptionsError, "Too many arguments: " + value.value));
-			} else {
-				break;
-			}
+		auto err = CommonInstallFlagsHandler(iter, nullptr, nullptr, &stop_after);
+		if (err != error::NoError) {
+			return expected::unexpected(err);
 		}
 
 		auto rollback_action = make_shared<RollbackAction>();
