@@ -538,8 +538,12 @@ void ExitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 			// in the rollback flow, we are likely to have a failure here, because the *install*
 			// failed. But when we now exit, and then later resume the rollback, the rollback
 			// should return success, not failure.
-			ctx.state_data.failed = false;
-			return SaveStateData(txn, ctx.state_data);
+			if (ctx.state_data.failed) {
+				ctx.state_data.failed = false;
+				return SaveStateData(txn, ctx.state_data);
+			} else {
+				return error::NoError;
+			}
 		});
 	if (err != error::NoError) {
 		UpdateResult(ctx.result_and_error, {Result::Failed, err});
