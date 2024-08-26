@@ -40,7 +40,7 @@ private:
 	shared_ptr<io::Reader> reader_;
 	size_t tot_size_;
 	size_t bytes_read_ {0};
-	int last_percentage {-1};
+	int last_percentage_ {-1};
 };
 
 } // namespace progress
