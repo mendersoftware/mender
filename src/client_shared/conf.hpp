@@ -100,13 +100,14 @@ private:
 	ArgumentsMode mode_ {ArgumentsMode::RejectBareArguments};
 };
 
-const struct {
+struct DefaultPathsType {
 	string path_conf_dir = path::Join("/etc", "mender");
 	string conf_file = path::Join(path_conf_dir, "mender.conf");
 	string path_data_dir = path::Join("/usr/share", "mender");
 	string data_store = path::Join("/var/lib", "mender");
 	string fallback_conf_file = path::Join(data_store, "mender.conf");
-} DefaultPaths;
+};
+extern const DefaultPathsType DefaultPaths;
 
 // NOTE - When updating this class - either adding or removing variables. Be
 // sure to update the transitive dependencies also.

@@ -37,6 +37,8 @@ namespace json = mender::common::json;
 
 const string kMenderVersion = MENDER_VERSION;
 
+const DefaultPathsType DefaultPaths;
+
 const ConfigErrorCategoryClass ConfigErrorCategory;
 
 const char *ConfigErrorCategoryClass::name() const noexcept {
