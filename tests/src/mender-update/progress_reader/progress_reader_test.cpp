@@ -63,5 +63,5 @@ TEST(ProgressReaderTests, RegularRead) {
 
 	std::string output = testing::internal::GetCapturedStderr();
 
-	EXPECT_EQ(output, "\r0%\r5%\r5%\r25%\r90%\r100%");
+	EXPECT_EQ(output, "\r0%\r5%\r25%\r90%\r100%");
 }
