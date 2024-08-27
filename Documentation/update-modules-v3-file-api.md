@@ -152,18 +152,29 @@ to make sure the correct partition has been booted.
 #### `ArtifactCommit` state
 
 Executes after `ArtifactVerifyReboot`, if `ArtifactVerifyReboot` runs at all, or
-else after `ArtifactInstall`. `ArtifactCommit` should be used to make the update
-permanent, in cases where it's still possible to roll back.
+else after `ArtifactInstall`. `ArtifactCommit` must be used to remove/disable
+automatic rollback mechanisms, such as for example the automatic rollback that a
+bootloader might do. This essentially makes the update permanent, but it is
+important to retain enough data so that an explicit `ArtifactRollback` can still
+roll back the update. If additional steps are required to clean up the rollback
+data, this should be done in the `Cleanup` state instead.
 
 #### `Cleanup` state
 
 `Cleanup` executes unconditionally at the end of all the other states,
-regardless of all outcomes. `Cleanup` can be used to cleanup various temporary
+regardless of all outcomes. `Cleanup` can be used to clean up various temporary
 files that might have been used during an update, but should not be used to make
 any system changes. For example, cleaning up an update that has failed,
 returning it to the previous state, should rather be done in the
-`ArtifactRollback` state. `Cleanup` is the only additional state that executes
-if `Download` fails.
+`ArtifactRollback` state. However, rollback data that has been kept around in
+order to facilite a rollback (which never happened), should be cleaned up in
+`Cleanup`.
+
+It is not necessary to clean up files inside the official update module file
+tree, since these will be cleaned up automatically, including any temporary
+files.
+
+`Cleanup` is the only additional state that executes if `Download` fails.
 
 ### Error states
 
