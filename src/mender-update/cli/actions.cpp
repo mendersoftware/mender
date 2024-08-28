@@ -80,8 +80,10 @@ static error::Error DoMaybeInstallBootstrapArtifact(context::MenderContext &main
 		return error::NoError;
 	}
 	log::Info("Installing the bootstrap Artifact");
+	events::EventLoop loop;
+	standalone::Context ctx {main_context, loop};
 	auto result = standalone::Install(
-		main_context,
+		ctx,
 		bootstrap_artifact_path,
 		artifact::config::Signature::Skip,
 		standalone::InstallOptions::NoStdout);
@@ -150,83 +152,96 @@ error::Error ShowProvidesAction::Execute(context::MenderContext &main_context) {
 }
 
 static error::Error ResultHandler(standalone::ResultAndError result) {
-	switch (result.result) {
-	case standalone::Result::InstalledAndCommitted:
-	case standalone::Result::Committed:
-	case standalone::Result::Installed:
-	case standalone::Result::RolledBack:
-		// There should not be any error for these.
-		assert(result.err == error::NoError);
-		break;
-	case standalone::Result::InstalledAndCommittedRebootRequired:
-	case standalone::Result::InstalledRebootRequired:
+	using Result = standalone::Result;
+
+	if (result.err != error::NoError) {
+		log::Error(result.err.String());
+	} else if (ResultContains(result.result, Result::Failed)) {
+		// All error states, make sure they have an error.
+		result.err = error::MakeError(error::ExitWithFailureError, "");
+	}
+
+	using r = Result;
+	auto contains = [&result](r val) { return ResultContains(result.result, val); };
+	auto none_of = [&result](r val) { return ResultNoneOf(result.result, val); };
+	auto add = [](string &str, const string &content) {
+		if (str.size() > 0) {
+			str += " ";
+		}
+		str += content;
+	};
+
+	string operation_done;
+	string operation_failure;
+
+	// For failure case, include which attempted operation failed.
+	if (contains(r::DownloadFailed)) {
+		operation_failure = "Streaming failed.";
+	} else if (contains(r::InstallFailed)) {
+		operation_failure = "Installation failed.";
+	} else if (contains(r::CommitFailed)) {
+		operation_failure = "Committing failed.";
+	}
+
+	// For done case, include which operation succeded.
+	if (contains(r::Committed) and none_of(r::Installed)) {
+		operation_done = "Committed.";
+	} else if (contains(r::Installed) and none_of(r::Committed)) {
+		operation_done =
+			"Installed, but not committed.\n"
+			"Use 'commit' to update, or 'rollback' to roll back the update.";
+	} else if (contains(r::Downloaded) and none_of(r::Installed)) {
+		operation_done = "Streamed to storage, but not installed/enabled.";
+	} else if (contains(r::Installed | r::Committed)) {
+		operation_done = "Installed and committed.";
+	} else if (contains(r::NoUpdateInProgress)) {
+		operation_done = "No update in progress.";
+	} else if (contains(r::Cleaned) and none_of(~r::Cleaned)) {
+		// Only include this message if it was the only thing done.
+		operation_done = "Cleaned up.";
+	}
+
+	// Pick which one of the done/failure cases to use. If the failure happened after the
+	// commit, we pick the done case, since the operation was still completed.
+	string &operation = (contains(r::Failed) and none_of(r::FailedInPostCommit | r::CleanupFailed))
+							? operation_failure
+							: operation_done;
+
+	string additional;
+
+	if (contains(r::RollbackFailed)) {
+		additional =
+			"Rollback failed. "
+			"System may be in an inconsistent state.";
+	} else if (contains(r::NoRollback)) {
+		additional =
+			"Update Module does not support rollback. "
+			"System may be in an inconsistent state.";
+	} else if (contains(r::NoRollbackNecessary)) {
+		additional = "System not modified.";
+	} else if (contains(r::RolledBack)) {
+		additional = "Rolled back.";
+	}
+
+	if (contains(r::FailedInPostCommit)) {
+		add(additional, "One or more post-commit steps failed.");
+	}
+	if (contains(r::CleanupFailed)) {
+		add(additional, "Cleanup failed.");
+	}
+
+	if (contains(r::RebootRequired)) {
+		add(additional, "At least one payload requested a reboot of the device it updated.");
 		if (result.err == error::NoError) {
 			result.err = context::MakeError(context::RebootRequiredError, "Reboot required");
 		}
-		break;
-	default:
-		// All other states, make sure they have an error.
-		if (result.err != error::NoError) {
-			log::Error(result.err.String());
-		} else {
-			result.err = error::MakeError(error::ExitWithFailureError, "");
-		}
-		break;
 	}
 
-	switch (result.result) {
-	case standalone::Result::InstalledAndCommitted:
-	case standalone::Result::InstalledAndCommittedRebootRequired:
-		cout << "Installed and committed." << endl;
-		break;
-	case standalone::Result::Committed:
-		cout << "Committed." << endl;
-		break;
-	case standalone::Result::Installed:
-	case standalone::Result::InstalledRebootRequired:
-		cout << "Installed, but not committed." << endl;
-		cout << "Use 'commit' to update, or 'rollback' to roll back the update." << endl;
-		break;
-	case standalone::Result::InstalledButFailedInPostCommit:
-		cout << "Installed, but one or more post-commit steps failed." << endl;
-		break;
-	case standalone::Result::NoUpdateInProgress:
-		cout << "No update in progress." << endl;
-		break;
-	case standalone::Result::FailedNothingDone:
-		cout << "Installation failed. System not modified." << endl;
-		break;
-	case standalone::Result::RolledBack:
-		cout << "Rolled back." << endl;
-		break;
-	case standalone::Result::NoRollback:
-		cout << "Update Module does not support rollback." << endl;
-		break;
-	case standalone::Result::RollbackFailed:
-		cout << "Rollback failed. System may be in an inconsistent state." << endl;
-		break;
-	case standalone::Result::FailedAndRolledBack:
-		cout << "Installation failed. Rolled back modifications." << endl;
-		break;
-	case standalone::Result::FailedAndNoRollback:
-		cout
-			<< "Installation failed, and Update Module does not support rollback. System may be in an inconsistent state."
-			<< endl;
-		break;
-	case standalone::Result::FailedAndRollbackFailed:
-		cout
-			<< "Installation failed, and rollback also failed. System may be in an inconsistent state."
-			<< endl;
-		break;
+	if (operation.size() > 0) {
+		cout << operation << endl;
 	}
-
-	switch (result.result) {
-	case standalone::Result::InstalledRebootRequired:
-	case standalone::Result::InstalledAndCommittedRebootRequired:
-		cout << "At least one payload requested a reboot of the device it updated." << endl;
-		break;
-	default:
-		break;
+	if (additional.size() > 0) {
+		cout << additional << endl;
 	}
 
 	return result.err;
@@ -237,7 +252,10 @@ error::Error InstallAction::Execute(context::MenderContext &main_context) {
 	if (err != error::NoError) {
 		return err;
 	}
-	auto result = standalone::Install(main_context, src_);
+	events::EventLoop loop;
+	standalone::Context ctx {main_context, loop};
+	ctx.stop_after = std::move(stop_after_);
+	auto result = standalone::Install(ctx, src_);
 	err = ResultHandler(result);
 	if (!reboot_exit_code_
 		&& err.code == context::MakeError(context::RebootRequiredError, "").code) {
@@ -248,13 +266,36 @@ error::Error InstallAction::Execute(context::MenderContext &main_context) {
 	return err;
 }
 
+error::Error ResumeAction::Execute(context::MenderContext &main_context) {
+	events::EventLoop loop;
+	standalone::Context ctx {main_context, loop};
+	ctx.stop_after = std::move(stop_after_);
+
+	auto result = standalone::Resume(ctx);
+	auto err = ResultHandler(result);
+
+	if (!reboot_exit_code_
+		&& err.code == context::MakeError(context::RebootRequiredError, "").code) {
+		// If reboot exit code isn't requested, then this type of error should be treated as
+		// plain success.
+		err = error::NoError;
+	}
+	return err;
+}
+
 error::Error CommitAction::Execute(context::MenderContext &main_context) {
-	auto result = standalone::Commit(main_context);
+	events::EventLoop loop;
+	standalone::Context ctx {main_context, loop};
+	ctx.stop_after = std::move(stop_after_);
+	auto result = standalone::Commit(ctx);
 	return ResultHandler(result);
 }
 
 error::Error RollbackAction::Execute(context::MenderContext &main_context) {
-	auto result = standalone::Rollback(main_context);
+	events::EventLoop loop;
+	standalone::Context ctx {main_context, loop};
+	ctx.stop_after = std::move(stop_after_);
+	auto result = standalone::Rollback(ctx);
 	return ResultHandler(result);
 }
 

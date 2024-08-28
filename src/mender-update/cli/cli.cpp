@@ -47,9 +47,25 @@ const conf::CliCommand cmd_check_update {
 	.description = "Force update check",
 };
 
+const conf::CliOption opt_stop_after {
+	conf::CliOption {
+		.long_option = "stop-after",
+		.description =
+			"Stop after the given state has completed. "
+			"Choices are `Download`, `ArtifactInstall` and `ArtifactCommit`. "
+			"You can later resume the installation by using the `resume` command. "
+			"Note that the client always stops after `ArtifactInstall` if the update module supports rollback.",
+		.parameter = "STATE",
+	},
+};
+
 const conf::CliCommand cmd_commit {
 	.name = "commit",
 	.description = "Commit current Artifact. Returns (2) if no update in progress",
+	.options_w_values =
+		{
+			opt_stop_after,
+		},
 };
 
 const conf::CliCommand cmd_daemon {
@@ -65,12 +81,33 @@ const conf::CliCommand cmd_install {
 			.name = "artifact",
 			.mandatory = true,
 		},
+	.options_w_values =
+		{
+			opt_stop_after,
+		},
 	.options =
 		{
 			conf::CliOption {
 				.long_option = "reboot-exit-code",
 				.description =
-					"Return exit code 4 if a manual reboot is required after the Artifact installation",
+					"Return exit code 4 if a manual reboot is required after the Artifact installation.",
+			},
+		},
+};
+
+const conf::CliCommand cmd_resume {
+	.name = "install",
+	.description = "Resume an interrupted installation",
+	.options_w_values =
+		{
+			opt_stop_after,
+		},
+	.options =
+		{
+			conf::CliOption {
+				.long_option = "reboot-exit-code",
+				.description =
+					"Return exit code 4 if a manual reboot is required after the Artifact installation.",
 			},
 		},
 };
@@ -78,6 +115,10 @@ const conf::CliCommand cmd_install {
 const conf::CliCommand cmd_rollback {
 	.name = "rollback",
 	.description = "Rollback current Artifact. Returns (2) if no update in progress",
+	.options_w_values =
+		{
+			opt_stop_after,
+		},
 };
 
 const conf::CliCommand cmd_send_inventory {
@@ -110,12 +151,57 @@ const conf::CliApp cli_mender_update = {
 			cmd_commit,
 			cmd_daemon,
 			cmd_install,
+			cmd_resume,
 			cmd_rollback,
 			cmd_send_inventory,
 			cmd_show_artifact,
 			cmd_show_provides,
 		},
 };
+
+static error::Error CommonInstallFlagsHandler(
+	conf::CmdlineOptionsIterator &iter,
+	string *filename,
+	bool *reboot_exit_code,
+	vector<string> *stop_after) {
+	while (true) {
+		auto arg = iter.Next();
+		if (!arg) {
+			return arg.error();
+		}
+
+		auto value = arg.value();
+		if (reboot_exit_code != nullptr and value.option == "--reboot-exit-code") {
+			*reboot_exit_code = true;
+			continue;
+		} else if (stop_after != nullptr and value.option == "--stop-after") {
+			if (value.value == "") {
+				return conf::MakeError(conf::InvalidOptionsError, "--stop-after needs an argument");
+			}
+			stop_after->push_back(value.value);
+			continue;
+		} else if (value.option != "") {
+			return conf::MakeError(conf::InvalidOptionsError, "No such option: " + value.option);
+		}
+
+		if (value.value != "") {
+			if (filename == nullptr or *filename != "") {
+				return conf::MakeError(
+					conf::InvalidOptionsError, "Too many arguments: " + value.value);
+			} else {
+				*filename = value.value;
+			}
+		} else {
+			if (filename != nullptr and *filename == "") {
+				return conf::MakeError(conf::InvalidOptionsError, "Need a path to an artifact");
+			} else {
+				break;
+			}
+		}
+	}
+
+	return error::NoError;
+}
 
 ExpectedActionPtr ParseUpdateArguments(
 	vector<string>::const_iterator start, vector<string>::const_iterator end) {
@@ -147,60 +233,68 @@ ExpectedActionPtr ParseUpdateArguments(
 		return make_shared<ShowProvidesAction>();
 	} else if (start[0] == "install") {
 		conf::CmdlineOptionsIterator iter(
-			start + 1, end, {}, conf::CommandOptsSetWithoutValue(cmd_install.options));
+			start + 1,
+			end,
+			conf::CommandOptsSetWithValue(cmd_install.options_w_values),
+			conf::CommandOptsSetWithoutValue(cmd_install.options));
 		iter.SetArgumentsMode(conf::ArgumentsMode::AcceptBareArguments);
 
 		string filename;
 		bool reboot_exit_code = false;
-		while (true) {
-			auto arg = iter.Next();
-			if (!arg) {
-				return expected::unexpected(arg.error());
-			}
-
-			auto value = arg.value();
-			if (value.option == "--reboot-exit-code") {
-				reboot_exit_code = true;
-				continue;
-			} else if (value.option != "") {
-				return expected::unexpected(
-					conf::MakeError(conf::InvalidOptionsError, "No such option: " + value.option));
-			}
-
-			if (value.value != "") {
-				if (filename != "") {
-					return expected::unexpected(conf::MakeError(
-						conf::InvalidOptionsError, "Too many arguments: " + value.value));
-				} else {
-					filename = value.value;
-				}
-			} else {
-				if (filename == "") {
-					return expected::unexpected(
-						conf::MakeError(conf::InvalidOptionsError, "Need a path to an artifact"));
-				} else {
-					break;
-				}
-			}
+		vector<string> stop_after;
+		auto err = CommonInstallFlagsHandler(iter, &filename, &reboot_exit_code, &stop_after);
+		if (err != error::NoError) {
+			return expected::unexpected(err);
 		}
 
-		return make_shared<InstallAction>(filename, reboot_exit_code);
+		auto install_action = make_shared<InstallAction>(filename);
+		install_action->SetRebootExitCode(reboot_exit_code);
+		install_action->SetStopAfter(std::move(stop_after));
+		return install_action;
+	} else if (start[0] == "resume") {
+		conf::CmdlineOptionsIterator iter(
+			start + 1,
+			end,
+			conf::CommandOptsSetWithValue(cmd_resume.options_w_values),
+			conf::CommandOptsSetWithoutValue(cmd_resume.options));
+
+		bool reboot_exit_code = false;
+		vector<string> stop_after;
+		auto err = CommonInstallFlagsHandler(iter, nullptr, &reboot_exit_code, &stop_after);
+		if (err != error::NoError) {
+			return expected::unexpected(err);
+		}
+
+		auto resume_action = make_shared<ResumeAction>();
+		resume_action->SetRebootExitCode(reboot_exit_code);
+		resume_action->SetStopAfter(std::move(stop_after));
+		return resume_action;
 	} else if (start[0] == "commit") {
-		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
-		auto arg = iter.Next();
-		if (!arg) {
-			return expected::unexpected(arg.error());
+		conf::CmdlineOptionsIterator iter(
+			start + 1, end, conf::CommandOptsSetWithValue(cmd_commit.options_w_values), {});
+
+		vector<string> stop_after;
+		auto err = CommonInstallFlagsHandler(iter, nullptr, nullptr, &stop_after);
+		if (err != error::NoError) {
+			return expected::unexpected(err);
 		}
 
-		return make_shared<CommitAction>();
+		auto commit_action = make_shared<CommitAction>();
+		commit_action->SetStopAfter(std::move(stop_after));
+		return commit_action;
 	} else if (start[0] == "rollback") {
-		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
-		auto arg = iter.Next();
-		if (!arg) {
-			return expected::unexpected(arg.error());
+		conf::CmdlineOptionsIterator iter(
+			start + 1, end, conf::CommandOptsSetWithValue(cmd_rollback.options_w_values), {});
+
+		vector<string> stop_after;
+		auto err = CommonInstallFlagsHandler(iter, nullptr, nullptr, &stop_after);
+		if (err != error::NoError) {
+			return expected::unexpected(err);
 		}
 
-		return make_shared<RollbackAction>();
+		auto rollback_action = make_shared<RollbackAction>();
+		rollback_action->SetStopAfter(std::move(stop_after));
+		return rollback_action;
 	} else if (start[0] == "daemon") {
 		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();

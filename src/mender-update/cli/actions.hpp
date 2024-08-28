@@ -28,6 +28,7 @@ using namespace std;
 
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
+
 namespace context = mender::update::context;
 
 class Action {
@@ -49,26 +50,44 @@ public:
 	error::Error Execute(context::MenderContext &main_context) override;
 };
 
-class InstallAction : virtual public Action {
+class BaseInstallAction : virtual public Action {
 public:
-	InstallAction(const string &src, bool reboot_exit_code) :
-		src_ {src},
-		reboot_exit_code_ {reboot_exit_code} {
+	void SetRebootExitCode(bool val) {
+		reboot_exit_code_ = val;
+	}
+
+	void SetStopAfter(vector<string> val) {
+		stop_after_ = std::move(val);
+	}
+
+protected:
+	bool reboot_exit_code_ {false};
+	vector<string> stop_after_;
+};
+
+class InstallAction : public BaseInstallAction {
+public:
+	InstallAction(const string &src) :
+		src_ {src} {
 	}
 
 	error::Error Execute(context::MenderContext &main_context) override;
 
 private:
 	string src_;
-	bool reboot_exit_code_;
 };
 
-class CommitAction : virtual public Action {
+class ResumeAction : public BaseInstallAction {
 public:
 	error::Error Execute(context::MenderContext &main_context) override;
 };
 
-class RollbackAction : virtual public Action {
+class CommitAction : public BaseInstallAction {
+public:
+	error::Error Execute(context::MenderContext &main_context) override;
+};
+
+class RollbackAction : public BaseInstallAction {
 public:
 	error::Error Execute(context::MenderContext &main_context) override;
 };
