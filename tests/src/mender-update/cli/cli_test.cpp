@@ -2040,7 +2040,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, StopAfterDownloadThenResume) {
+TEST(CliTest, StopBeforeArtifactInstallThenResume) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2070,8 +2070,8 @@ exit 0
 			"--datastore",
 			tmpdir.Path(),
 			"install",
-			"--stop-after",
-			"Download_Leave",
+			"--stop-before",
+			"ArtifactInstall_Enter",
 			artifact,
 		};
 
@@ -2150,7 +2150,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, StopAfterCommitThenResume) {
+TEST(CliTest, StopBeforeArtifactCommit_LeaveThenResume) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2174,8 +2174,8 @@ exit 0
 			"--datastore",
 			tmpdir.Path(),
 			"install",
-			"--stop-after",
-			"ArtifactCommit",
+			"--stop-before",
+			"ArtifactCommit_Leave",
 			artifact,
 		};
 
@@ -2233,7 +2233,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, StopAfterCommitCommandThenResume) {
+TEST(CliTest, StopBeforeArtifactCommit_EnterThenResume) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2269,8 +2269,8 @@ exit 0
 			"--datastore",
 			tmpdir.Path(),
 			"install",
-			"--stop-after",
-			"ArtifactInstall_Leave",
+			"--stop-before",
+			"ArtifactCommit_Enter",
 			artifact,
 		};
 
@@ -2297,8 +2297,8 @@ ArtifactInstall
 			"--datastore",
 			tmpdir.Path(),
 			"commit",
-			"--stop-after",
-			"ArtifactCommit",
+			"--stop-before",
+			"ArtifactCommit_Leave",
 		};
 
 		mtesting::RedirectStreamOutputs output;
@@ -2355,7 +2355,7 @@ artifact_name=test
 	EXPECT_TRUE(path::FileExists(commit_leave_run));
 }
 
-TEST(CliTest, StopAfterCommitCommandThenRollback) {
+TEST(CliTest, StopBeforeArtifactCommit_EnterCommandThenRollback) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2395,8 +2395,8 @@ exit 0
 			"--datastore",
 			tmpdir.Path(),
 			"install",
-			"--stop-after",
-			"ArtifactInstall_Leave",
+			"--stop-before",
+			"ArtifactCommit_Enter",
 			artifact,
 		};
 
@@ -2423,8 +2423,8 @@ ArtifactInstall
 			"--datastore",
 			tmpdir.Path(),
 			"commit",
-			"--stop-after",
-			"ArtifactCommit",
+			"--stop-before",
+			"ArtifactCommit_Leave",
 		};
 
 		mtesting::RedirectStreamOutputs output;
@@ -2484,7 +2484,7 @@ artifact_name=previous
 	EXPECT_FALSE(path::FileExists(commit_leave_run));
 }
 
-TEST(CliTest, StopAfterArtifactInstallFailure) {
+TEST(CliTest, StopBeforeArtifactRollback_Enter) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2514,10 +2514,8 @@ exit 0
 			"--datastore",
 			tmpdir.Path(),
 			"install",
-			"--stop-after",
-			"ArtifactInstall_Leave",
-			"--stop-after",
-			"ArtifactInstall_Error",
+			"--stop-before",
+			"ArtifactRollback_Enter",
 			artifact,
 		};
 
@@ -2545,8 +2543,8 @@ SupportsRollback
 			"--datastore",
 			tmpdir.Path(),
 			"rollback",
-			"--stop-after",
-			"ArtifactRollback_Leave",
+			"--stop-before",
+			"ArtifactFailure_Enter",
 		};
 
 		mtesting::RedirectStreamOutputs output;
@@ -2573,8 +2571,8 @@ ArtifactRollback
 			"--datastore",
 			tmpdir.Path(),
 			"resume",
-			"--stop-after",
-			"ArtifactFailure_Leave",
+			"--stop-before",
+			"Cleanup",
 		};
 
 		mtesting::RedirectStreamOutputs output;

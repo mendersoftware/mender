@@ -149,7 +149,7 @@ struct Context {
 
 	StateData state_data;
 
-	vector<string> stop_after;
+	vector<string> stop_before;
 
 	string artifact_src;
 

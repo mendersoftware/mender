@@ -64,7 +64,7 @@ public:
 	StateMachine(Context &ctx);
 
 	error::Error SetStartStateFromStateData(const string &completed_state);
-	error::Error AddStopAfterState(const string &state);
+	error::Error AddStopBeforeState(const string &state);
 	void StartOnRollback();
 
 	void Run();

@@ -349,7 +349,7 @@ StateMachine::StateMachine(Context &ctx) :
 	s.AddTransition(artifact_commit_state_,            se::Success,              save_post_artifact_commit_state_,  tf::Immediate);
 	s.AddTransition(artifact_commit_state_,            se::Failure,              artifact_commit_error_state_,      tf::Immediate);
 
-	// The reason we have two save states in a row here, is that using the `--stop-after`
+	// The reason we have two save states in a row here, is that using the `--stop-before`
 	// option, one can exit at the point of save_post_artifact_commit_state, and it is allowed
 	// both to resume and roll back from here. However, once we have started executing the
 	// `ArtifactCommit_Leave` scripts, it is no longer allowed to roll back, therefore it is
@@ -436,36 +436,33 @@ error::Error StateMachine::SetStartStateFromStateData(const string &in_state) {
 	return error::NoError;
 }
 
-error::Error StateMachine::AddStopAfterState(const string &state) {
+error::Error StateMachine::AddStopBeforeState(const string &state) {
 	using tf = common::state_machine::TransitionFlag;
 	using se = StateEvent;
 	auto &s = state_machine_;
 
 	// Replace transition in state machine in order to exit at given point.
-	if (state == "Download_Leave") {
+	if (state == "ArtifactInstall_Enter") {
 		s.AddTransition(save_artifact_install_state_, se::Success, exit_state_, tf::Immediate);
 
-	} else if (state == "ArtifactInstall_Leave") {
+	} else if (state == "ArtifactCommit_Enter") {
 		s.AddTransition(save_artifact_commit_state_, se::Success, exit_state_, tf::Immediate);
 
-	} else if (state == "ArtifactCommit") {
+	} else if (state == "ArtifactCommit_Leave") {
 		s.AddTransition(save_post_artifact_commit_state_, se::Success, exit_state_, tf::Immediate);
 
-	} else if (state == "ArtifactInstall_Error" or state == "ArtifactCommit_Error") {
-		// Either of these two states could be entered after an error, depending on rollback
-		// support.
+	} else if (state == "ArtifactRollback_Enter") {
 		s.AddTransition(save_artifact_rollback_state_, se::Success, exit_state_, tf::Immediate);
+
+	} else if (state == "ArtifactFailure_Enter") {
 		s.AddTransition(save_artifact_failure_state_, se::Success, exit_state_, tf::Immediate);
 
-	} else if (state == "ArtifactRollback_Leave") {
-		s.AddTransition(save_artifact_failure_state_, se::Success, exit_state_, tf::Immediate);
-
-	} else if (state == "ArtifactFailure_Leave") {
+	} else if (state == "Cleanup") {
 		s.AddTransition(save_cleanup_state_, se::Success, exit_state_, tf::Immediate);
 
 	} else if (state != "") {
 		return context::MakeError(
-			context::ValueError, "Cannot stop after unsupported state " + state);
+			context::ValueError, "Cannot stop before unsupported state " + state);
 	}
 
 	return error::NoError;
@@ -543,8 +540,8 @@ ResultAndError Install(
 
 	StateMachine state_machine {ctx};
 
-	for (const auto &state : ctx.stop_after) {
-		err = state_machine.AddStopAfterState(state);
+	for (const auto &state : ctx.stop_before) {
+		err = state_machine.AddStopBeforeState(state);
 		if (err != error::NoError) {
 			return {Result::Failed, err};
 		}
@@ -586,8 +583,8 @@ ResultAndError Resume(Context &ctx) {
 		return {Result::Failed, err};
 	}
 
-	for (const auto &state : ctx.stop_after) {
-		err = state_machine.AddStopAfterState(state);
+	for (const auto &state : ctx.stop_before) {
+		err = state_machine.AddStopBeforeState(state);
 		if (err != error::NoError) {
 			return {Result::Failed, err};
 		}
@@ -638,8 +635,8 @@ ResultAndError Commit(Context &ctx) {
 		return {Result::Failed, err};
 	}
 
-	for (const auto &state : ctx.stop_after) {
-		err = state_machine.AddStopAfterState(state);
+	for (const auto &state : ctx.stop_before) {
+		err = state_machine.AddStopBeforeState(state);
 		if (err != error::NoError) {
 			return {Result::Failed, err};
 		}
@@ -692,8 +689,8 @@ ResultAndError Rollback(Context &ctx) {
 		return {Result::Failed, err};
 	}
 
-	for (const auto &state : ctx.stop_after) {
-		err = state_machine.AddStopAfterState(state);
+	for (const auto &state : ctx.stop_before) {
+		err = state_machine.AddStopBeforeState(state);
 		if (err != error::NoError) {
 			return {Result::Failed, err};
 		}

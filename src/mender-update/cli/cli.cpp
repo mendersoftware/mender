@@ -47,11 +47,17 @@ const conf::CliCommand cmd_check_update {
 	.description = "Force update check",
 };
 
-const conf::CliOption opt_stop_after {
-	.long_option = "stop-after",
+const conf::CliOption opt_stop_before {
+	.long_option = "stop-before",
 	.description =
-		"Stop after the given state has completed. "
-		"Choices are `Download`, `ArtifactInstall` and `ArtifactCommit`. "
+		"Stop before entering the given state. "
+		"Choices are "
+		"`ArtifactInstall_Enter`, "
+		"`ArtifactCommit_Enter`, "
+		"`ArtifactCommit_Leave`, "
+		"`ArtifactRollback_Enter`, "
+		"`ArtifactFailure_Enter`, "
+		"and `Cleanup`. "
 		"You can later resume the installation by using the `resume` command. "
 		"Note that the client always stops after `ArtifactInstall` if the update module supports rollback.",
 	.parameter = "STATE",
@@ -62,7 +68,7 @@ const conf::CliCommand cmd_commit {
 	.description = "Commit current Artifact. Returns (2) if no update in progress",
 	.options =
 		{
-			opt_stop_after,
+			opt_stop_before,
 		},
 };
 
@@ -86,7 +92,7 @@ const conf::CliCommand cmd_install {
 				.description =
 					"Return exit code 4 if a manual reboot is required after the Artifact installation.",
 			},
-			opt_stop_after,
+			opt_stop_before,
 		},
 };
 
@@ -100,7 +106,7 @@ const conf::CliCommand cmd_resume {
 				.description =
 					"Return exit code 4 if a manual reboot is required after the Artifact installation.",
 			},
-			opt_stop_after,
+			opt_stop_before,
 		},
 };
 
@@ -109,7 +115,7 @@ const conf::CliCommand cmd_rollback {
 	.description = "Rollback current Artifact. Returns (2) if no update in progress",
 	.options =
 		{
-			opt_stop_after,
+			opt_stop_before,
 		},
 };
 
@@ -155,7 +161,7 @@ static error::Error CommonInstallFlagsHandler(
 	conf::CmdlineOptionsIterator &iter,
 	string *filename,
 	bool *reboot_exit_code,
-	vector<string> *stop_after) {
+	vector<string> *stop_before) {
 	while (true) {
 		auto arg = iter.Next();
 		if (!arg) {
@@ -166,11 +172,12 @@ static error::Error CommonInstallFlagsHandler(
 		if (reboot_exit_code != nullptr and value.option == "--reboot-exit-code") {
 			*reboot_exit_code = true;
 			continue;
-		} else if (stop_after != nullptr and value.option == "--stop-after") {
+		} else if (stop_before != nullptr and value.option == "--stop-before") {
 			if (value.value == "") {
-				return conf::MakeError(conf::InvalidOptionsError, "--stop-after needs an argument");
+				return conf::MakeError(
+					conf::InvalidOptionsError, "--stop-before needs an argument");
 			}
-			stop_after->push_back(value.value);
+			stop_before->push_back(value.value);
 			continue;
 		} else if (value.option != "") {
 			return conf::MakeError(conf::InvalidOptionsError, "No such option: " + value.option);
@@ -229,53 +236,53 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		string filename;
 		bool reboot_exit_code = false;
-		vector<string> stop_after;
-		auto err = CommonInstallFlagsHandler(iter, &filename, &reboot_exit_code, &stop_after);
+		vector<string> stop_before;
+		auto err = CommonInstallFlagsHandler(iter, &filename, &reboot_exit_code, &stop_before);
 		if (err != error::NoError) {
 			return expected::unexpected(err);
 		}
 
 		auto install_action = make_shared<InstallAction>(filename);
 		install_action->SetRebootExitCode(reboot_exit_code);
-		install_action->SetStopAfter(std::move(stop_after));
+		install_action->SetStopBefore(std::move(stop_before));
 		return install_action;
 	} else if (start[0] == "resume") {
 		conf::CmdlineOptionsIterator iter(start + 1, end, cmd_resume.options);
 
 		bool reboot_exit_code = false;
-		vector<string> stop_after;
-		auto err = CommonInstallFlagsHandler(iter, nullptr, &reboot_exit_code, &stop_after);
+		vector<string> stop_before;
+		auto err = CommonInstallFlagsHandler(iter, nullptr, &reboot_exit_code, &stop_before);
 		if (err != error::NoError) {
 			return expected::unexpected(err);
 		}
 
 		auto resume_action = make_shared<ResumeAction>();
 		resume_action->SetRebootExitCode(reboot_exit_code);
-		resume_action->SetStopAfter(std::move(stop_after));
+		resume_action->SetStopBefore(std::move(stop_before));
 		return resume_action;
 	} else if (start[0] == "commit") {
 		conf::CmdlineOptionsIterator iter(start + 1, end, cmd_commit.options);
 
-		vector<string> stop_after;
-		auto err = CommonInstallFlagsHandler(iter, nullptr, nullptr, &stop_after);
+		vector<string> stop_before;
+		auto err = CommonInstallFlagsHandler(iter, nullptr, nullptr, &stop_before);
 		if (err != error::NoError) {
 			return expected::unexpected(err);
 		}
 
 		auto commit_action = make_shared<CommitAction>();
-		commit_action->SetStopAfter(std::move(stop_after));
+		commit_action->SetStopBefore(std::move(stop_before));
 		return commit_action;
 	} else if (start[0] == "rollback") {
 		conf::CmdlineOptionsIterator iter(start + 1, end, cmd_rollback.options);
 
-		vector<string> stop_after;
-		auto err = CommonInstallFlagsHandler(iter, nullptr, nullptr, &stop_after);
+		vector<string> stop_before;
+		auto err = CommonInstallFlagsHandler(iter, nullptr, nullptr, &stop_before);
 		if (err != error::NoError) {
 			return expected::unexpected(err);
 		}
 
 		auto rollback_action = make_shared<RollbackAction>();
-		rollback_action->SetStopAfter(std::move(stop_after));
+		rollback_action->SetStopBefore(std::move(stop_before));
 		return rollback_action;
 	} else if (start[0] == "daemon") {
 		conf::CmdlineOptionsIterator iter(start + 1, end, cmd_daemon.options);
