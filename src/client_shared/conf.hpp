@@ -69,6 +69,38 @@ enum class ArgumentsMode {
 	StopAtBareArguments,
 };
 
+struct CliArgument {
+	string name;
+	bool mandatory;
+};
+
+struct CliOption {
+	string long_option;
+	string short_option;
+	string description;
+	string default_value;
+	string parameter;
+};
+
+struct CliCommand {
+	string name;
+	string description;
+	optional<CliArgument> argument;
+	vector<CliOption> options;
+};
+
+struct CliApp {
+	string name;
+	string short_description;
+	string long_description;
+	vector<CliCommand> commands;
+};
+
+const OptsSet GlobalOptsSetWithValue();
+const OptsSet GlobalOptsSetWithoutValue();
+const OptsSet CommandOptsSetWithValue(const vector<CliOption> &options);
+const OptsSet CommandOptsSetWithoutValue(const vector<CliOption> &options);
+
 class CmdlineOptionsIterator {
 public:
 	CmdlineOptionsIterator(
@@ -79,7 +111,16 @@ public:
 		start_ {start},
 		end_ {end},
 		opts_with_value_ {opts_with_value},
-		opts_wo_value_ {opts_without_value} {};
+		opts_wo_value_ {opts_without_value} {
+	}
+	CmdlineOptionsIterator(
+		vector<string>::const_iterator start,
+		vector<string>::const_iterator end,
+		const vector<CliOption> &opts) :
+		CmdlineOptionsIterator(
+			start, end, CommandOptsSetWithValue(opts), CommandOptsSetWithoutValue(opts)) {
+	}
+
 	ExpectedOptionValue Next();
 
 	size_t GetPos() const {
@@ -244,44 +285,11 @@ public:
 	}
 };
 
-struct CliArgument {
-	string name;
-	bool mandatory;
-};
-
-struct CliOption {
-	string long_option;
-	string short_option;
-	string description;
-	string default_value;
-	string parameter;
-};
-
-struct CliCommand {
-	string name;
-	string description;
-	optional<CliArgument> argument;
-	vector<CliOption> options_w_values;
-	vector<CliOption> options;
-};
-
-struct CliApp {
-	string name;
-	string short_description;
-	string long_description;
-	vector<CliCommand> commands;
-};
-
 bool FindCmdlineHelpArg(vector<string>::const_iterator start, vector<string>::const_iterator end);
 
 void PrintCliHelp(const CliApp &cli, ostream &stream = std::cout);
 void PrintCliCommandHelp(
 	const CliApp &cli, const string &command_name, ostream &stream = std::cout);
-
-const OptsSet GlobalOptsSetWithValue();
-const OptsSet GlobalOptsSetWithoutValue();
-const OptsSet CommandOptsSetWithValue(const vector<CliOption> &options);
-const OptsSet CommandOptsSetWithoutValue(const vector<CliOption> &options);
 
 class MenderConfig : public cfg_parser::MenderConfigFromFile {
 public:
