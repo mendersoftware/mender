@@ -48,15 +48,13 @@ const conf::CliCommand cmd_check_update {
 };
 
 const conf::CliOption opt_stop_after {
-	conf::CliOption {
-		.long_option = "stop-after",
-		.description =
-			"Stop after the given state has completed. "
-			"Choices are `Download`, `ArtifactInstall` and `ArtifactCommit`. "
-			"You can later resume the installation by using the `resume` command. "
-			"Note that the client always stops after `ArtifactInstall` if the update module supports rollback.",
-		.parameter = "STATE",
-	},
+	.long_option = "stop-after",
+	.description =
+		"Stop after the given state has completed. "
+		"Choices are `Download`, `ArtifactInstall` and `ArtifactCommit`. "
+		"You can later resume the installation by using the `resume` command. "
+		"Note that the client always stops after `ArtifactInstall` if the update module supports rollback.",
+	.parameter = "STATE",
 };
 
 const conf::CliCommand cmd_commit {
