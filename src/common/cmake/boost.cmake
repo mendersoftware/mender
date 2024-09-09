@@ -3,6 +3,10 @@
 find_package(Boost 1.74 COMPONENTS log)
 
 option(MENDER_DOWNLOAD_BOOST "Download Boost if it is not found (Default: OFF)" OFF)
+option(MENDER_USE_DYNAMIC_BOOST_LOG "Link dynamically to boost::log  (Default: OFF)" OFF)
+if(MENDER_USE_DYNAMIC_BOOST_LOG)
+  ADD_DEFINITIONS(-DBOOST_LOG_DYN_LINK)
+endif()
 
 if(NOT MENDER_DOWNLOAD_BOOST AND NOT ${Boost_FOUND})
   message(FATAL_ERROR
