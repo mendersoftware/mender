@@ -124,11 +124,7 @@ static ExpectedActionPtr ParseAuthArguments(
 	string passphrase = "";
 	bool forcebootstrap = false;
 	if (start[0] == "bootstrap" || start[0] == "daemon") {
-		conf::CmdlineOptionsIterator opts_iter(
-			start + 1,
-			end,
-			conf::CommandOptsSetWithValue(opts_bootstrap_daemon),
-			conf::CommandOptsSetWithoutValue(opts_bootstrap_daemon));
+		conf::CmdlineOptionsIterator opts_iter(start + 1, end, opts_bootstrap_daemon);
 		auto ex_opt_val = opts_iter.Next();
 
 		while (ex_opt_val
