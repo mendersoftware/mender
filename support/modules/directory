@@ -26,16 +26,25 @@ case "$STATE" in
         test "$dest_dir" = "/" && \
             echo "Error: destination dir is '/', install not supported." && exit 1
         mkdir -p $dest_dir
-        if ! tar -cf ${prev_files_tar} -C ${dest_dir} .
+        
+        tar -cf ${prev_files_tar} -C ${dest_dir} .
+        createPrevSuccess=$?
+        if [ $createPrevSuccess -ne 0 ]
         then
-            ret=$?
+            echo "Fatal error: Unable to create backup"
             # Make sure there is no half-backup lying around.
             rm -f ${prev_files_tar}
-            exit $ret
+            exit $createPrevSuccess
         fi
         rm -rf ${dest_dir}
         mkdir -p ${dest_dir}
         tar -xf ${update_files_tar} -C ${dest_dir}
+        extractSuccess=$?
+        if [ $extractSuccess -ne 0 ]
+        then
+            echo "Fatal error: something went wrong during artifact installation"
+            exit $extractSuccess
+        fi
         ;;
 
     ArtifactRollback)
