@@ -207,7 +207,13 @@ static error::Error ResultHandler(standalone::ResultAndError result) {
 							? operation_failure
 							: operation_done;
 
+	string prefix;
 	string additional;
+
+	if (contains(r::AutoCommitWanted) and contains(r::Installed)
+		and (contains(r::Committed) or contains(r::Failed))) {
+		prefix = "Update Module doesn't support rollback. Committing immediately.";
+	}
 
 	if (contains(r::RollbackFailed)) {
 		additional =
@@ -237,6 +243,9 @@ static error::Error ResultHandler(standalone::ResultAndError result) {
 		}
 	}
 
+	if (prefix.size() > 0) {
+		cout << prefix << endl;
+	}
 	if (operation.size() > 0) {
 		cout << operation << endl;
 	}

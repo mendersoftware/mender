@@ -386,9 +386,10 @@ void RebootAndRollbackQueryState::OnEnter(Context &ctx, sm::EventPoster<StateEve
 	if (rollback_support.value()) {
 		poster.PostEvent(StateEvent::NeedsInteraction);
 		return;
+	} else {
+		UpdateResult(ctx.result_and_error, {Result::AutoCommitWanted});
 	}
 
-	cout << "Update Module doesn't support rollback. Committing immediately." << endl;
 	poster.PostEvent(StateEvent::Success);
 }
 

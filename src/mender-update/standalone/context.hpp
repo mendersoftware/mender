@@ -107,6 +107,7 @@ enum class Result {
 	RollbackFailed = 0x2000,
 	Cleaned = 0x4000,
 	CleanupFailed = 0x8000,
+	AutoCommitWanted = 0x10000,
 };
 
 // enum classes cannot ordinarily be used as bit flags, but let's provide some convenience functions
