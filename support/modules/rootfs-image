@@ -278,7 +278,9 @@ EOF
         # this point.
 
         if test "$upgrade_available" = 1; then
-            ${SETENV} -s - <<EOF
+            # If upgrade_available = 1, then we know that the bootloader will roll back for us, even
+            # if we fail here.
+            ${SETENV} -s - <<EOF || true
 mender_boot_part=$passive_num
 mender_boot_part_hex=$passive_num_hex
 upgrade_available=0
