@@ -69,6 +69,11 @@ void SaveState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 		return;
 	}
 
+	OnEnterSaveState(ctx, poster);
+}
+
+void JustSaveState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	// Nothing other than saving, which has already happened.
 	poster.PostEvent(StateEvent::Success);
 }
 
@@ -362,7 +367,12 @@ void ArtifactInstallState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	poster.PostEvent(StateEvent::Success);
 }
 
-void RebootAndRollbackQueryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+RebootAndRollbackQueryState::RebootAndRollbackQueryState() :
+	SaveState(StateData::kBeforeStateArtifactCommit_Enter) {
+}
+
+void RebootAndRollbackQueryState::OnEnterSaveState(
+	Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	auto reboot = ctx.update_module->NeedsReboot();
 	if (!reboot) {
 		log::Error("Could not query for reboot: " + reboot.error().String());

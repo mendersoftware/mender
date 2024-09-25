@@ -76,9 +76,11 @@ struct StateData {
 	bool failed {false};
 	bool rolled_back {false};
 
+	static const string kBeforeStateArtifactInstall_Enter;
 	static const string kInStateArtifactInstall_Enter;
+	static const string kBeforeStateArtifactCommit_Enter;
 	static const string kInStateArtifactCommit_Enter;
-	static const string kInStatePostArtifactCommit;
+	static const string kBeforeStateArtifactCommit_Leave;
 	static const string kInStateArtifactCommit_Leave;
 	static const string kInStateArtifactRollback_Enter;
 	static const string kInStateArtifactFailure_Enter;

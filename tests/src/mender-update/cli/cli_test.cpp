@@ -2192,6 +2192,30 @@ Download
 )"));
 
 	{
+		// Stopping at the same place again should be a no-op.
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"ArtifactInstall_Enter",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), "");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+)"));
+
+	{
 		vector<string> args {
 			"--datastore",
 			tmpdir.Path(),
@@ -2302,6 +2326,32 @@ ArtifactCommit
 )"));
 
 	{
+		// Stopping at the same place again should be a no-op.
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"ArtifactCommit_Leave",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), "");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+ArtifactCommit
+)"));
+
+	{
 		vector<string> args {
 			"--datastore",
 			tmpdir.Path(),
@@ -2389,6 +2439,31 @@ exit 0
 Installed, but not committed.
 Use 'commit' to update, or 'rollback' to roll back the update.
 )");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+)"));
+
+	{
+		// Stopping at the same place again should be a no-op.
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"ArtifactCommit_Enter",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), "");
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
@@ -2532,6 +2607,31 @@ ArtifactInstall
 )"));
 
 	{
+		// Stopping at the same place again should be a no-op.
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"ArtifactCommit_Enter",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), "");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+)"));
+
+	{
 		vector<string> args {
 			"--datastore",
 			tmpdir.Path(),
@@ -2657,6 +2757,31 @@ ArtifactInstall
 )"));
 
 	{
+		// Stopping at the same place again should be a no-op.
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"ArtifactRollback_Enter",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), "");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+)"));
+
+	{
 		vector<string> args {
 			"--datastore",
 			tmpdir.Path(),
@@ -2683,6 +2808,61 @@ ArtifactRollback
 )"));
 
 	{
+		// Stopping at the same place again should be a no-op.
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"ArtifactFailure_Enter",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Rolled back.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+ArtifactRollback
+)"));
+
+	{
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"Cleanup",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Rolled back.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+ArtifactRollback
+ArtifactFailure
+)"));
+
+	{
+		// Stopping at the same place again should be a no-op.
 		vector<string> args {
 			"--datastore",
 			tmpdir.Path(),

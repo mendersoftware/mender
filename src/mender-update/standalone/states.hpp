@@ -35,10 +35,19 @@ public:
 	SaveState(const string &state) :
 		state_ {state} {
 	}
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override final;
+	virtual void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) = 0;
 
 private:
 	string state_;
+};
+
+class JustSaveState : public SaveState {
+public:
+	JustSaveState(const string &state) :
+		SaveState {state} {
+	}
+	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
 class PrepareDownloadState : virtual public StateType {
@@ -56,9 +65,10 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class RebootAndRollbackQueryState : virtual public StateType {
+class RebootAndRollbackQueryState : public SaveState {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	RebootAndRollbackQueryState();
+	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
 class ArtifactCommitState : virtual public StateType {
