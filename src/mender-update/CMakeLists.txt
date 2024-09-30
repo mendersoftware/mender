@@ -85,7 +85,6 @@ target_link_libraries(mender_update_daemon PUBLIC
   mender_inventory
   artifact_scripts_executor
   common_state_machine
-  common_watchdog
 )
 if(MENDER_EMBED_MENDER_AUTH)
   target_link_libraries(mender_update_daemon PUBLIC

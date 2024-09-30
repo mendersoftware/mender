@@ -10,7 +10,6 @@ option(MENDER_LOG_BOOST "Use Boost as the underlying logging library provider (D
 option(MENDER_TAR_LIBARCHIVE "Use libarchive as the underlying tar library provider (Default: ON)" ON)
 option(MENDER_SHA_OPENSSL "Use OpenSSL as the underlying shasum provider (Default: ON)" ON)
 option(MENDER_CRYPTO_OPENSSL "Use OpenSSL as the underlying cryptography provider (Default: ON)" ON)
-option(MENDER_USE_SYSTEMD "Use systemd as the watchdog provider (Default: ON)" ON)
 
 option(MENDER_ARTIFACT_GZIP_COMPRESSION "Enable GZIP compression support when downloading and extracting Artifacts (Default: ON)" ON)
 option(MENDER_ARTIFACT_LZMA_COMPRESSION "Enable LZMA compression support when downloading and extracting Artifacts (Default: ON)" ON)
@@ -197,23 +196,6 @@ if(MENDER_USE_DBUS)
       OpenSSL::Crypto
     )
   endif()
-endif()
-
-add_library(common_watchdog STATIC)
-if (MENDER_USE_SYSTEMD)
-  find_package(PkgConfig REQUIRED)
-  pkg_check_modules(SYSTEMD REQUIRED IMPORTED_TARGET libsystemd)
-  target_sources(common_watchdog PRIVATE watchdog/platform/systemd/watchdog.cpp)
-  target_compile_options(common_watchdog PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-  target_link_libraries(common_watchdog PUBLIC
-    common_log
-    systemd
-  )
-else()
-  target_sources(common_watchdog PRIVATE watchdog/platform/noop/watchdog.cpp)
-  target_link_libraries(common_watchdog PUBLIC
-    common
-  )
 endif()
 
 # Header-only.
