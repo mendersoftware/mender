@@ -17,7 +17,6 @@
 #include <client_shared/conf.hpp>
 #include <common/key_value_database.hpp>
 #include <common/log.hpp>
-#include <common/watchdog.hpp>
 
 #include <mender-update/daemon/states.hpp>
 
@@ -28,7 +27,6 @@ namespace daemon {
 namespace conf = mender::client_shared::conf;
 namespace kvdb = mender::common::key_value_database;
 namespace log = mender::common::log;
-namespace watchdog = mender::common::watchdog;
 
 StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	ctx_(ctx),
@@ -66,8 +64,6 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	runner_.AddStateMachine(main_states_);
 
 	runner_.AttachToEventLoop(event_loop_);
-
-	runner_.SetIterationCallback([]() { watchdog::Kick(); });
 
 	using se = StateEvent;
 	using tf = sm::TransitionFlag;

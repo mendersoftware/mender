@@ -165,10 +165,6 @@ public:
 
 private:
 	void RunOne() {
-		if (iteration_callback_) {
-			iteration_callback_();
-		}
-
 		vector<State<ContextType, EventType> *> to_run;
 
 		for (auto machine : machines_) {
