@@ -81,8 +81,8 @@ TEST(CliTest, KeyStoreSave) {
 	EXPECT_EQ(error::NoError, err);
 
 	EXPECT_FALSE(mtesting::FileContains(key_path, "old content"));
-	EXPECT_TRUE(mtesting::FileContains(key_path, "-----BEGIN RSA PRIVATE KEY-----"));
-	EXPECT_TRUE(mtesting::FileContains(key_path, "-----END RSA PRIVATE KEY-----"));
+	EXPECT_TRUE(mtesting::FileContains(key_path, "-----BEGIN PRIVATE KEY-----"));
+	EXPECT_TRUE(mtesting::FileContains(key_path, "-----END PRIVATE KEY-----"));
 }
 
 TEST(CliTest, KeyStoreSaveNonExistingPath) {

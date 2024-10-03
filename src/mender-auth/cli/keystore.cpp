@@ -87,7 +87,7 @@ error::Error MenderKeyStore::Generate() {
 		return MakeError(StaticKeyError, "A static key cannot be re-generated");
 	}
 
-	auto exp_key = crypto::PrivateKey::Generate(MENDER_DEFAULT_KEY_LENGTH);
+	auto exp_key = crypto::PrivateKey::Generate();
 	if (!exp_key) {
 		return exp_key.error();
 	}
