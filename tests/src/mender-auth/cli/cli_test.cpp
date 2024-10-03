@@ -67,8 +67,8 @@ TEST(CliTest, BootstrapActionGenerateKey) {
 
 	string key_path = path::Join(tmpdir.Path(), "mender-agent.pem");
 
-	EXPECT_TRUE(mtesting::FileContains(key_path, "-----BEGIN RSA PRIVATE KEY-----"));
-	EXPECT_TRUE(mtesting::FileContains(key_path, "-----END RSA PRIVATE KEY-----"));
+	EXPECT_TRUE(mtesting::FileContains(key_path, "-----BEGIN PRIVATE KEY-----"));
+	EXPECT_TRUE(mtesting::FileContains(key_path, "-----END PRIVATE KEY-----"));
 }
 
 TEST(CliTest, BootstrapActionExistingKey) {
@@ -96,8 +96,8 @@ TEST(CliTest, BootstrapActionExistingKey) {
 	args = {"--datastore", tmpdir.Path(), "bootstrap", "--forcebootstrap"};
 	EXPECT_EQ(cli::Main(args), 0);
 
-	EXPECT_TRUE(mtesting::FileContains(key_path, "-----BEGIN RSA PRIVATE KEY-----"));
-	EXPECT_TRUE(mtesting::FileContains(key_path, "-----END RSA PRIVATE KEY-----"));
+	EXPECT_TRUE(mtesting::FileContains(key_path, "-----BEGIN PRIVATE KEY-----"));
+	EXPECT_TRUE(mtesting::FileContains(key_path, "-----END PRIVATE KEY-----"));
 	EXPECT_TRUE(mtesting::FilesNotEqual("./sample.key", key_path));
 }
 

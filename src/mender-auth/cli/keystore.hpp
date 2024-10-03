@@ -30,8 +30,6 @@ namespace crypto = mender::common::crypto;
 
 using namespace std;
 
-const int MENDER_DEFAULT_KEY_LENGTH = 3072;
-
 enum KeyStoreErrorCode {
 	NoError = 0,
 	NoKeysError,

@@ -233,16 +233,12 @@ TEST(CryptoTest, TestPrivateKeyLoadFromPEMCorrectPassphrase) {
 }
 
 TEST(CryptoTest, TestPrivateKeyGenerate) {
-	auto expected_private_key = PrivateKey::Generate(3072);
+	auto expected_private_key = PrivateKey::Generate();
 	EXPECT_TRUE(expected_private_key) << "Unexpected: " << expected_private_key.error();
-
-	auto expected_private_key_exponent = PrivateKey::Generate(3072, 65539);
-	EXPECT_TRUE(expected_private_key_exponent)
-		<< "Unexpected: " << expected_private_key_exponent.error();
 }
 
 TEST(CryptoTest, TestPrivateKeySaveToPEM) {
-	string private_key_file = "./private-key.rsa.traditional.pem";
+	string private_key_file = "./private-key.ed25519.pem";
 	auto expected_private_key = PrivateKey::Load({private_key_file});
 	ASSERT_TRUE(expected_private_key) << "Unexpected: " << expected_private_key.error();
 	auto private_key = std::move(expected_private_key.value());
