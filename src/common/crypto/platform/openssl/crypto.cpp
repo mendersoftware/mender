@@ -283,7 +283,7 @@ ExpectedPrivateKey LoadFrom(const Args &args) {
 
 ExpectedPrivateKey PrivateKey::Load(const Args &args) {
 	// Load OpenSSL config
-	if ((CONF_modules_load_file(nullptr, nullptr, 0) != OPENSSL_SUCCESS)) {
+	if (CONF_modules_load_file(nullptr, nullptr, 0) != OPENSSL_SUCCESS) {
 		log::Warning("Failed to load OpenSSL configuration file: " + GetOpenSSLErrorMessage());
 	}
 
