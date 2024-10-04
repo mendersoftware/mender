@@ -26,6 +26,7 @@
 #include <openssl/err.h>
 #include <openssl/engine.h>
 #include <openssl/ui.h>
+#include <openssl/ssl.h>
 #ifndef MENDER_CRYPTO_OPENSSL_LEGACY
 #include <openssl/provider.h>
 #include <openssl/store.h>
@@ -282,8 +283,15 @@ ExpectedPrivateKey LoadFrom(const Args &args) {
 #endif // ndef MENDER_CRYPTO_OPENSSL_LEGACY
 
 ExpectedPrivateKey PrivateKey::Load(const Args &args) {
+	// Numerous internal OpenSSL functions call OPENSSL_init_ssl().
+	// Therefore, in order to perform nondefault initialisation,
+	// OPENSSL_init_ssl() MUST be called by application code prior to any other OpenSSL function
+	// calls. See: https://docs.openssl.org/3.3/man3/OPENSSL_init_ssl/#description
+	if (OPENSSL_init_ssl(0, nullptr) != OPENSSL_SUCCESS) {
+		log::Warning("Error initializing libssl: " + GetOpenSSLErrorMessage());
+	}
 	// Load OpenSSL config
-	if ((CONF_modules_load_file(nullptr, nullptr, 0) != OPENSSL_SUCCESS)) {
+	if (CONF_modules_load_file(nullptr, nullptr, 0) != OPENSSL_SUCCESS) {
 		log::Warning("Failed to load OpenSSL configuration file: " + GetOpenSSLErrorMessage());
 	}
 
