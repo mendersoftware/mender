@@ -30,7 +30,7 @@ resolve_rootfs() {
         /dev/root|/dev/disk/by-partlabel/*|/dev/disk/by-partuuid/*)
             # This is a symlink that points to the regular device
             # (e.g. /dev/disk/by-partuuid/b3c4f349-1180-45e1-9a3d-0a6697f4960e --> /dev/sda2)
-            echo "$(readlink -f $1)"
+            readlink -f "$1"
             ;;
 
         *)
@@ -69,19 +69,19 @@ parse_conf_file() {
         fi
     done
 
-    if [ -z "$MENDER_ROOTFS_PART_A" -o -z "$MENDER_ROOTFS_PART_B" ]; then
+    if [ -z "$MENDER_ROOTFS_PART_A" ] || [ -z "$MENDER_ROOTFS_PART_B" ]; then
         echo "Cannot parse RootfsPartA/B in any configuration file!" 1>&2
         return 1
     fi
 
     # For UBI, standardize on the `/dev/` variant. The kernel only accepts an argument without
     # `/dev/`, but all userspace tools use the `/dev/` variant.
-    MENDER_ROOTFS_PART_A="$(echo $MENDER_ROOTFS_PART_A | sed -e 's,^ubi,/dev/ubi,')"
-    MENDER_ROOTFS_PART_B="$(echo $MENDER_ROOTFS_PART_B | sed -e 's,^ubi,/dev/ubi,')"
+    MENDER_ROOTFS_PART_A="$(echo "$MENDER_ROOTFS_PART_A" | sed -e 's,^ubi,/dev/ubi,')"
+    MENDER_ROOTFS_PART_B="$(echo "$MENDER_ROOTFS_PART_B" | sed -e 's,^ubi,/dev/ubi,')"
 
     # Resolve paths if required.
-    MENDER_ROOTFS_PART_A="$(resolve_rootfs $MENDER_ROOTFS_PART_A)"
-    MENDER_ROOTFS_PART_B="$(resolve_rootfs $MENDER_ROOTFS_PART_B)"
+    MENDER_ROOTFS_PART_A="$(resolve_rootfs "$MENDER_ROOTFS_PART_A")"
+    MENDER_ROOTFS_PART_B="$(resolve_rootfs "$MENDER_ROOTFS_PART_B")"
 
     # Extract the partition number from the regular device path (e.g. /dev/sda2 --> 2).
     MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | grep -Eo '[0-9]+$' || true)"
@@ -93,7 +93,7 @@ parse_conf_file() {
 set_upgrade_vars() {
     active_num="$(${PRINTENV} mender_boot_part)"
     active_num="${active_num#mender_boot_part=}"
-    if test $active_num -eq $MENDER_ROOTFS_PART_A_NUMBER; then
+    if test "$active_num" -eq "$MENDER_ROOTFS_PART_A_NUMBER"; then
         active=$MENDER_ROOTFS_PART_A
         passive=$MENDER_ROOTFS_PART_B
         passive_num=$MENDER_ROOTFS_PART_B_NUMBER
@@ -102,8 +102,8 @@ set_upgrade_vars() {
         passive=$MENDER_ROOTFS_PART_A
         passive_num=$MENDER_ROOTFS_PART_A_NUMBER
     fi
-    active_num_hex=$(printf '%x' $active_num)
-    passive_num_hex=$(printf '%x' $passive_num)
+    active_num_hex=$(printf '%x' "$active_num")
+    passive_num_hex=$(printf '%x' "$passive_num")
     upgrade_available="$(${PRINTENV} upgrade_available)"
     upgrade_available="${upgrade_available#upgrade_available=}"
 }
@@ -184,18 +184,18 @@ case "$STATE" in
         check_device_matches_root "$active"
 
         line="$(cat stream-next)"
-        file="$(echo $line | cut -d' ' -f1)"
-        size="$(echo $line | cut -d' ' -f2)"
-        if [ -z "$file" -o -z "$size" ]; then
+        file="$(echo "$line" | cut -d' ' -f1)"
+        size="$(echo "$line" | cut -d' ' -f2)"
+        if [ -z "$file" ] || [ -z "$size" ]; then
             echo "Cannot parse line from stream-next, got: $line" 1>&2
             exit 1
         fi
         if [ "$MENDER_FLASH_AVAILABLE" = 1 ]; then
-            mender-flash --input-size $size --input $file --output $passive
+            mender-flash --input-size "$size" --input "$file" --output "$passive"
         elif echo "$passive" | grep "^/dev/ubi" > /dev/null; then
-            ubiupdatevol $passive --size=$size $file
+            ubiupdatevol "$passive" --size="$size" "$file"
         else
-            cat "$file" > $passive
+            cat "$file" > "$passive"
             sync
         fi
         if [ "$(cat stream-next)" != "" ]; then
