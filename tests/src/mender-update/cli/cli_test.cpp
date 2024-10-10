@@ -434,7 +434,14 @@ TEST(CliTest, InstallAndCommitArtifact) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 exit 0
 )"));
@@ -463,8 +470,6 @@ Installed and committed.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit
 Cleanup
 )"));
@@ -489,7 +494,14 @@ TEST(CliTest, InstallAndCommitArtifactCheckProvidesDepends) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 exit 0
 )"));
@@ -518,8 +530,6 @@ Installed and committed.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit
 Cleanup
 )"));
@@ -579,7 +589,14 @@ TEST(CliTest, DownloadWithFileSizesInstallAndCommitArtifact) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     ProvidePayloadFileSizes)
@@ -620,8 +637,6 @@ Installed and committed.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 DownloadWithFileSizes
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit
 Cleanup
 )"));
@@ -647,7 +662,14 @@ TEST(CliTest, InstallAndThenCommitArtifact) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     SupportsRollback)
@@ -682,8 +704,6 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 )"));
 
 	{
@@ -707,8 +727,6 @@ SupportsRollback
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit
 Cleanup
 )"));
@@ -733,7 +751,14 @@ TEST(CliTest, InstallAndThenRollBackArtifact) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     SupportsRollback)
@@ -768,8 +793,6 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 )"));
 
 	{
@@ -793,9 +816,6 @@ SupportsRollback
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
-SupportsRollback
 ArtifactRollback
 ArtifactFailure
 Cleanup
@@ -821,7 +841,14 @@ TEST(CliTest, RollbackAfterFailure) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     ArtifactInstall)
@@ -861,7 +888,6 @@ Rolled back.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-SupportsRollback
 ArtifactRollback
 ArtifactFailure
 Cleanup
@@ -888,7 +914,14 @@ TEST(CliTest, RollbackAfterFailureInDownload) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     Download)
@@ -949,7 +982,14 @@ TEST(CliTest, FailedRollbackAfterFailure) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     ArtifactInstall)
@@ -989,7 +1029,6 @@ Rollback failed. System may be in an inconsistent state.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-SupportsRollback
 ArtifactRollback
 ArtifactFailure
 Cleanup
@@ -1012,7 +1051,14 @@ TEST(CliTest, NoRollbackAfterFailure) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     ArtifactInstall)
@@ -1049,7 +1095,6 @@ Update Module does not support rollback. System may be in an inconsistent state.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-SupportsRollback
 ArtifactFailure
 Cleanup
 )"));
@@ -1135,7 +1180,14 @@ TEST(CliTest, TryToRollBackWithoutSupport) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     SupportsRollback)
@@ -1170,15 +1222,20 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 )"));
 
 	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 exit 0
 )"));
@@ -1206,9 +1263,6 @@ exit 0
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
-SupportsRollback
 )"));
 
 	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=previous
@@ -1228,7 +1282,14 @@ TEST(CliTest, InstallWithRebootRequiredNoArgument) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     NeedsArtifactReboot)
@@ -1264,8 +1325,6 @@ At least one payload requested a reboot of the device it updated.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit
 Cleanup
 )"));
@@ -1287,7 +1346,14 @@ TEST(CliTest, InstallWithRebootRequiredWithArgument) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     NeedsArtifactReboot)
@@ -1324,8 +1390,6 @@ At least one payload requested a reboot of the device it updated.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit
 Cleanup
 )"));
@@ -1350,7 +1414,14 @@ TEST(CliTest, InstallWhenUpdateInProgress) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     SupportsRollback)
@@ -1385,8 +1456,6 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 )"));
 
 	{
@@ -1406,8 +1475,6 @@ SupportsRollback
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 )"));
 }
 
@@ -1425,7 +1492,14 @@ TEST(CliTest, InstallAndThenFailRollBack) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     ArtifactRollback)
@@ -1463,8 +1537,6 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 )"));
 
 	{
@@ -1491,9 +1563,6 @@ SupportsRollback
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
-SupportsRollback
 ArtifactRollback
 ArtifactFailure
 Cleanup
@@ -1534,7 +1603,14 @@ TEST(CliTest, InstallAndFailCleanup) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     Cleanup)
@@ -1573,8 +1649,6 @@ Cleanup failed.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit
 Cleanup
 )"));
@@ -1596,7 +1670,14 @@ TEST(CliTest, FailureInArtifactFailure) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     ArtifactInstall)
@@ -1636,7 +1717,6 @@ Rollback failed. System may be in an inconsistent state.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-SupportsRollback
 ArtifactRollback
 ArtifactFailure
 Cleanup
@@ -1693,7 +1773,14 @@ TEST(CliTest, InstallAndThenCommitLegacyArtifact) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     SupportsRollback)
@@ -1728,8 +1815,6 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 )"));
 
 	{
@@ -1753,8 +1838,6 @@ SupportsRollback
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit
 Cleanup
 )"));
@@ -1778,7 +1861,14 @@ TEST(CliTest, InstallUsingOldClientAndThenCommitArtifact) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     SupportsRollback)
@@ -1815,8 +1905,6 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 )"));
 
 	// Remove the Update Module working directory. This is what would have happened if upgrading
@@ -1847,8 +1935,6 @@ SupportsRollback
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit
 Cleanup
 )"));
@@ -1874,7 +1960,14 @@ TEST(CliTest, InstallUsingOldClientAndThenRollBackArtifact) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     SupportsRollback)
@@ -1911,8 +2004,6 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 )"));
 
 	// Remove the Update Module working directory. This is what would have happened if upgrading
@@ -1943,9 +2034,6 @@ SupportsRollback
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
-SupportsRollback
 ArtifactRollback
 ArtifactFailure
 Cleanup
@@ -1997,7 +2085,14 @@ TEST(CliTest, InstallAndCommitArtifactFromNetwork) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 exit 0
 )"));
@@ -2028,8 +2123,6 @@ Installed and committed.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit
 Cleanup
 )"));
@@ -2040,7 +2133,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, StopAfterDownloadThenResume) {
+TEST(CliTest, StopBeforeArtifactInstallThenResume) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2054,7 +2147,14 @@ TEST(CliTest, StopAfterDownloadThenResume) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 case "$1" in
     SupportsRollback)
@@ -2070,8 +2170,8 @@ exit 0
 			"--datastore",
 			tmpdir.Path(),
 			"install",
-			"--stop-after",
-			"Download_Leave",
+			"--stop-before",
+			"ArtifactInstall_Enter",
 			artifact,
 		};
 
@@ -2083,6 +2183,30 @@ exit 0
 		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
 Streamed to storage, but not installed/enabled.
 )");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+)"));
+
+	{
+		// Stopping at the same place again should be a no-op.
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"ArtifactInstall_Enter",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), "");
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
@@ -2113,8 +2237,6 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 )"));
 
 	{
@@ -2138,8 +2260,6 @@ SupportsRollback
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit
 Cleanup
 )"));
@@ -2150,7 +2270,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, StopAfterCommitThenResume) {
+TEST(CliTest, StopBeforeArtifactCommit_LeaveThenResume) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2164,7 +2284,14 @@ TEST(CliTest, StopAfterCommitThenResume) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 exit 0
 )"));
@@ -2174,8 +2301,8 @@ exit 0
 			"--datastore",
 			tmpdir.Path(),
 			"install",
-			"--stop-after",
-			"ArtifactCommit",
+			"--stop-before",
+			"ArtifactCommit_Leave",
 			artifact,
 		};
 
@@ -2195,8 +2322,32 @@ Installed and committed.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
+ArtifactCommit
+)"));
+
+	{
+		// Stopping at the same place again should be a no-op.
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"ArtifactCommit_Leave",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), "");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
 ArtifactCommit
 )"));
 
@@ -2221,8 +2372,6 @@ ArtifactCommit
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit
 Cleanup
 )"));
@@ -2233,7 +2382,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, StopAfterCommitCommandThenResume) {
+TEST(CliTest, StopBeforeArtifactCommit_EnterThenResume) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2259,7 +2408,14 @@ touch )" << commit_leave_run
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 exit 0
 )"));
@@ -2269,8 +2425,8 @@ exit 0
 			"--datastore",
 			tmpdir.Path(),
 			"install",
-			"--stop-after",
-			"ArtifactInstall_Leave",
+			"--stop-before",
+			"ArtifactCommit_Enter",
 			artifact,
 		};
 
@@ -2293,12 +2449,37 @@ ArtifactInstall
 )"));
 
 	{
+		// Stopping at the same place again should be a no-op.
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"ArtifactCommit_Enter",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), "");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+)"));
+
+	{
 		vector<string> args {
 			"--datastore",
 			tmpdir.Path(),
 			"commit",
-			"--stop-after",
-			"ArtifactCommit",
+			"--stop-before",
+			"ArtifactCommit_Leave",
 		};
 
 		mtesting::RedirectStreamOutputs output;
@@ -2355,7 +2536,7 @@ artifact_name=test
 	EXPECT_TRUE(path::FileExists(commit_leave_run));
 }
 
-TEST(CliTest, StopAfterCommitCommandThenRollback) {
+TEST(CliTest, StopBeforeArtifactCommit_EnterCommandThenRollback) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2381,7 +2562,14 @@ touch )" << commit_leave_run
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 if [ "$1" = "SupportsRollback" ]; then
     echo "Yes"
@@ -2395,8 +2583,8 @@ exit 0
 			"--datastore",
 			tmpdir.Path(),
 			"install",
-			"--stop-after",
-			"ArtifactInstall_Leave",
+			"--stop-before",
+			"ArtifactCommit_Enter",
 			artifact,
 		};
 
@@ -2419,12 +2607,37 @@ ArtifactInstall
 )"));
 
 	{
+		// Stopping at the same place again should be a no-op.
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"ArtifactCommit_Enter",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), "");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+)"));
+
+	{
 		vector<string> args {
 			"--datastore",
 			tmpdir.Path(),
 			"commit",
-			"--stop-after",
-			"ArtifactCommit",
+			"--stop-before",
+			"ArtifactCommit_Leave",
 		};
 
 		mtesting::RedirectStreamOutputs output;
@@ -2469,7 +2682,6 @@ ArtifactCommit
 Download
 ArtifactInstall
 ArtifactCommit
-SupportsRollback
 ArtifactRollback
 ArtifactFailure
 Cleanup
@@ -2484,7 +2696,7 @@ artifact_name=previous
 	EXPECT_FALSE(path::FileExists(commit_leave_run));
 }
 
-TEST(CliTest, StopAfterArtifactInstallFailure) {
+TEST(CliTest, StopBeforeArtifactRollback_Enter) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2498,7 +2710,14 @@ TEST(CliTest, StopAfterArtifactInstallFailure) {
 
 TEST_DIR=")" + tmpdir.Path() + R"("
 
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 
 if [ "$1" = "SupportsRollback" ]; then
     echo "Yes"
@@ -2514,10 +2733,8 @@ exit 0
 			"--datastore",
 			tmpdir.Path(),
 			"install",
-			"--stop-after",
-			"ArtifactInstall_Leave",
-			"--stop-after",
-			"ArtifactInstall_Error",
+			"--stop-before",
+			"ArtifactRollback_Enter",
 			artifact,
 		};
 
@@ -2537,7 +2754,31 @@ Installation failed.
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-SupportsRollback
+)"));
+
+	{
+		// Stopping at the same place again should be a no-op.
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"ArtifactRollback_Enter",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), "");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
 )"));
 
 	{
@@ -2545,8 +2786,8 @@ SupportsRollback
 			"--datastore",
 			tmpdir.Path(),
 			"rollback",
-			"--stop-after",
-			"ArtifactRollback_Leave",
+			"--stop-before",
+			"ArtifactFailure_Enter",
 		};
 
 		mtesting::RedirectStreamOutputs output;
@@ -2563,8 +2804,33 @@ SupportsRollback
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-SupportsRollback
-SupportsRollback
+ArtifactRollback
+)"));
+
+	{
+		// Stopping at the same place again should be a no-op.
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"ArtifactFailure_Enter",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Rolled back.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
 ArtifactRollback
 )"));
 
@@ -2573,8 +2839,8 @@ ArtifactRollback
 			"--datastore",
 			tmpdir.Path(),
 			"resume",
-			"--stop-after",
-			"ArtifactFailure_Leave",
+			"--stop-before",
+			"Cleanup",
 		};
 
 		mtesting::RedirectStreamOutputs output;
@@ -2591,8 +2857,34 @@ ArtifactRollback
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-SupportsRollback
-SupportsRollback
+ArtifactRollback
+ArtifactFailure
+)"));
+
+	{
+		// Stopping at the same place again should be a no-op.
+		vector<string> args {
+			"--datastore",
+			tmpdir.Path(),
+			"resume",
+			"--stop-before",
+			"Cleanup",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Rolled back.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
 ArtifactRollback
 ArtifactFailure
 )"));
@@ -2618,8 +2910,6 @@ ArtifactFailure
 		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
 Download
 ArtifactInstall
-SupportsRollback
-SupportsRollback
 ArtifactRollback
 ArtifactFailure
 Cleanup
@@ -2665,8 +2955,6 @@ Download_Leave_01
 ArtifactInstall_Enter_01
 ArtifactInstall
 ArtifactInstall_Leave_01
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit_Enter_01
 ArtifactCommit
 ArtifactCommit_Leave_01
@@ -2780,7 +3068,6 @@ Download_Leave_01
 ArtifactInstall_Enter_01
 ArtifactInstall_Error_01
 ArtifactInstall_Error_02
-SupportsRollback
 ArtifactFailure_Enter_01
 ArtifactFailure
 ArtifactFailure_Leave_01
@@ -2812,7 +3099,6 @@ ArtifactInstall_Enter_01
 ArtifactInstall
 ArtifactInstall_Error_01
 ArtifactInstall_Error_02
-SupportsRollback
 ArtifactFailure_Enter_01
 ArtifactFailure
 ArtifactFailure_Leave_01
@@ -2848,7 +3134,6 @@ ArtifactInstall_Leave_01
 ArtifactInstall_Leave_02
 ArtifactInstall_Error_01
 ArtifactInstall_Error_02
-SupportsRollback
 ArtifactFailure_Enter_01
 ArtifactFailure
 ArtifactFailure_Leave_01
@@ -2883,12 +3168,9 @@ ArtifactInstall_Enter_01
 ArtifactInstall_Enter_02
 ArtifactInstall
 ArtifactInstall_Leave_01
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit_Enter_01
 ArtifactCommit_Error_01
 ArtifactCommit_Error_02
-SupportsRollback
 ArtifactFailure_Enter_01
 ArtifactFailure
 ArtifactFailure_Leave_01
@@ -2921,13 +3203,10 @@ ArtifactInstall_Enter_01
 ArtifactInstall_Enter_02
 ArtifactInstall
 ArtifactInstall_Leave_01
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit_Enter_01
 ArtifactCommit
 ArtifactCommit_Error_01
 ArtifactCommit_Error_02
-SupportsRollback
 ArtifactFailure_Enter_01
 ArtifactFailure
 ArtifactFailure_Leave_01
@@ -2960,8 +3239,6 @@ ArtifactInstall_Enter_01
 ArtifactInstall
 ArtifactInstall_Leave_01
 ArtifactInstall_Leave_02
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit_Enter_01
 ArtifactCommit
 ArtifactCommit_Leave_01
@@ -2995,8 +3272,6 @@ ArtifactInstall_Enter_01
 ArtifactInstall
 ArtifactInstall_Leave_01
 ArtifactInstall_Leave_02
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit_Enter_01
 ArtifactCommit
 ArtifactCommit_Leave_01
@@ -3032,10 +3307,7 @@ ArtifactInstall_Enter_01
 ArtifactInstall_Enter_02
 ArtifactInstall
 ArtifactInstall_Leave_01
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit_Enter_01
-SupportsRollback
 ArtifactFailure_Enter_01
 ArtifactFailure_Enter_02
 ArtifactFailure
@@ -3071,10 +3343,7 @@ ArtifactInstall_Enter_01
 ArtifactInstall_Enter_02
 ArtifactInstall
 ArtifactInstall_Leave_01
-NeedsArtifactReboot
-SupportsRollback
 ArtifactCommit_Enter_01
-SupportsRollback
 ArtifactFailure_Enter_01
 ArtifactFailure_Enter_02
 ArtifactFailure
@@ -3111,9 +3380,6 @@ ArtifactInstall_Enter_01
 ArtifactInstall_Enter_02
 ArtifactInstall
 ArtifactInstall_Leave_01
-NeedsArtifactReboot
-SupportsRollback
-SupportsRollback
 ArtifactRollback_Enter_01
 ArtifactRollback
 ArtifactRollback_Leave_01
@@ -3212,7 +3478,14 @@ TEST_P(StandaloneStateScriptTest, AllScriptSuccess) {
 	string script = R"(#!/bin/bash
 TEST_DIR=")" + tmpdir_path
 					+ R"("
-echo "$1" >> $TEST_DIR/call.log
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+    *)
+        echo "$1" >> $TEST_DIR/call.log
+        ;;
+esac
 )";
 	if (common::StartsWith<string>(GetParam().case_name, "rollback")) {
 		script += R"(

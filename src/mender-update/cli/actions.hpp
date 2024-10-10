@@ -56,13 +56,13 @@ public:
 		reboot_exit_code_ = val;
 	}
 
-	void SetStopAfter(vector<string> val) {
-		stop_after_ = std::move(val);
+	void SetStopBefore(vector<string> val) {
+		stop_before_ = std::move(val);
 	}
 
 protected:
 	bool reboot_exit_code_ {false};
-	vector<string> stop_after_;
+	vector<string> stop_before_;
 };
 
 class InstallAction : public BaseInstallAction {

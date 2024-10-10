@@ -207,7 +207,13 @@ static error::Error ResultHandler(standalone::ResultAndError result) {
 							? operation_failure
 							: operation_done;
 
+	string prefix;
 	string additional;
+
+	if (contains(r::AutoCommitWanted) and contains(r::Installed)
+		and (contains(r::Committed) or contains(r::Failed))) {
+		prefix = "Update Module doesn't support rollback. Committing immediately.";
+	}
 
 	if (contains(r::RollbackFailed)) {
 		additional =
@@ -237,6 +243,9 @@ static error::Error ResultHandler(standalone::ResultAndError result) {
 		}
 	}
 
+	if (prefix.size() > 0) {
+		cout << prefix << endl;
+	}
 	if (operation.size() > 0) {
 		cout << operation << endl;
 	}
@@ -254,7 +263,7 @@ error::Error InstallAction::Execute(context::MenderContext &main_context) {
 	}
 	events::EventLoop loop;
 	standalone::Context ctx {main_context, loop};
-	ctx.stop_after = std::move(stop_after_);
+	ctx.stop_before = std::move(stop_before_);
 	auto result = standalone::Install(ctx, src_);
 	err = ResultHandler(result);
 	if (!reboot_exit_code_
@@ -269,7 +278,7 @@ error::Error InstallAction::Execute(context::MenderContext &main_context) {
 error::Error ResumeAction::Execute(context::MenderContext &main_context) {
 	events::EventLoop loop;
 	standalone::Context ctx {main_context, loop};
-	ctx.stop_after = std::move(stop_after_);
+	ctx.stop_before = std::move(stop_before_);
 
 	auto result = standalone::Resume(ctx);
 	auto err = ResultHandler(result);
@@ -286,7 +295,7 @@ error::Error ResumeAction::Execute(context::MenderContext &main_context) {
 error::Error CommitAction::Execute(context::MenderContext &main_context) {
 	events::EventLoop loop;
 	standalone::Context ctx {main_context, loop};
-	ctx.stop_after = std::move(stop_after_);
+	ctx.stop_before = std::move(stop_before_);
 	auto result = standalone::Commit(ctx);
 	return ResultHandler(result);
 }
@@ -294,7 +303,7 @@ error::Error CommitAction::Execute(context::MenderContext &main_context) {
 error::Error RollbackAction::Execute(context::MenderContext &main_context) {
 	events::EventLoop loop;
 	standalone::Context ctx {main_context, loop};
-	ctx.stop_after = std::move(stop_after_);
+	ctx.stop_before = std::move(stop_before_);
 	auto result = standalone::Rollback(ctx);
 	return ResultHandler(result);
 }

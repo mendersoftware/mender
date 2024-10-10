@@ -76,9 +76,11 @@ struct StateData {
 	bool failed {false};
 	bool rolled_back {false};
 
+	static const string kBeforeStateArtifactInstall_Enter;
 	static const string kInStateArtifactInstall_Enter;
+	static const string kBeforeStateArtifactCommit_Enter;
 	static const string kInStateArtifactCommit_Enter;
-	static const string kInStatePostArtifactCommit;
+	static const string kBeforeStateArtifactCommit_Leave;
 	static const string kInStateArtifactCommit_Leave;
 	static const string kInStateArtifactRollback_Enter;
 	static const string kInStateArtifactFailure_Enter;
@@ -107,6 +109,7 @@ enum class Result {
 	RollbackFailed = 0x2000,
 	Cleaned = 0x4000,
 	CleanupFailed = 0x8000,
+	AutoCommitWanted = 0x10000,
 };
 
 // enum classes cannot ordinarily be used as bit flags, but let's provide some convenience functions
@@ -149,7 +152,7 @@ struct Context {
 
 	StateData state_data;
 
-	vector<string> stop_after;
+	vector<string> stop_before;
 
 	string artifact_src;
 

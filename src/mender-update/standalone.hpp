@@ -64,7 +64,7 @@ public:
 	StateMachine(Context &ctx);
 
 	error::Error SetStartStateFromStateData(const string &completed_state);
-	error::Error AddStopAfterState(const string &state);
+	error::Error AddStopBeforeState(const string &state);
 	void StartOnRollback();
 
 	void Run();
@@ -81,7 +81,8 @@ private:
 	ScriptRunnerState download_leave_state_;
 	ScriptRunnerState download_error_state_;
 
-	SaveState save_artifact_install_state_;
+	JustSaveState save_before_artifact_install_state_;
+	JustSaveState save_artifact_install_state_;
 	ScriptRunnerState artifact_install_enter_state_;
 	ArtifactInstallState artifact_install_state_;
 	ScriptRunnerState artifact_install_leave_state_;
@@ -89,27 +90,28 @@ private:
 
 	RebootAndRollbackQueryState reboot_and_rollback_query_state_;
 
-	SaveState save_artifact_commit_state_;
+	JustSaveState save_before_artifact_commit_state_;
+	JustSaveState save_artifact_commit_state_;
 	ScriptRunnerState artifact_commit_enter_state_;
 	ArtifactCommitState artifact_commit_state_;
-	SaveState save_post_artifact_commit_state_;
-	SaveState save_artifact_commit_leave_state_;
+	JustSaveState save_before_artifact_commit_leave_state_;
+	JustSaveState save_artifact_commit_leave_state_;
 	ScriptRunnerState artifact_commit_leave_state_;
 	ScriptRunnerState artifact_commit_error_state_;
 
 	RollbackQueryState rollback_query_state_;
 
-	SaveState save_artifact_rollback_state_;
+	JustSaveState save_artifact_rollback_state_;
 	ScriptRunnerState artifact_rollback_enter_state_;
 	ArtifactRollbackState artifact_rollback_state_;
 	ScriptRunnerState artifact_rollback_leave_state_;
 
-	SaveState save_artifact_failure_state_;
+	JustSaveState save_artifact_failure_state_;
 	ScriptRunnerState artifact_failure_enter_state_;
 	ArtifactFailureState artifact_failure_state_;
 	ScriptRunnerState artifact_failure_leave_state_;
 
-	SaveState save_cleanup_state_;
+	JustSaveState save_cleanup_state_;
 	CleanupState cleanup_state_;
 
 	ExitState exit_state_;

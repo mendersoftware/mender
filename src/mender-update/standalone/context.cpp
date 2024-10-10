@@ -28,9 +28,11 @@ const string StateDataKeys::in_state {"InState"};
 const string StateDataKeys::failed {"Failed"};
 const string StateDataKeys::rolled_back {"RolledBack"};
 
+const string StateData::kBeforeStateArtifactInstall_Enter {"Before_ArtifactInstall_Enter"};
 const string StateData::kInStateArtifactInstall_Enter {"ArtifactInstall_Enter"};
+const string StateData::kBeforeStateArtifactCommit_Enter {"Before_ArtifactCommit_Enter"};
 const string StateData::kInStateArtifactCommit_Enter {"ArtifactCommit_Enter"};
-const string StateData::kInStatePostArtifactCommit {"PostArtifactCommit"};
+const string StateData::kBeforeStateArtifactCommit_Leave {"Before_ArtifactCommit_Leave"};
 const string StateData::kInStateArtifactCommit_Leave {"ArtifactCommit_Leave"};
 const string StateData::kInStateArtifactRollback_Enter {"ArtifactRollback_Enter"};
 const string StateData::kInStateArtifactFailure_Enter {"ArtifactFailure_Enter"};
