@@ -6,6 +6,8 @@
     io.mender.Authentication1:
     @short_description: Mender Authentication API v1
 
+    !!! This feature is available since Mender client 3.0.
+
     This interface lets applications authenticate with the Mender server. The
     Mender client will handle the authentication and provide the user with a
     JSON Web Token (JWT) and the server URL, which the user can use to do API
