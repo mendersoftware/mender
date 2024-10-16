@@ -180,7 +180,7 @@ string URLEncode(const string &value) {
 		} else {
 			// Any other characters are percent-encoded
 			escaped << uppercase;
-			escaped << '%' << setw(2) << int((unsigned char) c);
+			escaped << '%' << setw(2) << static_cast<int>(static_cast<unsigned char>(c));
 			escaped << nouppercase;
 		}
 	}

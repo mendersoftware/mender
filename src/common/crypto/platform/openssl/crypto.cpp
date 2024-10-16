@@ -174,10 +174,7 @@ ExpectedPrivateKey LoadFromHSMEngine(const Args &args) {
 
 	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
 		ENGINE_load_private_key(
-			engine.get(),
-			args.private_key_path.c_str(),
-			(UI_METHOD *) nullptr,
-			nullptr /*callback_data */),
+			engine.get(), args.private_key_path.c_str(), nullptr, nullptr /*callback_data */),
 		pkey_free_func);
 	if (private_key == nullptr) {
 		return expected::unexpected(MakeError(

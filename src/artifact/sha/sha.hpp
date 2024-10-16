@@ -70,7 +70,7 @@ public:
 	string String() const {
 		std::stringstream ss {};
 		for (unsigned int i = 0; i < 32; ++i) {
-			ss << std::hex << std::setw(2) << std::setfill('0') << (int) sha_.at(i);
+			ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(sha_.at(i));
 		}
 		return ss.str();
 	}

@@ -435,7 +435,7 @@ TEST_P(DownloadResumerTest, Cases) {
 
 	http::ResponseHandler user_body_handler = [&test_case,
 											   &loop](http::ExpectedIncomingResponsePtr exp_resp) {
-		EXPECT_EQ((bool) exp_resp, test_case.success);
+		EXPECT_EQ(exp_resp.has_value(), test_case.success);
 		loop.Stop();
 	};
 
