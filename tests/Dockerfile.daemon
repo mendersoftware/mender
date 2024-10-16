@@ -54,4 +54,4 @@ RUN mkdir -p /var/lib/mender && echo device_type=docker-client > /var/lib/mender
 
 COPY tests/entrypoint.sh /
 
-CMD /entrypoint.sh
+CMD ["/entrypoint.sh"]
