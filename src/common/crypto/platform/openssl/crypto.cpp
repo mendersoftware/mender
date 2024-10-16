@@ -339,7 +339,7 @@ expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode) {
 	// For every 3 bytes of input provided 4 bytes of output
 	// data will be produced. If n is not divisible by 3 (...)
 	// the output is padded such that it is always divisible by 4.
-	const uint64_t predicted_len {4 * ((to_encode.size() + 2) / 3)};
+	const size_t predicted_len {4 * ((to_encode.size() + 2) / 3)};
 
 	// Add space for a NUL terminator. From man page:
 	// Additionally a NUL terminator character will be added
@@ -362,7 +362,7 @@ expected::ExpectedBytes DecodeBase64(string to_decode) {
 	// For every 4 input bytes exactly 3 output bytes will be
 	// produced. The output will be padded with 0 bits if necessary
 	// to ensure that the output is always 3 bytes.
-	const uint64_t predicted_len {3 * ((to_decode.size() + 3) / 4)};
+	const size_t predicted_len {3 * ((to_decode.size() + 3) / 4)};
 
 	auto buffer {vector<unsigned char>(predicted_len)};
 
@@ -452,7 +452,9 @@ expected::ExpectedString ExtractPublicKey(const Args &args) {
 				+ "): OpenSSL BIO write failed: " + GetOpenSSLErrorMessage()));
 	}
 
-	int pending = BIO_ctrl_pending(bio_public_key_new.get());
+	// Inconsistent API, this returns size_t, but the API below uses int. Should not matter for
+	// key sizes though.
+	int pending = static_cast<int>(BIO_ctrl_pending(bio_public_key_new.get()));
 	if (pending <= 0) {
 		return expected::unexpected(MakeError(
 			SetupError,

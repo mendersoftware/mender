@@ -146,7 +146,13 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address, bool with_a
 			address = {};
 			return error::Error(port.error().code, url + " contains invalid port number");
 		}
-		address.port = port.value();
+		if (port.value() < 0 or port.value() > numeric_limits<decltype(address.port)>::max()) {
+			address = {};
+			return error::Error(
+				make_error_condition(errc::invalid_argument),
+				url + " contains invalid port number");
+		}
+		address.port = static_cast<decltype(address.port)>(port.value());
 	} else {
 		if (address.protocol == "http") {
 			address.port = 80;
