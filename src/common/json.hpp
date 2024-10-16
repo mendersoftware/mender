@@ -124,19 +124,43 @@ public:
 	bool IsObject() const;
 	bool IsArray() const;
 	bool IsString() const;
-	bool IsInt() const;
+	bool IsInt64() const;
 	bool IsNumber() const;
 	bool IsDouble() const;
 	bool IsBool() const;
 	bool IsNull() const;
 
 	ExpectedString GetString() const;
-	ExpectedInt64 GetInt() const;
+	ExpectedInt64 GetInt64() const;
 	ExpectedDouble GetDouble() const;
 	ExpectedBool GetBool() const;
 
+	// Defined in cpp file as specialized templates.
 	template <typename T>
-	expected::expected<T, error::Error> Get() const;
+	typename enable_if<
+		not is_integral<T>::value or is_same<T, int64_t>::value,
+		expected::expected<T, error::Error>>::type
+	Get() const;
+
+	// Use this as a catch-all for all integral types besides int64_t. It then automates the
+	// process of checking whether it fits in the requested data type.
+	template <typename T>
+	typename enable_if<
+		is_integral<T>::value and not is_same<T, int64_t>::value,
+		expected::expected<T, error::Error>>::type
+	Get() const {
+		auto num = Get<int64_t>();
+		if (!num) {
+			return expected::unexpected(num.error());
+		}
+		if (num.value() < numeric_limits<T>::min() or num.value() > numeric_limits<T>::max()) {
+			return expected::unexpected(error::Error(
+				make_error_condition(errc::result_out_of_range),
+				"Json::Get(): Number " + to_string(num.value())
+					+ " does not fit in requested data type"));
+		}
+		return static_cast<T>(num.value());
+	}
 
 	ExpectedSize GetArraySize() const;
 
@@ -171,8 +195,13 @@ using ExpectedKeyValueMap = expected::expected<KeyValueMap, error::Error>;
 ExpectedStringVector ToStringVector(const json::Json &j);
 ExpectedKeyValueMap ToKeyValueMap(const json::Json &j);
 ExpectedString ToString(const json::Json &j);
-ExpectedInt64 ToInt(const json::Json &j);
+ExpectedInt64 ToInt64(const json::Json &j);
 ExpectedBool ToBool(const json::Json &j);
+
+template <typename T>
+expected::expected<T, error::Error> To(const json::Json &j) {
+	return j.Get<T>();
+}
 
 // Template which we specialize for the given type in the platform dependent implementation
 template <typename DataType>
@@ -185,7 +214,20 @@ enum class MissingOk {
 
 template <typename T>
 expected::expected<T, error::Error> Get(
-	const json::Json &json, const string &key, MissingOk missing_ok);
+	const json::Json &json, const string &key, MissingOk missing_ok) {
+	auto exp_value = json.Get(key);
+	if (!exp_value) {
+		if (missing_ok == MissingOk::Yes
+			&& exp_value.error().code != json::MakeError(json::KeyError, "").code) {
+			return T();
+		} else {
+			auto err = exp_value.error();
+			err.message += ": Could not get `" + key + "` from state data";
+			return expected::unexpected(err);
+		}
+	}
+	return exp_value.value().Get<T>();
+}
 
 } // namespace json
 } // namespace common
