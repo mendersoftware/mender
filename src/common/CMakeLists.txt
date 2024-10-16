@@ -42,15 +42,24 @@ add_library(common_cpp INTERFACE)
 target_compile_options(common_cpp INTERFACE
   # Make all warnings that are on into errors.
   -Werror -Wall
+
   # Make sure we use `override` everywhere.
   -Wsuggest-override
+
   # Warn about lossy number conversions, which often arise in int64_t vs size_t scenarios.
   -Wconversion
+
   # Don't warn about sign conversion, which have an extreme amount of false positives. This is
   # mainly because sizes are unsigned, while iterator arithmetic is signed, and they are very often
   # combined, which is perfectly fine. It's possible this may hide certain real errors, but the
   # sheer amount of false positives just isn't worth it.
   -Wno-sign-conversion
+
+  # Miscellaneus.
+  -Wpacked
+  -Wpointer-arith
+  -Wredundant-decls
+  -Wold-style-cast
 )
 target_include_directories(common_cpp SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/expected/include)
 target_include_directories(common_cpp SYSTEM INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/optional-lite/include)

@@ -176,7 +176,7 @@ error::Error TeeReader::ReadyToAsyncRead(
 	if (leaf_readers_[leaf_reader].buffer_bytes_missing > 0) {
 		// Special case, reading missing bytes
 		TeeReaderLeafContext &ctx = leaf_readers_[leaf_reader];
-		auto to_read = std::min(ctx.buffer_bytes_missing, (size_t) (end - start));
+		auto to_read = std::min(ctx.buffer_bytes_missing, static_cast<size_t>(end - start));
 		auto handler_wrapper = [this, handler, &ctx](mio::ExpectedSize result) {
 			if (result) {
 				ctx.buffer_bytes_missing -= result.value();

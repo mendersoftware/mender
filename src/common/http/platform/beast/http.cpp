@@ -695,8 +695,24 @@ void Client::HandshakeHandler(
 	boost::asio::socket_base::keep_alive option(true);
 	stream_->lowest_layer().set_option(option);
 
+	// We can't avoid a C style cast on this next line. The usual method by which system headers
+	// are excluded from warnings doesn't work, because `SSL_set_tlsext_host_name` is a macro,
+	// containing a cast, which expands here, not in the original file. So just disable the
+	// warning here.
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#else
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif
 	// Set SNI Hostname (many hosts need this to handshake successfully)
 	if (!SSL_set_tlsext_host_name(stream.native_handle(), request_->address_.host.c_str())) {
+#ifdef __clang__
+#pragma clang diagnostic pop
+#else
+#pragma GCC diagnostic pop
+#endif
 		beast::error_code ec2 {
 			static_cast<int>(::ERR_get_error()), asio::error::get_ssl_category()};
 		logger_.Error("Failed to set SNI host name: " + ec2.message());

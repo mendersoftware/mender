@@ -176,7 +176,7 @@ ExpectedPrivateKey LoadFromHSMEngine(const Args &args) {
 		ENGINE_load_private_key(
 			engine.get(),
 			args.private_key_path.c_str(),
-			(UI_METHOD *) nullptr,
+			nullptr,
 			nullptr /*callback_data */),
 		pkey_free_func);
 	if (private_key == nullptr) {
