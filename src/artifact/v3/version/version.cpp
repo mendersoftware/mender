@@ -72,8 +72,7 @@ ExpectedVersion Parse(io::Reader &reader) {
 
 	const json::Json version_json = expected_json.value();
 
-	auto version =
-		version_json.Get("version").and_then([](const json::Json &j) { return j.GetInt(); });
+	auto version = version_json.Get("version").and_then(json::ToInt64);
 
 	if (!version) {
 		return expected::unexpected(MakeError(VersionError, version.error().message));
@@ -86,8 +85,7 @@ ExpectedVersion Parse(io::Reader &reader) {
 				+ " is supported, received version " + std::to_string(version.value())));
 	}
 
-	auto format =
-		version_json.Get("format").and_then([](const json::Json &j) { return j.GetString(); });
+	auto format = version_json.Get("format").and_then(json::ToString);
 
 	if (!format) {
 		return expected::unexpected(MakeError(FormatError, format.error().message));

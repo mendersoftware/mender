@@ -370,7 +370,7 @@ error::Error Context::SaveDeploymentStateData(StateData &state_data) {
 	}
 
 static error::Error UnmarshalJsonStateDataVersion1(const json::Json &json, StateData &state_data) {
-	auto exp_int = json.Get("Version").and_then(json::ToInt);
+	auto exp_int = json.Get("Version").and_then(json::ToInt64);
 	SetOrReturnIfError(state_data.version, exp_int);
 
 	if (state_data.version != 1) {
@@ -416,7 +416,7 @@ static error::Error UnmarshalJsonStateDataVersion1(const json::Json &json, State
 }
 
 static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &state_data) {
-	auto exp_int = json.Get("Version").and_then(json::ToInt);
+	auto exp_int = json.Get("Version").and_then(json::ToInt64);
 	SetOrReturnIfError(state_data.version, exp_int);
 
 	if (state_data.version != kStateDataVersion && state_data.version != 1) {
@@ -510,7 +510,7 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 		}
 	}
 
-	exp_int = json_update_info.Get("StateDataStoreCount").and_then(json::ToInt);
+	exp_int = json_update_info.Get("StateDataStoreCount").and_then(json::ToInt64);
 	SetOrReturnIfError(update_info.state_data_store_count, exp_int);
 
 	auto exp_bool = json_update_info.Get("HasDBSchemaUpdate").and_then(json::ToBool);
