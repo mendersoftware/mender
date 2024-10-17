@@ -932,7 +932,8 @@ TEST_F(DeploymentsTests, JsonLogMessageReaderTest) {
 	EXPECT_EQ(deps::JsonLogMessagesReader::TotalDataSize(messages.size() - 1), expected_total_size);
 
 	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
-	deps::JsonLogMessagesReader logs_reader {file_reader, messages.size() - 1};
+	deps::JsonLogMessagesReader logs_reader {
+		file_reader, static_cast<int64_t>(messages.size() - 1)};
 
 	stringstream ss;
 	vector<uint8_t> buf(1024);
@@ -971,7 +972,8 @@ TEST_F(DeploymentsTests, JsonLogMessageReaderSmallBufferTest) {
 	EXPECT_EQ(deps::JsonLogMessagesReader::TotalDataSize(messages.size() - 1), expected_total_size);
 
 	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
-	deps::JsonLogMessagesReader logs_reader {file_reader, messages.size() - 1};
+	deps::JsonLogMessagesReader logs_reader {
+		file_reader, static_cast<int64_t>(messages.size() - 1)};
 
 	stringstream ss;
 	vector<uint8_t> buf(16);
@@ -1010,7 +1012,8 @@ TEST_F(DeploymentsTests, JsonLogMessageReaderSmallEvenBufferTest) {
 	EXPECT_EQ(deps::JsonLogMessagesReader::TotalDataSize(messages.size() - 1), expected_total_size);
 
 	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
-	deps::JsonLogMessagesReader logs_reader {file_reader, messages.size() - 1};
+	deps::JsonLogMessagesReader logs_reader {
+		file_reader, static_cast<int64_t>(messages.size() - 1)};
 
 	stringstream ss;
 	vector<uint8_t> buf(7);
@@ -1049,7 +1052,8 @@ TEST_F(DeploymentsTests, JsonLogMessageReaderRewindTest) {
 	EXPECT_EQ(deps::JsonLogMessagesReader::TotalDataSize(messages.size() - 1), expected_total_size);
 
 	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
-	deps::JsonLogMessagesReader logs_reader {file_reader, messages.size() - 1};
+	deps::JsonLogMessagesReader logs_reader {
+		file_reader, static_cast<int64_t>(messages.size() - 1)};
 
 	stringstream ss;
 	vector<uint8_t> buf(1024);

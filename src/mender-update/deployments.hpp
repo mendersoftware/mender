@@ -147,7 +147,7 @@ public:
 	/**
 	 * @see GetLogFileDataSize() for details about #data_size
 	 */
-	JsonLogMessagesReader(shared_ptr<io::FileReader> raw_data_reader, size_t data_size) :
+	JsonLogMessagesReader(shared_ptr<io::FileReader> raw_data_reader, int64_t data_size) :
 		reader_ {raw_data_reader},
 		raw_data_size_ {data_size},
 		rem_raw_data_size_ {data_size} {};
@@ -162,14 +162,14 @@ public:
 		return reader_->Rewind();
 	}
 
-	static size_t TotalDataSize(size_t raw_data_size) {
+	static int64_t TotalDataSize(int64_t raw_data_size) {
 		return raw_data_size + header_.size() + closing_.size();
 	}
 
 private:
 	shared_ptr<io::FileReader> reader_;
-	size_t raw_data_size_;
-	size_t rem_raw_data_size_;
+	int64_t raw_data_size_;
+	int64_t rem_raw_data_size_;
 	static const vector<uint8_t> header_;
 	static const vector<uint8_t> closing_;
 	io::Vsize header_rem_ = header_.size();
