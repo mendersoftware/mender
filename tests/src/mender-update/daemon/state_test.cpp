@@ -3448,6 +3448,8 @@ class NoopInventoryClient : virtual public inventory::InventoryAPI {
 		api_handler(error::NoError);
 		return error::NoError;
 	}
+	void ClearDataCache() override {
+	}
 };
 
 class NoopDeploymentClient : virtual public deployments::DeploymentAPI {
@@ -4003,6 +4005,9 @@ TEST(SubmitInventoryTests, SubmitInventoryStateTest) {
 			}
 			return error::NoError;
 		};
+
+		void ClearDataCache() override {
+		}
 
 	private:
 		int &recorder_;
