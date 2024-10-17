@@ -220,7 +220,7 @@ TEST(YamlDataTests, GetYamlData) {
 
 	echild = _yaml.Get("integer");
 	ASSERT_TRUE(echild);
-	EXPECT_TRUE(echild.value().IsInt());
+	EXPECT_TRUE(echild.value().IsInt64());
 	EXPECT_EQ(echild.value().Get<int64_t>(), 42);
 
 	echild = _yaml.Get("string");
@@ -259,7 +259,7 @@ TEST(YamlDataTests, GetYamlData) {
 
 	echild = j_arr.Get(1);
 	ASSERT_TRUE(echild);
-	EXPECT_TRUE(echild.value().IsInt());
+	EXPECT_TRUE(echild.value().IsInt64());
 
 	echild = j_arr.Get(2);
 	ASSERT_TRUE(echild);

@@ -299,8 +299,21 @@ error::Error DeploymentClient::PushStatus(
 						"Failed to convert the content length from the status API response headers to an integer: "
 						+ ex_len.error().String());
 					body_writer->SetUnlimited(true);
+				} else if (
+					ex_len.value() < 0
+					or static_cast<unsigned long long>(ex_len.value())
+						   > numeric_limits<size_t>::max()) {
+					// This is a ridiculuous limit, but we are mainly interested
+					// in catching corrupt data / mistakes here. Actually
+					// limiting memory usage in a useful way is something which
+					// should be thought through more carefully and maybe
+					// configurable.
+					api_handler(error::Error(
+						make_error_condition(errc::result_out_of_range),
+						"Content-Length out of range"));
+					return;
 				} else {
-					received_body->resize(ex_len.value());
+					received_body->resize(static_cast<size_t>(ex_len.value()));
 				}
 			}
 			resp->SetBodyWriter(body_writer);
@@ -348,7 +361,7 @@ static ExpectedSize GetLogFileDataSize(const string &path) {
 	// newline. So let's seek one byte before the end of file, check if the last
 	// byte is a newline and return the appropriate number.
 	istr.seekg(-1, ios_base::end);
-	char c = istr.get();
+	int c = istr.get();
 	if (c == '\n') {
 		return istr.tellg() - static_cast<ifstream::off_type>(1);
 	} else {
@@ -370,8 +383,8 @@ ExpectedSize JsonLogMessagesReader::Read(
 		header_rem_ -= n_copied;
 		return static_cast<size_t>(n_copied);
 	} else if (rem_raw_data_size_ > 0) {
-		if (static_cast<size_t>(end - start) > rem_raw_data_size_) {
-			end = start + rem_raw_data_size_;
+		if (end - start > rem_raw_data_size_) {
+			end = start + static_cast<size_t>(rem_raw_data_size_);
 		}
 		auto ex_sz = reader_->Read(start, end);
 		if (!ex_sz) {
@@ -464,8 +477,21 @@ error::Error DeploymentClient::PushLogs(
 						"Failed to convert the content length from the status API response headers to an integer: "
 						+ ex_len.error().String());
 					body_writer->SetUnlimited(true);
+				} else if (
+					ex_len.value() < 0
+					or static_cast<unsigned long long>(ex_len.value())
+						   > numeric_limits<size_t>::max()) {
+					// This is a ridiculuous limit, but we are mainly interested
+					// in catching corrupt data / mistakes here. Actually
+					// limiting memory usage in a useful way is something which
+					// should be thought through more carefully and maybe
+					// configurable.
+					api_handler(error::Error(
+						make_error_condition(errc::result_out_of_range),
+						"Content-Length out of range"));
+					return;
 				} else {
-					received_body->resize(ex_len.value());
+					received_body->resize(static_cast<size_t>(ex_len.value()));
 				}
 			}
 			resp->SetBodyWriter(body_writer);

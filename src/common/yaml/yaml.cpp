@@ -99,28 +99,12 @@ ExpectedKeyValueMap ToKeyValueMap(const yaml::Yaml &y) {
 	return kv_map;
 }
 
-ExpectedInt64 ToInt(const yaml::Yaml &y) {
+ExpectedInt64 ToInt64(const yaml::Yaml &y) {
 	return y.Get<int64_t>();
 }
 
 ExpectedBool ToBool(const yaml::Yaml &y) {
 	return y.Get<bool>();
-}
-
-template <typename T>
-expected::expected<T, error::Error> Get(
-	const yaml::Yaml &yaml, const string &key, MissingOk missing_ok) {
-	auto exp_value = yaml.Get(key);
-	if (not exp_value) {
-		if (missing_ok == MissingOk::Yes
-			and exp_value.error().code == yaml::MakeError(yaml::KeyError, "").code) {
-			return T();
-		} else {
-			return expected::unexpected(
-				exp_value.error().WithContext(": Could not get `" + key + "` from the YAML data"));
-		}
-	}
-	return exp_value.value().Get<T>();
 }
 
 template <>
@@ -132,22 +116,6 @@ template <>
 expected::expected<vector<string>, error::Error> Yaml::Get<vector<string>>() const {
 	return ToStringVector(*this);
 }
-
-// The number of instantiations is pretty much set in stone since it depends on
-// the number of YAML types, which isn't going to change. So use explicit
-// instantiation for compile time efficiency.
-template expected::expected<KeyValueMap, error::Error> Get(
-	const yaml::Yaml &yaml, const string &key, MissingOk missing_ok);
-template expected::expected<vector<string>, error::Error> Get(
-	const yaml::Yaml &yaml, const string &key, MissingOk missing_ok);
-template expected::expected<string, error::Error> Get(
-	const yaml::Yaml &yaml, const string &key, MissingOk missing_ok);
-template expected::expected<int64_t, error::Error> Get(
-	const yaml::Yaml &yaml, const string &key, MissingOk missing_ok);
-template expected::expected<double, error::Error> Get(
-	const yaml::Yaml &yaml, const string &key, MissingOk missing_ok);
-template expected::expected<bool, error::Error> Get(
-	const yaml::Yaml &yaml, const string &key, MissingOk missing_ok);
 
 } // namespace yaml
 } // namespace common
