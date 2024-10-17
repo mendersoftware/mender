@@ -70,6 +70,8 @@ public:
 		events::EventLoop &loop,
 		api::Client &client,
 		APIResponseHandler api_handler) = 0;
+
+	virtual void ClearDataCache() = 0;
 };
 
 class InventoryClient : public InventoryAPI {
@@ -82,6 +84,10 @@ public:
 		return PushInventoryData(
 			inventory_generators_dir, loop, client, last_data_hash_, api_handler);
 	};
+
+	void ClearDataCache() override {
+		last_data_hash_ = 0;
+	}
 
 private:
 	size_t last_data_hash_ {0};

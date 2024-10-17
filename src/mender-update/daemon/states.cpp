@@ -176,6 +176,15 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 		[&ctx, &poster](mender::update::deployments::CheckUpdatesAPIResponse response) {
 			if (!response) {
 				log::Error("Error while polling for deployment: " + response.error().String());
+
+				// When unauthenticated,
+				// invalidate the cached inventory data so that it can be sent again
+				// and set clear the context flag so that it is triggered on re-authorization
+				if ((response.error().code == auth::MakeError(auth::UnauthorizedError, "").code)
+					&& ctx.has_submitted_inventory) {
+					ctx.inventory_client->ClearDataCache();
+					ctx.has_submitted_inventory = false;
+				}
 				poster.PostEvent(StateEvent::Failure);
 				return;
 			} else if (!response.value()) {

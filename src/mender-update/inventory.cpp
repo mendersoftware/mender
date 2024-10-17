@@ -123,6 +123,7 @@ error::Error PushInventoryData(
 
 	size_t payload_hash = std::hash<string> {}(payload);
 	if (payload_hash == last_data_hash) {
+		log::Info("Inventory data unchanged, not submitting");
 		loop.Post([api_handler]() { api_handler(error::NoError); });
 		return error::NoError;
 	}
@@ -172,6 +173,7 @@ error::Error PushInventoryData(
 			auto resp = exp_resp.value();
 			auto status = resp->GetStatusCode();
 			if (status == http::StatusOK) {
+				log::Info("Inventory data submitted successfully");
 				last_data_hash = payload_hash;
 				api_handler(error::NoError);
 			} else {
