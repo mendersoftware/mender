@@ -154,8 +154,20 @@ error::Error PushInventoryData(
 			if (!ex_len) {
 				log::Error("Failed to get content length from the inventory API response headers");
 				body_writer->SetUnlimited(true);
+			} else if (
+				ex_len.value() < 0
+				or static_cast<unsigned long long>(ex_len.value())
+					   > numeric_limits<size_t>::max()) {
+				// This is a ridiculuous limit, but we are mainly interested in
+				// catching corrupt data / mistakes here. Actually limiting memory
+				// usage in a useful way is something which should be thought
+				// through more carefully and maybe configurable.
+				api_handler(error::Error(
+					make_error_condition(errc::result_out_of_range),
+					"Content-Length out of range"));
+				return;
 			} else {
-				received_body->resize(ex_len.value());
+				received_body->resize(static_cast<size_t>(ex_len.value()));
 			}
 			resp->SetBodyWriter(body_writer);
 		},

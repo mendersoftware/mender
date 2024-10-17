@@ -247,7 +247,7 @@ private:
 };
 
 template <typename PARSER>
-size_t GetContentLength(const PARSER &parser) {
+int64_t GetContentLength(const PARSER &parser) {
 	auto content_length = parser.content_length();
 	if (content_length) {
 		return content_length.value();

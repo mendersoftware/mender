@@ -125,7 +125,7 @@ string MethodToString(Method method);
 struct BrokenDownUrl {
 	string protocol;
 	string host;
-	int port {-1};
+	uint16_t port;
 	string path;
 	string username;
 	string password;

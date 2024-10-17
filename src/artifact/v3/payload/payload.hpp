@@ -54,7 +54,7 @@ public:
 	string Name() {
 		return this->entry_->Name();
 	}
-	size_t Size() {
+	int64_t Size() {
 		return this->entry_->Size();
 	}
 
