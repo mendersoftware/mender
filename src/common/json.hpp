@@ -222,7 +222,7 @@ expected::expected<T, error::Error> Get(
 			return T();
 		} else {
 			auto err = exp_value.error();
-			err.message += ": Could not get `" + key + "` from state data";
+			err.message += ": Could not get `" + key + "` from json data";
 			return expected::unexpected(err);
 		}
 	}
