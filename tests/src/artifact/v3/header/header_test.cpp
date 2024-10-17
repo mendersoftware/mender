@@ -594,7 +594,7 @@ TEST_F(HeaderTestEnv, TestHeaderMetaDataIs64BitFloatingPointRepresented) {
 
 	{
 		auto val = expected_meta_data.value().Get("test").and_then(
-			[](const json::Json &json) { return json.GetInt(); });
+			[](const json::Json &json) { return json.GetInt64(); });
 
 		ASSERT_TRUE(val) << val.error().message;
 		EXPECT_EQ(val.value(), 10000000);
@@ -603,7 +603,7 @@ TEST_F(HeaderTestEnv, TestHeaderMetaDataIs64BitFloatingPointRepresented) {
 	{
 		auto val =
 			expected_meta_data.value().Get("correct-max-int").and_then([](const json::Json &json) {
-				return json.GetInt();
+				return json.GetInt64();
 			});
 
 		ASSERT_TRUE(val) << val.error().message;
@@ -613,7 +613,7 @@ TEST_F(HeaderTestEnv, TestHeaderMetaDataIs64BitFloatingPointRepresented) {
 	{
 		auto val =
 			expected_meta_data.value().Get("correct-min-int").and_then([](const json::Json &json) {
-				return json.GetInt();
+				return json.GetInt64();
 			});
 
 		ASSERT_TRUE(val) << val.error().message;
