@@ -28,7 +28,7 @@ namespace io = mender::common::io;
 namespace progress = mender::update::progress;
 
 TEST(ProgressReaderTests, RegularRead) {
-	std::srand(time(nullptr));
+	std::srand(static_cast<unsigned int>(time(nullptr)));
 
 	std::vector<uint8_t> data(1024 * 100);
 

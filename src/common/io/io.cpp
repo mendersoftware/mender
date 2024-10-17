@@ -93,18 +93,18 @@ Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer) {
 }
 
 struct CopyData {
-	CopyData(size_t limit) :
+	CopyData(int64_t limit) :
 		buf(MENDER_BUFSIZE),
 		limit {limit} {
 	}
 
 	vector<uint8_t> buf;
-	size_t copied {0};
-	size_t limit;
+	int64_t copied {0};
+	int64_t limit;
 };
 
 void AsyncCopy(
-	Writer &dst, AsyncReader &src, function<void(Error)> finished_handler, size_t stop_after) {
+	Writer &dst, AsyncReader &src, function<void(Error)> finished_handler, int64_t stop_after) {
 	AsyncCopy(
 		WriterPtr(&dst, [](Writer *) {}),
 		AsyncReaderPtr(&src, [](AsyncReader *) {}),
@@ -113,7 +113,7 @@ void AsyncCopy(
 }
 
 void AsyncCopy(
-	WriterPtr dst, AsyncReaderPtr src, function<void(Error)> finished_handler, size_t stop_after) {
+	WriterPtr dst, AsyncReaderPtr src, function<void(Error)> finished_handler, int64_t stop_after) {
 	auto data = make_shared<CopyData>(stop_after);
 	class Functor {
 	public:
@@ -141,7 +141,8 @@ void AsyncCopy(
 
 			data->copied += *n;
 
-			size_t to_copy = min(data->limit - data->copied, data->buf.size());
+			size_t to_copy = static_cast<size_t>(
+				min(data->limit - data->copied, static_cast<int64_t>(data->buf.size())));
 			if (to_copy == 0) {
 				CallFinishedHandler(error::NoError);
 				return;
@@ -170,7 +171,7 @@ void AsyncCopy(
 		shared_ptr<CopyData> data;
 		function<void(Error)> finished_handler;
 	};
-	size_t to_copy = min(data->limit, data->buf.size());
+	size_t to_copy = static_cast<size_t>(min(data->limit, static_cast<int64_t>(data->buf.size())));
 	auto err = src->AsyncRead(
 		data->buf.begin(), data->buf.begin() + to_copy, Functor {dst, src, data, finished_handler});
 	if (err != error::NoError) {
@@ -179,7 +180,7 @@ void AsyncCopy(
 }
 
 void AsyncCopy(
-	AsyncWriter &dst, Reader &src, function<void(Error)> finished_handler, size_t stop_after) {
+	AsyncWriter &dst, Reader &src, function<void(Error)> finished_handler, int64_t stop_after) {
 	AsyncCopy(
 		AsyncWriterPtr(&dst, [](AsyncWriter *) {}),
 		ReaderPtr(&src, [](Reader *) {}),
@@ -188,7 +189,7 @@ void AsyncCopy(
 }
 
 void AsyncCopy(
-	AsyncWriterPtr dst, ReaderPtr src, function<void(Error)> finished_handler, size_t stop_after) {
+	AsyncWriterPtr dst, ReaderPtr src, function<void(Error)> finished_handler, int64_t stop_after) {
 	auto data = make_shared<CopyData>(stop_after);
 
 	class Functor {
@@ -205,7 +206,8 @@ void AsyncCopy(
 
 			data->copied += *exp_written;
 
-			size_t to_copy = min(data->limit - data->copied, data->buf.size());
+			size_t to_copy = static_cast<size_t>(
+				min(data->limit - data->copied, static_cast<int64_t>(data->buf.size())));
 			if (to_copy == 0) {
 				CallFinishedHandler(error::NoError);
 				return;
@@ -253,7 +255,10 @@ void AsyncCopy(
 }
 
 void AsyncCopy(
-	AsyncWriter &dst, AsyncReader &src, function<void(Error)> finished_handler, size_t stop_after) {
+	AsyncWriter &dst,
+	AsyncReader &src,
+	function<void(Error)> finished_handler,
+	int64_t stop_after) {
 	AsyncCopy(
 		AsyncWriterPtr(&dst, [](AsyncWriter *) {}),
 		AsyncReaderPtr(&src, [](AsyncReader *) {}),
@@ -332,7 +337,8 @@ void AsyncCopyWriterFunctor::operator()(io::ExpectedSize exp_size) {
 
 	data->copied += *exp_size;
 
-	size_t to_copy = min(data->limit - data->copied, data->buf.size());
+	size_t to_copy = static_cast<size_t>(
+		min(data->limit - data->copied, static_cast<int64_t>(data->buf.size())));
 	if (to_copy == 0) {
 		CallFinishedHandler(error::NoError);
 		return;
@@ -351,10 +357,10 @@ void AsyncCopy(
 	AsyncWriterPtr dst,
 	AsyncReaderPtr src,
 	function<void(Error)> finished_handler,
-	size_t stop_after) {
+	int64_t stop_after) {
 	auto data = make_shared<CopyData>(stop_after);
 
-	size_t to_copy = min(data->limit, data->buf.size());
+	size_t to_copy = static_cast<size_t>(min(data->limit, static_cast<int64_t>(data->buf.size())));
 	auto err = src->AsyncRead(
 		data->buf.begin(),
 		data->buf.begin() + to_copy,
