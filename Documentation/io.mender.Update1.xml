@@ -6,7 +6,7 @@
     io.mender.Update1:
     @short_description: Mender Update Management API v1
 
-    !! This feature was deprecated in Mender client 4.0.
+    !! This feature was deprecated in Mender Client 4.0.
 
     This interface lets applications interact with the update flow. It is exposed at
 
@@ -43,7 +43,7 @@
           where the `id` is equal to the deployment ID, the update_control_map
           is cleared after the deployment finished. This happens if the
           update_control_map is provisioned with the deployment.
-        * `states` instructs the Mender client what to do when entering
+        * `states` instructs the Mender Client what to do when entering
           the state given as object key. Valid `state` values include: `ArtifactInstall_Enter`,
           `ArtifactReboot_Enter` and `ArtifactCommit_Enter`.
           * `action` is the action

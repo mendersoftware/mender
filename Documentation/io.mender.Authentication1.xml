@@ -6,10 +6,10 @@
     io.mender.Authentication1:
     @short_description: Mender Authentication API v1
 
-    !!! This feature is available since Mender client 3.0.
+    !!! This feature is available since Mender Client 3.0.
 
     This interface lets applications authenticate with the Mender server. The
-    Mender client will handle the authentication and provide the user with a
+    Mender Client will handle the authentication and provide the user with a
     JSON Web Token (JWT) and the server URL, which the user can use to do API
     calls to the Mender server on his own. It is exposed at
 
@@ -35,7 +35,7 @@
       FetchJwtToken:
       @success: false on errors
 
-      Instructs the Mender client to fetch the JWT token from the server. When
+      Instructs the Mender Client to fetch the JWT token from the server. When
       the token is ready, a JwtTokenStateChange signal will be emitted.
     -->
     <method name="FetchJwtToken">
@@ -47,7 +47,7 @@
       @token: Current JWT token
       @server_url: Server URL
 
-      Emitted whenever a valid JWT is available in the Mender client. The event
+      Emitted whenever a valid JWT is available in the Mender Client. The event
       includes the new token and the server URL.
     -->
     <signal name="JwtTokenStateChange">
