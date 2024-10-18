@@ -98,7 +98,7 @@ bool Is(const YAML::Node &n) {
 bool Yaml::IsString() const {
 	return Is<string>(this->n_yaml);
 }
-bool Yaml::IsInt() const {
+bool Yaml::IsInt64() const {
 	return Is<int64_t>(this->n_yaml);
 }
 bool Yaml::IsDouble() const {
@@ -108,7 +108,7 @@ bool Yaml::IsNumber() const {
 	if (not n_yaml.IsScalar()) {
 		return false;
 	}
-	return IsInt() or IsDouble();
+	return IsInt64() or IsDouble();
 }
 bool Yaml::IsBool() const {
 	return Is<bool>(this->n_yaml);
@@ -210,7 +210,10 @@ string ToString<double>() {
 }
 
 template <typename T>
-expected::expected<T, error::Error> Yaml::Get() const {
+typename enable_if<
+	not is_integral<T>::value or is_same<T, int64_t>::value or is_same<T, bool>::value,
+	expected::expected<T, error::Error>>::type
+Yaml::Get() const {
 	try {
 		return n_yaml.as<T>();
 	} catch (YAML::Exception &e) {

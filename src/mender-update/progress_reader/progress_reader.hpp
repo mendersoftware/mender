@@ -29,7 +29,7 @@ namespace expected = mender::common::expected;
 
 class Reader : virtual public io::Reader {
 public:
-	Reader(const shared_ptr<io::Reader> &reader, size_t size) :
+	Reader(const shared_ptr<io::Reader> &reader, int64_t size) :
 		reader_ {reader},
 		tot_size_ {size} {};
 
@@ -38,8 +38,8 @@ public:
 
 private:
 	shared_ptr<io::Reader> reader_;
-	size_t tot_size_;
-	size_t bytes_read_ {0};
+	int64_t tot_size_;
+	int64_t bytes_read_ {0};
 	int last_percentage_ {-1};
 };
 

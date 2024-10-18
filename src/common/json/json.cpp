@@ -68,7 +68,7 @@ expected::expected<string, error::Error> Json::Get<string>() const {
 
 template <>
 expected::expected<int64_t, error::Error> Json::Get<int64_t>() const {
-	return GetInt();
+	return GetInt64();
 }
 
 template <>
@@ -149,44 +149,13 @@ ExpectedKeyValueMap ToKeyValueMap(const json::Json &j) {
 	return kv_map;
 }
 
-ExpectedInt64 ToInt(const json::Json &j) {
-	return j.GetInt();
+ExpectedInt64 ToInt64(const json::Json &j) {
+	return j.GetInt64();
 }
 
 ExpectedBool ToBool(const json::Json &j) {
 	return j.GetBool();
 }
-
-template <typename T>
-expected::expected<T, error::Error> Get(
-	const json::Json &json, const string &key, MissingOk missing_ok) {
-	auto exp_value = json.Get(key);
-	if (!exp_value) {
-		if (missing_ok == MissingOk::Yes
-			&& exp_value.error().code != json::MakeError(json::KeyError, "").code) {
-			return T();
-		} else {
-			auto err = exp_value.error();
-			err.message += ": Could not get `" + key + "` from state data";
-			return expected::unexpected(err);
-		}
-	}
-	return exp_value.value().Get<T>();
-}
-// The number of instantiations is pretty much set in stone since it depends on the number of JSON
-// types, which isn't going to change. So use explicit instantiation for compile time efficiency.
-template expected::expected<KeyValueMap, error::Error> Get(
-	const json::Json &json, const string &key, MissingOk missing_ok);
-template expected::expected<vector<string>, error::Error> Get(
-	const json::Json &json, const string &key, MissingOk missing_ok);
-template expected::expected<string, error::Error> Get(
-	const json::Json &json, const string &key, MissingOk missing_ok);
-template expected::expected<int64_t, error::Error> Get(
-	const json::Json &json, const string &key, MissingOk missing_ok);
-template expected::expected<double, error::Error> Get(
-	const json::Json &json, const string &key, MissingOk missing_ok);
-template expected::expected<bool, error::Error> Get(
-	const json::Json &json, const string &key, MissingOk missing_ok);
 
 } // namespace json
 } // namespace common

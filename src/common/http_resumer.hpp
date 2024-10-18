@@ -47,8 +47,8 @@ enum class DownloadResumerUserHandlersStatus {
 
 struct DownloadResumerClientState {
 	DownloadResumerActiveStatus active_state {DownloadResumerActiveStatus::None};
-	ssize_t content_length {0};
-	ssize_t offset {0};
+	int64_t content_length {0};
+	int64_t offset {0};
 	DownloadResumerUserHandlersStatus user_handlers_state {DownloadResumerUserHandlersStatus::None};
 };
 

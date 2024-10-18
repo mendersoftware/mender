@@ -134,13 +134,14 @@ void PrintInTwoColumns(
 	// The second column takes the rest of the available width
 	const size_t column_two_width {max_width - column_one_width};
 	for (auto it = start; it != end; ++it) {
-		stream << indent << setw(column_one_size) << left << column_one_fmt(*it) << separator;
+		stream << indent << setw(static_cast<int>(column_one_size)) << left << column_one_fmt(*it)
+			   << separator;
 		// Wrap around and align the text for the second column
 		auto lines = common::JoinStringsMaxWidth(
 			common::SplitString(column_two_fmt(*it), " "), " ", column_two_width);
 		stream << lines.front() << endl;
 		for_each(lines.begin() + 1, lines.end(), [&stream, column_one_width](const string &l) {
-			stream << setw(column_one_width) << left << " " << l << endl;
+			stream << setw(static_cast<int>(column_one_width)) << left << " " << l << endl;
 		});
 	}
 }
