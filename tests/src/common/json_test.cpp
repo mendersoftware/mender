@@ -204,7 +204,7 @@ TEST(JsonDataTests, GetJsonData) {
 
 	echild = j.Get(string("integer"));
 	ASSERT_TRUE(echild);
-	EXPECT_TRUE(echild.value().IsInt());
+	EXPECT_TRUE(echild.value().IsInt64());
 
 	echild = j["boolean"];
 	ASSERT_TRUE(echild);
@@ -237,7 +237,7 @@ TEST(JsonDataTests, GetJsonData) {
 
 	echild = j_arr.Get(1);
 	ASSERT_TRUE(echild);
-	EXPECT_TRUE(echild.value().IsInt());
+	EXPECT_TRUE(echild.value().IsInt64());
 
 	echild = j_arr.Get(2);
 	ASSERT_TRUE(echild);
@@ -275,7 +275,7 @@ TEST(JsonDataTests, GetDataValues) {
 	ASSERT_TRUE(estr);
 	EXPECT_EQ(estr.value(), "string value");
 
-	json::ExpectedInt64 eint = echild.value().GetInt();
+	json::ExpectedInt64 eint = echild.value().GetInt64();
 	ASSERT_FALSE(eint);
 	EXPECT_EQ(eint.error().code, json::MakeError(json::JsonErrorCode::TypeError, "").code);
 	EXPECT_THAT(eint.error().message, ::testing::HasSubstr("Type mismatch when getting int"));
@@ -287,7 +287,7 @@ TEST(JsonDataTests, GetDataValues) {
 
 	echild = j.Get("integer");
 	ASSERT_TRUE(echild);
-	eint = echild.value().GetInt();
+	eint = echild.value().GetInt64();
 	ASSERT_TRUE(eint);
 	EXPECT_EQ(eint.value(), 42);
 

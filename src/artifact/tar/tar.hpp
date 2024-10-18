@@ -45,15 +45,15 @@ using ExpectedSize = expected::ExpectedSize;
 class Entry : public io::Reader {
 private:
 	string name_;
-	size_t total_size_;
+	int64_t total_size_;
 
 	Reader &reader_;
 
 	// Reader data
-	size_t nr_bytes_read_ {0};
+	int64_t nr_bytes_read_ {0};
 
 public:
-	Entry(const string &name, size_t archive_size, Reader &reader) :
+	Entry(const string &name, int64_t archive_size, Reader &reader) :
 		name_ {name},
 		total_size_ {archive_size},
 		reader_ {reader} {
@@ -63,7 +63,7 @@ public:
 		return name_;
 	}
 
-	size_t Size() {
+	int64_t Size() {
 		return total_size_;
 	}
 

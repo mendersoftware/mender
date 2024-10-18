@@ -100,14 +100,38 @@ public:
 	bool IsObject() const;
 	bool IsArray() const;
 	bool IsString() const;
-	bool IsInt() const;
+	bool IsInt64() const;
 	bool IsNumber() const;
 	bool IsDouble() const;
 	bool IsBool() const;
 	bool IsNull() const;
 
+	// Defined in cpp file as specialized templates.
 	template <typename T>
-	expected::expected<T, error::Error> Get() const;
+	typename enable_if<
+		not is_integral<T>::value or is_same<T, int64_t>::value or is_same<T, bool>::value,
+		expected::expected<T, error::Error>>::type
+	Get() const;
+
+	// Use this as a catch-all for all integral types besides int64_t and bool. It then
+	// automates the process of checking whether it fits in the requested data type.
+	template <typename T>
+	typename enable_if<
+		is_integral<T>::value and not is_same<T, int64_t>::value and not is_same<T, bool>::value,
+		expected::expected<T, error::Error>>::type
+	Get() const {
+		auto num = Get<int64_t>();
+		if (!num) {
+			return expected::unexpected(num.error());
+		}
+		if (num.value() < numeric_limits<T>::min() or num.value() > numeric_limits<T>::max()) {
+			return expected::unexpected(error::Error(
+				make_error_condition(errc::result_out_of_range),
+				"Json::Get(): Number " + to_string(num.value())
+					+ " does not fit in requested data type"));
+		}
+		return static_cast<T>(num.value());
+	}
 
 	ExpectedSize GetArraySize() const;
 
@@ -144,8 +168,13 @@ using ExpectedKeyValueMap = expected::expected<KeyValueMap, error::Error>;
 ExpectedStringVector ToStringVector(const yaml::Yaml &j);
 ExpectedKeyValueMap ToKeyValueMap(const yaml::Yaml &j);
 ExpectedString ToString(const yaml::Yaml &j);
-ExpectedInt64 ToInt(const yaml::Yaml &j);
+ExpectedInt64 ToInt64(const yaml::Yaml &j);
 ExpectedBool ToBool(const yaml::Yaml &j);
+
+template <typename T>
+expected::expected<T, error::Error> To(const yaml::Yaml &j) {
+	return j.Get<T>();
+}
 
 enum class MissingOk {
 	No,
@@ -154,7 +183,19 @@ enum class MissingOk {
 
 template <typename T>
 expected::expected<T, error::Error> Get(
-	const yaml::Yaml &yaml, const string &key, MissingOk missing_ok);
+	const yaml::Yaml &yaml, const string &key, MissingOk missing_ok) {
+	auto exp_value = yaml.Get(key);
+	if (not exp_value) {
+		if (missing_ok == MissingOk::Yes
+			and exp_value.error().code == yaml::MakeError(yaml::KeyError, "").code) {
+			return T();
+		} else {
+			return expected::unexpected(
+				exp_value.error().WithContext(": Could not get `" + key + "` from the YAML data"));
+		}
+	}
+	return exp_value.value().Get<T>();
+}
 
 } // namespace yaml
 } // namespace common
