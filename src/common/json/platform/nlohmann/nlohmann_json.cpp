@@ -176,7 +176,7 @@ bool Json::IsString() const {
 	return this->n_json.is_string();
 }
 
-bool Json::IsInt() const {
+bool Json::IsInt64() const {
 	return this->n_json.is_number_integer();
 }
 
@@ -205,7 +205,7 @@ ExpectedString Json::GetString() const {
 	}
 }
 
-ExpectedInt64 Json::GetInt() const {
+ExpectedInt64 Json::GetInt64() const {
 	try {
 		int64_t s {this->n_json.get<int64_t>()};
 		return s;

@@ -56,7 +56,7 @@ ExpectedOptionalStateData LoadStateData(database::KeyValueDatabase &db) {
 	}
 	auto &json = exp_json.value();
 
-	auto exp_int = json::Get<int64_t>(json, keys.version, json::MissingOk::No);
+	auto exp_int = json::Get<int>(json, keys.version, json::MissingOk::No);
 	if (!exp_int) {
 		return expected::unexpected(exp_int.error());
 	}

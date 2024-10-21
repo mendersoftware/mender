@@ -27,7 +27,7 @@ expected::ExpectedSize Reader::Read(
 	expected::ExpectedSize exp_read = reader_->Read(start, end);
 	if (exp_read) {
 		bytes_read_ += exp_read.value();
-		int percentage = (bytes_read_ / static_cast<float>(tot_size_)) * 100;
+		int percentage = static_cast<int>(bytes_read_ * 100 / tot_size_);
 		if (percentage > last_percentage_) {
 			cerr << "\r" << percentage << "%";
 			last_percentage_ = percentage;
