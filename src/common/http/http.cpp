@@ -140,10 +140,10 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address, bool with_a
 		address.host = tmp.substr(0, split_index);
 
 		tmp = tmp.substr(split_index + 1);
-		auto port = common::StringToLongLong(tmp);
+		auto port = common::StringTo<decltype(address.port)>(tmp);
 		if (!port) {
 			address = {};
-			return error::Error(port.error().code, url + " contains invalid port number");
+			return port.error().WithContext(url + " contains invalid port number");
 		}
 		address.port = port.value();
 	} else {

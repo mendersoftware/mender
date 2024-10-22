@@ -144,12 +144,12 @@ void AsyncCopy(
 	Writer &dst,
 	AsyncReader &src,
 	function<void(Error)> finished_handler,
-	size_t stop_after = numeric_limits<size_t>::max());
+	int64_t stop_after = numeric_limits<int64_t>::max());
 void AsyncCopy(
 	WriterPtr dst,
 	AsyncReaderPtr src,
 	function<void(Error)> finished_handler,
-	size_t stop_after = numeric_limits<size_t>::max());
+	int64_t stop_after = numeric_limits<int64_t>::max());
 
 /**
  * Stream the data from `src` to `dst` until encountering EOF or an error. The writing end is async,
@@ -159,12 +159,12 @@ void AsyncCopy(
 	AsyncWriter &dst,
 	Reader &src,
 	function<void(Error)> finished_handler,
-	size_t stop_after = numeric_limits<size_t>::max());
+	int64_t stop_after = numeric_limits<int64_t>::max());
 void AsyncCopy(
 	AsyncWriterPtr dst,
 	ReaderPtr src,
 	function<void(Error)> finished_handler,
-	size_t stop_after = numeric_limits<size_t>::max());
+	int64_t stop_after = numeric_limits<int64_t>::max());
 
 /**
  * Stream the data from `src` to `dst` until encountering EOF or an error.
@@ -173,12 +173,12 @@ void AsyncCopy(
 	AsyncWriter &dst,
 	AsyncReader &src,
 	function<void(Error)> finished_handler,
-	size_t stop_after = numeric_limits<size_t>::max());
+	int64_t stop_after = numeric_limits<int64_t>::max());
 void AsyncCopy(
 	AsyncWriterPtr dst,
 	AsyncReaderPtr src,
 	function<void(Error)> finished_handler,
-	size_t stop_after = numeric_limits<size_t>::max());
+	int64_t stop_after = numeric_limits<int64_t>::max());
 
 class StreamReader : virtual public Reader {
 protected:

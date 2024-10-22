@@ -209,11 +209,11 @@ private:
 		io::AsyncWriterPtr stream_next_writer_;
 
 		string current_payload_name_;
-		size_t current_payload_size_;
+		int64_t current_payload_size_;
 		io::AsyncReaderPtr current_payload_reader_;
 		shared_ptr<io::Canceller> current_stream_opener_;
 		io::AsyncWriterPtr current_stream_writer_;
-		size_t written_ {0};
+		int64_t written_ {0};
 
 		bool module_has_started_download_ {false};
 		bool module_has_finished_download_ {false};

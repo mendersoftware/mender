@@ -21,6 +21,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -73,6 +74,21 @@ inline static string StringFromByteVector(const vector<uint8_t> &vec) {
 }
 
 mender::common::expected::ExpectedLongLong StringToLongLong(const string &str, int base = 10);
+
+template <typename T>
+expected::expected<T, error::Error> StringTo(const string &str, int base = 10) {
+	auto num = StringToLongLong(str, base);
+	if (!num) {
+		return expected::unexpected(num.error());
+	}
+	if (num.value() < numeric_limits<T>::min() or num.value() > numeric_limits<T>::max()) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::result_out_of_range),
+			"StringTo(): Number " + to_string(num.value())
+				+ " does not fit in requested data type"));
+	}
+	return static_cast<T>(num.value());
+}
 
 string StringToLower(const string &str);
 
