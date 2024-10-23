@@ -42,6 +42,15 @@ namespace log = mender::common::log;
 
 using namespace std;
 
+// DBus uses many macros with C style casts which get expanded in this file. Therefore the usual
+// method which excludes system headers from warnings doesn't work. So just disable warnings for C
+// style casts in this file.
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#else
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif
+
 // The code below integrates ASIO and libdbus. Or, more precisely, it uses
 // asio::io_context as the main/event loop for libdbus.
 //
