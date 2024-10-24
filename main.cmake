@@ -20,6 +20,7 @@ endif()
 
 include(cmake/asan.cmake)
 include(cmake/threadsan.cmake)
+include(cmake/undefsan.cmake)
 # set(CMAKE_VERBOSE_MAKEFILE ON)
 
 option(COVERAGE "Turn coverage instrumentation on (Default: OFF)" OFF)
