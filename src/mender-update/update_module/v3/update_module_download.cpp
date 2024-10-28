@@ -180,7 +180,7 @@ void UpdateModule::PayloadReadHandler(io::ExpectedSize result) {
 			download_->buffer_.begin(),
 			download_->buffer_.begin() + result.value(),
 			[this, result](io::ExpectedSize write_result) {
-				StreamWriteHandler(result.value(), write_result);
+				StreamWriteHandler(0, result.value(), write_result);
 			}));
 	} else {
 		// Close streams.
@@ -196,13 +196,22 @@ void UpdateModule::PayloadReadHandler(io::ExpectedSize result) {
 	}
 }
 
-void UpdateModule::StreamWriteHandler(size_t expected_n, io::ExpectedSize result) {
+void UpdateModule::StreamWriteHandler(size_t offset, size_t expected_n, io::ExpectedSize result) {
 	if (!result) {
 		DownloadErrorHandler(result.error());
-	} else if (expected_n != result.value()) {
+	} else if (result.value() == 0 || result.value() > expected_n) {
 		DownloadErrorHandler(error::Error(
 			make_error_condition(errc::io_error),
 			"Unexpected number of written bytes to download stream"));
+	} else if (result.value() < expected_n) {
+		auto new_offset = offset + result.value();
+		auto new_expected = expected_n - result.value();
+		DownloadErrorHandler(download_->current_stream_writer_->AsyncWrite(
+			download_->buffer_.begin() + new_offset,
+			download_->buffer_.begin() + new_offset + new_expected,
+			[this, new_offset, new_expected](io::ExpectedSize write_result) {
+				StreamWriteHandler(new_offset, new_expected, write_result);
+			}));
 	} else {
 		download_->written_ += result.value();
 		log::Trace("Wrote " + to_string(download_->written_) + " bytes to Update Module");

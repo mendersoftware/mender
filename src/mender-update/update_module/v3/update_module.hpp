@@ -178,7 +178,7 @@ private:
 
 	void StreamNextWriteHandler(size_t expected_n, io::ExpectedSize result);
 	void PayloadReadHandler(io::ExpectedSize result);
-	void StreamWriteHandler(size_t expected_n, io::ExpectedSize result);
+	void StreamWriteHandler(size_t offset, size_t expected_n, io::ExpectedSize result);
 
 	void EndStreamNext();
 
