@@ -209,10 +209,7 @@ The module can respond with the following responses:
   * `ArtifactInstall`
   * `ArtifactReboot`
   * `ArtifactVerifyReboot`
-  * `ArtifactCommit` (`ArtifactRollback` will not be called if at least one
-    payload has successfully finished `ArtifactCommit`. In this case it is not
-    possible to roll back and Mender will go straight to `ArtifactFailure`
-    state)
+  * `ArtifactCommit`
 
 It should be used to roll back to the previously installed software, either by
 restoring a backup or deactivating the new software so that the old software
