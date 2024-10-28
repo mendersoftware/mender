@@ -188,7 +188,7 @@ being considered, Mender calls the update module with:
 ```
 
 The exact time is not specified, but it is always after `Download` has
-completed, and before either `ArtifactRollback` or `ArtifactFailure` are
+completed, and before either `ArtifactRollbackReboot` or `ArtifactFailure` are
 executed. If the installation is successful it may not be called at all.
 
 The module can respond with the following responses:
