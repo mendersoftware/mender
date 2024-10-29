@@ -84,7 +84,17 @@ expected::expected<T, error::Error> StringTo(const string &str, int base = 10) {
 	if (!num) {
 		return expected::unexpected(num.error());
 	}
-	if (num.value() < numeric_limits<T>::min() or num.value() > numeric_limits<T>::max()) {
+	bool fits = true;
+	if (is_signed<T>()) {
+		if (num.value() < numeric_limits<T>::lowest() or num.value() > numeric_limits<T>::max()) {
+			fits = false;
+		}
+	} else {
+		if (static_cast<unsigned long long>(num.value()) > numeric_limits<T>::max()) {
+			fits = false;
+		}
+	}
+	if (not fits) {
 		return expected::unexpected(error::Error(
 			make_error_condition(errc::result_out_of_range),
 			"StringTo(): Number " + to_string(num.value())

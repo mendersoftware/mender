@@ -293,27 +293,14 @@ error::Error DeploymentClient::PushStatus(
 					+ content_length.error().String());
 				body_writer->SetUnlimited(true);
 			} else {
-				auto ex_len = common::StringToLongLong(content_length.value());
+				auto ex_len = common::StringTo<size_t>(content_length.value());
 				if (!ex_len) {
 					log::Error(
 						"Failed to convert the content length from the status API response headers to an integer: "
 						+ ex_len.error().String());
 					body_writer->SetUnlimited(true);
-				} else if (
-					ex_len.value() < 0
-					or static_cast<unsigned long long>(ex_len.value())
-						   > numeric_limits<size_t>::max()) {
-					// This is a ridiculuous limit, but we are mainly interested
-					// in catching corrupt data / mistakes here. Actually
-					// limiting memory usage in a useful way is something which
-					// should be thought through more carefully and maybe
-					// configurable.
-					api_handler(error::Error(
-						make_error_condition(errc::result_out_of_range),
-						"Content-Length out of range"));
-					return;
 				} else {
-					received_body->resize(static_cast<size_t>(ex_len.value()));
+					received_body->resize(ex_len.value());
 				}
 			}
 			resp->SetBodyWriter(body_writer);
@@ -471,27 +458,14 @@ error::Error DeploymentClient::PushLogs(
 					+ content_length.error().String());
 				body_writer->SetUnlimited(true);
 			} else {
-				auto ex_len = common::StringToLongLong(content_length.value());
+				auto ex_len = common::StringTo<size_t>(content_length.value());
 				if (!ex_len) {
 					log::Error(
 						"Failed to convert the content length from the status API response headers to an integer: "
 						+ ex_len.error().String());
 					body_writer->SetUnlimited(true);
-				} else if (
-					ex_len.value() < 0
-					or static_cast<unsigned long long>(ex_len.value())
-						   > numeric_limits<size_t>::max()) {
-					// This is a ridiculuous limit, but we are mainly interested
-					// in catching corrupt data / mistakes here. Actually
-					// limiting memory usage in a useful way is something which
-					// should be thought through more carefully and maybe
-					// configurable.
-					api_handler(error::Error(
-						make_error_condition(errc::result_out_of_range),
-						"Content-Length out of range"));
-					return;
 				} else {
-					received_body->resize(static_cast<size_t>(ex_len.value()));
+					received_body->resize(ex_len.value());
 				}
 			}
 			resp->SetBodyWriter(body_writer);
