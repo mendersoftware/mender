@@ -208,29 +208,6 @@ trigger:mender-qa:
       - artifact: gitlab-ci-client-qemu-publish-job.yml
         job: generate-qa-trigger
 
-.trigger:mender-docs-site:
-  stage: trigger
-  inherit:
-    variables: false
-  rules:
-    - if: '$CI_COMMIT_BRANCH =~ /^(master|[0-9]+\.[0-9]+\.x)$/'
-      changes:
-      - Documentation/*
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: never
-
-trigger:mender-docs-site:master:
-  extends: .trigger:mender-docs-site
-  trigger:
-    project: Northern.tech/Mender/mender-docs-site
-    branch: master
-
-trigger:mender-docs-site:production:
-  extends: .trigger:mender-docs-site
-  trigger:
-    project: Northern.tech/Mender/mender-docs-site
-    branch: production
-
 trigger:integration:
   stage: trigger
   inherit:
