@@ -55,7 +55,7 @@ TEST(ParserTest, TestParseManifest) {
 
 	// Check the checksum of the whole manifest
 	EXPECT_EQ(
-		manifest_unwrapped.GetShaSum().String(),
+		manifest_unwrapped.shasum.String(),
 		"cbea329fa8ae6223656b8c96015c41313cd6e7a199400ea6854b0a653052802d")
 		<< "SHASUM";
 }

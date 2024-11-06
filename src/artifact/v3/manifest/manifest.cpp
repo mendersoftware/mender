@@ -99,7 +99,7 @@ ExpectedManifest Parse(mender::common::io::Reader &reader) {
 		expected::unexpected(parser_error::MakeError(
 			parser_error::ParseError, "Invalid ShaSum: " + expected_sha.error().message));
 	}
-	m.shasum_ = expected_sha.value();
+	m.shasum = expected_sha.value();
 
 	std::stringstream input {common::StringFromByteVector(data)};
 	string line {};
@@ -109,15 +109,15 @@ ExpectedManifest Parse(mender::common::io::Reader &reader) {
 			return expected::unexpected(manifest_line.error());
 		}
 
-		m.map_[manifest_line->entry_name] = manifest_line->shasum;
+		m.map[manifest_line->entry_name] = manifest_line->shasum;
 	}
 
 	return m;
 }
 
 string Manifest::Get(const string &key) {
-	auto value = this->map_.find(key);
-	if (value != this->map_.end()) {
+	auto value = this->map.find(key);
+	if (value != this->map.end()) {
 		return value->second;
 	}
 	return "";

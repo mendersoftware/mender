@@ -169,7 +169,7 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 	vector<SubHeader> subheaders {};
 
 	int current_index {0};
-	while (tok.type != token::Type::EOFToken) {
+	while (tok.type != token::Type::EOFToken and tok.type != token::Type::Unrecognized) {
 		log::Trace("Parsing the sub-header ...");
 
 		// NOTE: We currently do not support multiple payloads
@@ -233,6 +233,11 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 		header.subHeaders.push_back(sub_header);
 
 		current_index++;
+	}
+
+	if (tok.type == token::Type::Unrecognized) {
+		return expected::unexpected(parser_error::MakeError(
+			parser_error::Code::ParseError, "Unrecognized error while parsing the header"));
 	}
 
 	return header;
