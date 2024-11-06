@@ -258,7 +258,7 @@ TEST_F(ParserTestEnv, TestParseTopLevelSigned) {
 	// Additional explicit verification of the signature
 	vector<string> keys = {path::Join(tmpdir->Path(), "public.key")};
 	auto expected_verify = mender::artifact::v3::manifest_sig::VerifySignature(
-		artifact.manifest_signature.value(), artifact.manifest.GetShaSum(), keys);
+		artifact.manifest_signature.value(), artifact.manifest.shasum, keys);
 	ASSERT_TRUE(expected_verify) << expected_verify.error().message << std::endl;
 	ASSERT_TRUE(expected_verify.value());
 }
@@ -281,7 +281,7 @@ TEST_F(ParserTestEnv, TestParseTopLevelSignedECKey) {
 	// Additional explicit verification of the signature
 	vector<string> keys = {path::Join(tmpdir->Path(), "public.ec.key")};
 	auto expected_verify = mender::artifact::v3::manifest_sig::VerifySignature(
-		artifact.manifest_signature.value(), artifact.manifest.GetShaSum(), keys);
+		artifact.manifest_signature.value(), artifact.manifest.shasum, keys);
 	ASSERT_TRUE(expected_verify) << expected_verify.error().message << std::endl;
 	ASSERT_TRUE(expected_verify.value());
 }

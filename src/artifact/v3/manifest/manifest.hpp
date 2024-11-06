@@ -38,12 +38,8 @@ namespace sha = mender::sha;
 class Manifest {
 public:
 	string Get(const string &key);
-	sha::SHA GetShaSum() const {
-		return shasum_;
-	}
-
-	unordered_map<string, string> map_;
-	sha::SHA shasum_;
+	unordered_map<string, string> map;
+	sha::SHA shasum;
 };
 
 using ExpectedManifest = expected::expected<Manifest, error::Error>;
