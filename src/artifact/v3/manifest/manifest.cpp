@@ -55,9 +55,11 @@ namespace {
 string MaybeStripSuffix(string s, vector<string> suffixes) {
 	auto s_ {s};
 	for (const auto &suffix : suffixes) {
-		if (s.substr(s.size() - suffix.size()) == suffix) {
-			s_.erase(s.size() - suffix.size());
-			return s_;
+		if (s.size() > suffix.size()) {
+			if (s.substr(s.size() - suffix.size()) == suffix) {
+				s_.erase(s.size() - suffix.size());
+				return s_;
+			}
 		}
 	}
 	return s_;

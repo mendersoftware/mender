@@ -184,3 +184,31 @@ aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  manifest.zst
 		manifest_unwrapped.Get("header.tar"),
 		"9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50");
 }
+
+TEST(ParserTest, TestParseManifestShortFilenames) {
+	std::string manifest_data =
+		R"(aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  a
+9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50  bb
+96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b  ccc
+)";
+
+	std::stringstream ss {manifest_data};
+
+	mender::common::io::StreamReader sr {ss};
+
+	auto manifest = mender::artifact::v3::manifest::Parse(sr);
+
+	ASSERT_TRUE(manifest) << "error message: " << manifest.error().message;
+
+	auto manifest_unwrapped = manifest.value();
+
+	EXPECT_EQ(
+		manifest_unwrapped.Get("a"),
+		"aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f");
+	EXPECT_EQ(
+		manifest_unwrapped.Get("bb"),
+		"9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50");
+	EXPECT_EQ(
+		manifest_unwrapped.Get("ccc"),
+		"96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b");
+}
