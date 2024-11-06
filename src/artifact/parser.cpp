@@ -142,7 +142,7 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 		if (config.verify_signature != config::Signature::Skip
 			and config.artifact_verify_keys.size() > 0) {
 			auto expected_verified = manifest_sig::VerifySignature(
-				*signature, manifest.GetShaSum(), config.artifact_verify_keys);
+				*signature, manifest.shasum, config.artifact_verify_keys);
 			if (!expected_verified) {
 				return expected::unexpected(parser_error::MakeError(
 					parser_error::Code::SignatureVerificationError,
