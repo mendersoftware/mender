@@ -157,6 +157,14 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 		}
 	}
 
+	log::Trace("Check version integrity");
+	if (manifest.Get("version") != version.shasum.String()) {
+		return expected::unexpected(sha::MakeError(
+			sha::ShasumMismatchError,
+			"The checksum of version file does not match the expected checksum, (expected): "
+				+ manifest.Get("version") + " (calculated): " + version.shasum.String()));
+	}
+
 	log::Trace("Parsing the Header");
 	if (tok.type != token::Type::Header) {
 		return expected::unexpected(parser_error::MakeError(
