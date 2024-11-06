@@ -22,6 +22,8 @@
 #include <common/error.hpp>
 #include <common/json.hpp>
 
+#include <artifact/sha/sha.hpp>
+
 
 namespace mender {
 namespace artifact {
@@ -32,6 +34,7 @@ namespace io = mender::common::io;
 namespace expected = mender::common::expected;
 namespace error = mender::common::error;
 namespace json = mender::common::json;
+namespace sha = mender::sha;
 
 const int supported_parser_version {3};
 const string supported_parser_format {"mender"};
@@ -63,7 +66,11 @@ error::Error MakeError(ErrorCode code, const string &msg) {
 
 
 ExpectedVersion Parse(io::Reader &reader) {
-	auto expected_json = json::Load(reader);
+	Version v {};
+
+	sha::Reader sha_reader {reader};
+
+	auto expected_json = json::Load(sha_reader);
 	if (!expected_json) {
 		return expected::unexpected(MakeError(
 			ParseError,
@@ -84,6 +91,7 @@ ExpectedVersion Parse(io::Reader &reader) {
 			"Only version " + std::to_string(supported_parser_version)
 				+ " is supported, received version " + std::to_string(version.value())));
 	}
+	v.version = supported_parser_version;
 
 	auto format = version_json.Get("format").and_then(json::ToString);
 
@@ -97,8 +105,16 @@ ExpectedVersion Parse(io::Reader &reader) {
 			"The client only understands the 'mender' Artifact type. Got format: "
 				+ format.value()));
 	}
+	v.format = supported_parser_format;
 
-	return Version {.version = supported_parser_version, .format = supported_parser_format};
+	auto expected_sha = sha_reader.ShaSum();
+	if (!expected_sha) {
+		expected::unexpected(
+			MakeError(FormatError, "Invalid ShaSum: " + expected_sha.error().message));
+	}
+	v.shasum = expected_sha.value();
+
+	return v;
 }
 
 } // namespace version
