@@ -17,6 +17,7 @@
 #include <string>
 
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include <common/log.hpp>
 
@@ -138,7 +139,7 @@ TEST(ParserTest, TestParseManifestFormatErrorAllOnOneLine) {
 
 TEST(ParserTest, TestParseManifestFormatErrorNewlineSeparators) {
 	std::string manifest_data =
-		R"(aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f data/0000.tar 9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50 header.tar 96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b version)";
+		R"(aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f data/0000.tar 9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50 header.tar)";
 
 	std::stringstream ss {manifest_data};
 
@@ -150,7 +151,7 @@ TEST(ParserTest, TestParseManifestFormatErrorNewlineSeparators) {
 
 	EXPECT_EQ(
 		manifest.error().message,
-		"Line (aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f data/0000.tar 9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50 header.tar 96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b version) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([^[:blank:]]+)$");
+		"Line (aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f data/0000.tar 9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50 header.tar) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([^[:blank:]]+)$");
 }
 
 TEST(ParserTest, TestParseManifestFormatStripCompressionSuffixes) {
@@ -183,4 +184,51 @@ aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  manifest.zst
 	ASSERT_EQ(
 		manifest_unwrapped.Get("header.tar"),
 		"9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50");
+}
+
+TEST(ParserTest, TestParseManifestShortFilenames) {
+	std::string manifest_data =
+		R"(aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  a
+9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50  bb
+96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b  ccc
+)";
+
+	std::stringstream ss {manifest_data};
+
+	mender::common::io::StreamReader sr {ss};
+
+	auto manifest = mender::artifact::v3::manifest::Parse(sr);
+
+	ASSERT_TRUE(manifest) << "error message: " << manifest.error().message;
+
+	auto manifest_unwrapped = manifest.value();
+
+	EXPECT_EQ(
+		manifest_unwrapped.Get("a"),
+		"aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f");
+	EXPECT_EQ(
+		manifest_unwrapped.Get("bb"),
+		"9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50");
+	EXPECT_EQ(
+		manifest_unwrapped.Get("ccc"),
+		"96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b");
+}
+
+TEST(ParserTest, TestParseManifestLongFilenames) {
+	std::string long_filename(100, '*');
+	std::string manifest_data =
+		R"(aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  )" + long_filename
+		+ R"(1)";
+
+	std::stringstream ss {manifest_data};
+
+	mender::common::io::StreamReader sr {ss};
+
+	auto expected_manifest = mender::artifact::v3::manifest::Parse(sr);
+
+	ASSERT_FALSE(expected_manifest);
+
+	EXPECT_THAT(
+		expected_manifest.error().message,
+		testing::HasSubstr("*****1) is too long, maximum allowed filename length is"));
 }
