@@ -83,6 +83,20 @@ protected:
 		# Verify the signature of the Artifact generated
 		mender-artifact validate ${DIRNAME}/test-artifact-signed-ec.mender -k ${DIRNAME}/public.ec.key
 
+		# Artifacts with compromised manifest
+		mkdir ${DIRNAME}/untar || exit 1
+		mender-artifact --compression none write rootfs-image --no-progress -t test-device -n test-artifact \
+			-f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-integrity-base.mender || exit 1
+		tar -xf  ${DIRNAME}/test-artifact-integrity-base.mender -C  ${DIRNAME}/untar/ || exit 1
+		cp ${DIRNAME}/untar/manifest ${DIRNAME}/untar/manifest.bkp
+		# Line 2 is the header.tar
+		sed --in-place --regexp-extended '2s/[0-9a-f.*]{8}/deadbeef/' ${DIRNAME}/untar/manifest || exit 1
+		tar -cf ${DIRNAME}/test-artifact-integrity-header.mender -C ${DIRNAME}/untar version manifest header.tar data/0000.tar || exit 1
+		# Line 3 is the version
+		cp ${DIRNAME}/untar/manifest.bkp ${DIRNAME}/untar/manifest
+		sed --in-place --regexp-extended '3s/[0-9a-f.*]{8}/deadbeef/' ${DIRNAME}/untar/manifest || exit 1
+		tar -cf ${DIRNAME}/test-artifact-integrity-version.mender -C ${DIRNAME}/untar version manifest header.tar data/0000.tar || exit 1
+
 		exit 0
 		)";
 
@@ -258,7 +272,7 @@ TEST_F(ParserTestEnv, TestParseTopLevelSigned) {
 	// Additional explicit verification of the signature
 	vector<string> keys = {path::Join(tmpdir->Path(), "public.key")};
 	auto expected_verify = mender::artifact::v3::manifest_sig::VerifySignature(
-		artifact.manifest_signature.value(), artifact.manifest.GetShaSum(), keys);
+		artifact.manifest_signature.value(), artifact.manifest.shasum, keys);
 	ASSERT_TRUE(expected_verify) << expected_verify.error().message << std::endl;
 	ASSERT_TRUE(expected_verify.value());
 }
@@ -281,7 +295,7 @@ TEST_F(ParserTestEnv, TestParseTopLevelSignedECKey) {
 	// Additional explicit verification of the signature
 	vector<string> keys = {path::Join(tmpdir->Path(), "public.ec.key")};
 	auto expected_verify = mender::artifact::v3::manifest_sig::VerifySignature(
-		artifact.manifest_signature.value(), artifact.manifest.GetShaSum(), keys);
+		artifact.manifest_signature.value(), artifact.manifest.shasum, keys);
 	ASSERT_TRUE(expected_verify) << expected_verify.error().message << std::endl;
 	ASSERT_TRUE(expected_verify.value());
 }
@@ -337,4 +351,35 @@ TEST_F(ParserTestEnv, TestParseTopLevelSignedKeysListInvalid) {
 		expected_artifact.error().message,
 		testing::HasSubstr(
 			"Failed to verify the manifest signature: Failed to open the public key file from (non-existing-path.key)"));
+}
+
+TEST_F(ParserTestEnv, TestParseCompromisedManifestHeader) {
+	std::fstream fs {path::Join(tmpdir->Path(), "test-artifact-integrity-header.mender")};
+
+	mender::common::io::StreamReader sr {fs};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr);
+
+	ASSERT_FALSE(expected_artifact);
+
+	/* The actual error is logged by the parser (see lexer.hpp) but not passed to the caller:
+	 *  severity=error msg="Error reading the next tar entry: Shasum mismatch error: ...
+	 */
+	EXPECT_THAT(
+		expected_artifact.error().message,
+		testing::HasSubstr("Unrecognized error while parsing the header"));
+}
+
+TEST_F(ParserTestEnv, TestParseCompromisedManifestVersion) {
+	std::fstream fs {path::Join(tmpdir->Path(), "test-artifact-integrity-version.mender")};
+
+	mender::common::io::StreamReader sr {fs};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr);
+
+	ASSERT_FALSE(expected_artifact);
+
+	EXPECT_THAT(
+		expected_artifact.error().message,
+		testing::HasSubstr("The checksum of version file does not match the expected checksum"));
 }

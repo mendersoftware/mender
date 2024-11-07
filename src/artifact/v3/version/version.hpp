@@ -21,6 +21,8 @@
 #include <common/error.hpp>
 #include <common/io.hpp>
 
+#include <artifact/sha/sha.hpp>
+
 namespace mender {
 namespace artifact {
 namespace v3 {
@@ -31,6 +33,7 @@ using namespace std;
 namespace io = mender::common::io;
 namespace expected = mender::common::expected;
 namespace error = mender::common::error;
+namespace sha = mender::sha;
 
 
 enum ErrorCode {
@@ -51,8 +54,9 @@ extern const ErrorCategoryClass ErrorCategory;
 error::Error MakeError(ErrorCode code, const string &msg);
 
 struct Version {
-	const int version;
-	const string format;
+	int version;
+	string format;
+	sha::SHA shasum;
 };
 
 using ExpectedVersion = expected::expected<Version, error::Error>;

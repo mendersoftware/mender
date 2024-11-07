@@ -42,22 +42,25 @@ struct ManifestLine {
 
 using ExpectedManifestLine = expected::expected<ManifestLine, error::Error>;
 
-const size_t expected_shasum_length {64};
-const size_t expected_whitespace {2};
-const string manifest_line_regex_string {
+static const size_t expected_shasum_length {64};
+static const size_t expected_whitespace {2};
+static const size_t max_allowed_filename_length {100};
+static const string manifest_line_regex_string {
 	"^([0-9a-z]{" + to_string(expected_shasum_length) + "})[[:space:]]{"
 	+ to_string(expected_whitespace) + "}([^[:blank:]]+)$"};
 
-const vector<string> supported_compression_suffixes {".gz", ".xz", ".zst"};
+static const vector<string> supported_compression_suffixes {".gz", ".xz", ".zst"};
 
 namespace {
 
 string MaybeStripSuffix(string s, vector<string> suffixes) {
 	auto s_ {s};
 	for (const auto &suffix : suffixes) {
-		if (s.substr(s.size() - suffix.size()) == suffix) {
-			s_.erase(s.size() - suffix.size());
-			return s_;
+		if (s.size() > suffix.size()) {
+			if (s.substr(s.size() - suffix.size()) == suffix) {
+				s_.erase(s.size() - suffix.size());
+				return s_;
+			}
 		}
 	}
 	return s_;
@@ -66,6 +69,18 @@ string MaybeStripSuffix(string s, vector<string> suffixes) {
 ExpectedManifestLine Tokenize(const string &line) {
 	const std::regex manifest_line_regex(
 		manifest_line_regex_string, std::regex_constants::ECMAScript);
+
+	/* Refuse regex matching for too long lines to prevent std::regex crash
+	 * See: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=86164
+	 */
+	if (line.size() > expected_shasum_length + expected_whitespace + max_allowed_filename_length) {
+		return expected::unexpected(parser_error::MakeError(
+			parser_error::ParseError,
+			"Line (" + line + ") is too long, maximum allowed filename length is "
+				+ to_string(max_allowed_filename_length)));
+	}
+
+
 	std::smatch base_match;
 	std::regex_match(line, base_match, manifest_line_regex);
 
@@ -99,7 +114,7 @@ ExpectedManifest Parse(mender::common::io::Reader &reader) {
 		expected::unexpected(parser_error::MakeError(
 			parser_error::ParseError, "Invalid ShaSum: " + expected_sha.error().message));
 	}
-	m.shasum_ = expected_sha.value();
+	m.shasum = expected_sha.value();
 
 	std::stringstream input {common::StringFromByteVector(data)};
 	string line {};
@@ -109,15 +124,15 @@ ExpectedManifest Parse(mender::common::io::Reader &reader) {
 			return expected::unexpected(manifest_line.error());
 		}
 
-		m.map_[manifest_line->entry_name] = manifest_line->shasum;
+		m.map[manifest_line->entry_name] = manifest_line->shasum;
 	}
 
 	return m;
 }
 
 string Manifest::Get(const string &key) {
-	auto value = this->map_.find(key);
-	if (value != this->map_.end()) {
+	auto value = this->map.find(key);
+	if (value != this->map.end()) {
 		return value->second;
 	}
 	return "";
