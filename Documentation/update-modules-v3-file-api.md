@@ -28,6 +28,7 @@ also some additional error states:
 
 * `ArtifactRollback`
 * `ArtifactRollbackReboot`
+* `ArtifactVerifyRollbackReboot`
 * `ArtifactFailure`
 
 There are also a few calls in addition to the states that don't perform any
@@ -188,7 +189,7 @@ being considered, Mender calls the update module with:
 ```
 
 The exact time is not specified, but it is always after `Download` has
-completed, and before either `ArtifactRollback` or `ArtifactFailure` are
+completed, and before either `ArtifactRollbackReboot` or `ArtifactFailure` are
 executed. If the installation is successful it may not be called at all.
 
 The module can respond with the following responses:
@@ -209,10 +210,7 @@ The module can respond with the following responses:
   * `ArtifactInstall`
   * `ArtifactReboot`
   * `ArtifactVerifyReboot`
-  * `ArtifactCommit` (`ArtifactRollback` will not be called if at least one
-    payload has successfully finished `ArtifactCommit`. In this case it is not
-    possible to roll back and Mender will go straight to `ArtifactFailure`
-    state)
+  * `ArtifactCommit`
 
 It should be used to roll back to the previously installed software, either by
 restoring a backup or deactivating the new software so that the old software
@@ -236,13 +234,13 @@ The `reboot` command execution follows the same mechanics as those described in
 the `ArtifactReboot` state.
 
 Additionally, `ArtifactRollbackReboot` (or the `reboot` command) will execute if
-the next state, `ArtifactRollbackVerifyReboot` has executed and returned
+the next state, `ArtifactVerifyRollbackReboot` has executed and returned
 failure. This will only happen a limited number of times, to avoid endless
 reboot loops.
 
-#### `ArtifactRollbackVerifyReboot` state
+#### `ArtifactVerifyRollbackReboot` state
 
-`ArtifactRollbackVerifyReboot` executes whenever:
+`ArtifactVerifyRollbackReboot` executes whenever:
 
 * `ArtifactRollbackReboot` has executed
 
@@ -250,7 +248,7 @@ This state should be used to verify that the system or peripheral was
 successfully rebooted back into its old state. Note that if this returns
 failure, the reboot will be attempted again using the `ArtifactRollbackReboot`
 state. Mender will only try a limited number of times before moving on to the
-`ArtifactFailure` state, but **if `ArtifactRollbackVerifyReboot` keeps returning
+`ArtifactFailure` state, but **if `ArtifactVerifyRollbackReboot` keeps returning
 failure the system may be left in a permanently inconsistent state**.
 
 #### `ArtifactFailure` state
