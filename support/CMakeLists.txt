@@ -23,16 +23,11 @@ set (ROOTFS_IMAGE
   modules/rootfs-image
 )
 set(MODULES
-  modules/deb
-  modules/docker
   modules/directory
   modules/single-file
-  modules/rpm
-  modules/script
   ${ROOTFS_IMAGE}
 )
 set(MODULES_ARTIFACT_GENERATORS
-  modules-artifact-gen/docker-artifact-gen
   modules-artifact-gen/directory-artifact-gen
   modules-artifact-gen/single-file-artifact-gen
 )
