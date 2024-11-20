@@ -299,6 +299,18 @@ ExpectedPrivateKey PrivateKey::Load(const Args &args) {
 	if (args.ssl_engine != "") {
 		return LoadFromHSMEngine(args);
 	}
+	// Try to make sure the key has the right permissions and warn if there was
+	// a change (MEN-7752), but try to load it in any case (it may not even be a
+	// file on the file system).
+	if (common::StartsWith<string>(args.private_key_path, "/")) {
+		auto err = path::Permissions(
+			args.private_key_path,
+			{path::Perms::Owner_read, path::Perms::Owner_write},
+			path::WarnMode::WarnOnChange);
+		if (err != error::NoError) {
+			log::Warning("Failed to fix permissions of the private key file '" + args.private_key_path + "': " + err.String());
+		}
+	}
 	return LoadFrom(args);
 }
 

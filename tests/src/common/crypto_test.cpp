@@ -16,6 +16,7 @@
 #include <artifact/sha/sha.hpp>
 
 #include <filesystem>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -253,6 +254,24 @@ TEST(CryptoTest, TestPrivateKeySaveToPEM) {
 	EXPECT_EQ(perms, fs::perms::owner_read | fs::perms::owner_write);
 
 	EXPECT_TRUE(mtesting::FilesEqual(private_key_file, tmpfile));
+
+	// Pre-existing file should get its permissions fixed.
+	ofstream key2 {"private.key2"};
+	key2.close();
+	err = path::Permissions(
+		"private.key2",
+		{path::Perms::Owner_read,
+		 path::Perms::Owner_write,
+		 path::Perms::Group_read,
+		 path::Perms::Group_write,
+		 path::Perms::Others_read,
+		 path::Perms::Others_write});
+	EXPECT_EQ(error::NoError, err);
+
+	err = private_key.SaveToPEM(tmpfile);
+	EXPECT_EQ(error::NoError, err);
+	perms = fs::status(tmpfile).permissions();
+	EXPECT_EQ(perms, fs::perms::owner_read | fs::perms::owner_write);
 }
 
 } // namespace crypto
