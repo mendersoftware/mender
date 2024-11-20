@@ -308,7 +308,9 @@ ExpectedPrivateKey PrivateKey::Load(const Args &args) {
 			{path::Perms::Owner_read, path::Perms::Owner_write},
 			path::WarnMode::WarnOnChange);
 		if (err != error::NoError) {
-			log::Warning("Failed to fix permissions of the private key file '" + args.private_key_path + "': " + err.String());
+			log::Warning(
+				"Failed to fix permissions of the private key file '" + args.private_key_path
+				+ "': " + err.String());
 		}
 	}
 	return LoadFrom(args);
@@ -784,28 +786,22 @@ expected::ExpectedBool VerifySign(
 }
 
 error::Error PrivateKey::SaveToPEM(const string &private_key_path) {
-	auto bio_key = unique_ptr<BIO, void (*)(BIO *)>(NULL, bio_free_func);
+	if (path::FileExists(private_key_path)) {
+		auto err = path::FileDelete(private_key_path);
+		if (err != error::NoError) {
+			log::Debug(
+				"Failed to delete the private key fie '" + private_key_path + "': " + err.String());
+		}
+	}
 	auto ex_fd =
 		path::FileCreate(private_key_path, {path::Perms::Owner_read, path::Perms::Owner_write});
 	if (!ex_fd) {
 		auto &err = ex_fd.error();
-		if (err.IsErrno(EEXIST)) {
-			// The file already exists, let's make sure it has the right
-			// permissions. Ideally, we should insist on creating the file
-			// because we never know if there is no other process having it open
-			// before we fix the permissions.
-			path::Permissions(
-				private_key_path,
-				{path::Perms::Owner_read, path::Perms::Owner_write},
-				path::WarnMode::WarnOnChange);
-			bio_key.reset(BIO_new_file(private_key_path.c_str(), "w"));
-		} else {
-			return err.FollowedBy(MakeError(
-				SetupError, "Failed to create the private key file '" + private_key_path + "'"));
-		}
-	} else {
-		bio_key.reset(BIO_new_fd(ex_fd.value(), BIO_CLOSE));
+		return err.FollowedBy(MakeError(
+			SetupError, "Failed to create the private key file '" + private_key_path + "'"));
 	}
+	auto bio_key =
+		unique_ptr<BIO, void (*)(BIO *)>(BIO_new_fd(ex_fd.value(), BIO_CLOSE), bio_free_func);
 	if (bio_key == nullptr) {
 		return MakeError(
 			SetupError,
