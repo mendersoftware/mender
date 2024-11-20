@@ -102,14 +102,32 @@ expected::ExpectedBool IsExecutable(const string &file_path, const bool warn) {
 	}
 }
 
-error::Error Permissions(const string &file_path, const vector<Perms> perms) {
+error::Error Permissions(
+	const string &file_path, const vector<Perms> perms, WarnMode warn_on_change) {
 	if (perms.size() == 0) {
 		return error::NoError;
 	}
-	fs::perms p {};
-	std::for_each(perms.cbegin(), perms.cend(), [&p](const Perms perm) { p |= perm_map.at(perm); });
+	fs::perms old_perms {};
 	try {
-		fs::permissions(file_path, p);
+		old_perms = fs::status(file_path).permissions();
+	} catch (const fs::filesystem_error &e) {
+		return error::Error(
+			e.code().default_error_condition(),
+			"Could not check permissions on '" + file_path + "'");
+	}
+
+	fs::perms new_perms {};
+	std::for_each(perms.cbegin(), perms.cend(), [&new_perms](const Perms perm) {
+		new_perms |= perm_map.at(perm);
+	});
+	if (old_perms == new_perms) {
+		return error::NoError;
+	}
+	if (warn_on_change == WarnMode::WarnOnChange) {
+		log::Warning("Changing permissions on the '" + file_path + "' file");
+	}
+	try {
+		fs::permissions(file_path, new_perms);
 	} catch (const fs::filesystem_error &e) {
 		return error::Error(
 			e.code().default_error_condition(), "Could not set permissions on '" + file_path + "'");
