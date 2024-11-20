@@ -15,6 +15,7 @@
 #include <common/crypto.hpp>
 #include <artifact/sha/sha.hpp>
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -30,6 +31,7 @@ namespace mtesting = mender::common::testing;
 using testing::HasSubstr;
 
 namespace error = mender::common::error;
+namespace fs = std::filesystem;
 namespace path = mender::common::path;
 
 namespace mender {
@@ -247,6 +249,8 @@ TEST(CryptoTest, TestPrivateKeySaveToPEM) {
 	string tmpfile = path::Join(tmpdir.Path(), "private.key");
 	auto err = private_key.SaveToPEM(tmpfile);
 	EXPECT_EQ(error::NoError, err);
+	fs::perms perms = fs::status(tmpfile).permissions();
+	EXPECT_EQ(perms, fs::perms::owner_read | fs::perms::owner_write);
 
 	EXPECT_TRUE(mtesting::FilesEqual(private_key_file, tmpfile));
 }

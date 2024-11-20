@@ -16,6 +16,7 @@
 
 #include <common/crypto/platform/openssl/openssl_config.h>
 
+#include <cerrno>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -41,6 +42,7 @@
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/common.hpp>
+#include <common/path.hpp>
 
 #include <artifact/sha/sha.hpp>
 
@@ -57,6 +59,7 @@ using namespace std;
 
 namespace error = mender::common::error;
 namespace io = mender::common::io;
+namespace path = mender::common::path;
 
 using EnginePtr = unique_ptr<ENGINE, void (*)(ENGINE *)>;
 #ifndef MENDER_CRYPTO_OPENSSL_LEGACY
@@ -769,8 +772,28 @@ expected::ExpectedBool VerifySign(
 }
 
 error::Error PrivateKey::SaveToPEM(const string &private_key_path) {
-	auto bio_key = unique_ptr<BIO, void (*)(BIO *)>(
-		BIO_new_file(private_key_path.c_str(), "w"), bio_free_func);
+	auto bio_key = unique_ptr<BIO, void (*)(BIO *)>(NULL, bio_free_func);
+	auto ex_fd =
+		path::FileCreate(private_key_path, {path::Perms::Owner_read, path::Perms::Owner_write});
+	if (!ex_fd) {
+		auto &err = ex_fd.error();
+		if (err.IsErrno(EEXIST)) {
+			// The file already exists, let's make sure it has the right
+			// permissions. Ideally, we should insist on creating the file
+			// because we never know if there is no other process having it open
+			// before we fix the permissions.
+			path::Permissions(
+				private_key_path,
+				{path::Perms::Owner_read, path::Perms::Owner_write},
+				path::WarnMode::WarnOnChange);
+			bio_key.reset(BIO_new_file(private_key_path.c_str(), "w"));
+		} else {
+			return err.FollowedBy(MakeError(
+				SetupError, "Failed to create the private key file '" + private_key_path + "'"));
+		}
+	} else {
+		bio_key.reset(BIO_new_fd(ex_fd.value(), BIO_CLOSE));
+	}
 	if (bio_key == nullptr) {
 		return MakeError(
 			SetupError,
