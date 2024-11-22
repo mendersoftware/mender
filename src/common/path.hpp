@@ -43,7 +43,12 @@ enum class Perms {
 	Others_exec,
 };
 
-error::Error Permissions(const string &file_path, vector<Perms> perms);
+enum class WarnMode { WarnOnChange, NoWarnOnChange };
+
+error::Error Permissions(
+	const string &file_path,
+	vector<Perms> perms,
+	WarnMode warn_on_change = WarnMode::NoWarnOnChange);
 
 string JoinOne(const string &prefix, const string &path);
 
@@ -66,6 +71,8 @@ bool IsAbsolute(const string &path);
 bool FileExists(const string &path);
 
 error::Error FileDelete(const string &path);
+
+expected::ExpectedInt FileCreate(const string &path, vector<Perms> perms);
 
 error::Error DeleteRecursively(const string &path);
 

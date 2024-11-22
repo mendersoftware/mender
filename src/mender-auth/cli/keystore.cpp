@@ -69,7 +69,7 @@ error::Error MenderKeyStore::Load() {
 			"Error loading private key from " + key_name_ + ": " + exp_key.error().message);
 	}
 	log::Info("Successfully loaded private key from " + key_name_);
-	key_ = move(exp_key.value());
+	key_ = std::move(exp_key.value());
 
 	return error::NoError;
 }

@@ -16,6 +16,7 @@
 
 #include <common/crypto/platform/openssl/openssl_config.h>
 
+#include <cerrno>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -41,6 +42,7 @@
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/common.hpp>
+#include <common/path.hpp>
 
 #include <artifact/sha/sha.hpp>
 
@@ -57,6 +59,7 @@ using namespace std;
 
 namespace error = mender::common::error;
 namespace io = mender::common::io;
+namespace path = mender::common::path;
 
 using EnginePtr = unique_ptr<ENGINE, void (*)(ENGINE *)>;
 #ifndef MENDER_CRYPTO_OPENSSL_LEGACY
@@ -295,6 +298,20 @@ ExpectedPrivateKey PrivateKey::Load(const Args &args) {
 	log::Trace("Loading private key");
 	if (args.ssl_engine != "") {
 		return LoadFromHSMEngine(args);
+	}
+	// Try to make sure the key has the right permissions and warn if there was
+	// a change (MEN-7752), but try to load it in any case (it may not even be a
+	// file on the file system).
+	if (common::StartsWith<string>(args.private_key_path, "/")) {
+		auto err = path::Permissions(
+			args.private_key_path,
+			{path::Perms::Owner_read, path::Perms::Owner_write},
+			path::WarnMode::WarnOnChange);
+		if (err != error::NoError) {
+			log::Warning(
+				"Failed to fix permissions of the private key file '" + args.private_key_path
+				+ "': " + err.String());
+		}
 	}
 	return LoadFrom(args);
 }
@@ -769,8 +786,22 @@ expected::ExpectedBool VerifySign(
 }
 
 error::Error PrivateKey::SaveToPEM(const string &private_key_path) {
-	auto bio_key = unique_ptr<BIO, void (*)(BIO *)>(
-		BIO_new_file(private_key_path.c_str(), "w"), bio_free_func);
+	if (path::FileExists(private_key_path)) {
+		auto err = path::FileDelete(private_key_path);
+		if (err != error::NoError) {
+			log::Debug(
+				"Failed to delete the private key fie '" + private_key_path + "': " + err.String());
+		}
+	}
+	auto ex_fd =
+		path::FileCreate(private_key_path, {path::Perms::Owner_read, path::Perms::Owner_write});
+	if (!ex_fd) {
+		auto &err = ex_fd.error();
+		return err.FollowedBy(MakeError(
+			SetupError, "Failed to create the private key file '" + private_key_path + "'"));
+	}
+	auto bio_key =
+		unique_ptr<BIO, void (*)(BIO *)>(BIO_new_fd(ex_fd.value(), BIO_CLOSE), bio_free_func);
 	if (bio_key == nullptr) {
 		return MakeError(
 			SetupError,

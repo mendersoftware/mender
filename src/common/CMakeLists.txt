@@ -193,6 +193,7 @@ target_compile_options(common_crypto PRIVATE
 target_link_libraries(common_crypto PUBLIC
   common_log
   common_io
+  common_path
   sha
   OpenSSL::SSL
   OpenSSL::Crypto

@@ -111,6 +111,7 @@ gtest_discover_tests(key_value_parser_test NO_PRETTY_VALUES)
 add_dependencies(tests key_value_parser_test)
 
 add_executable(crypto_test EXCLUDE_FROM_ALL crypto_test.cpp)
+target_compile_options(crypto_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(crypto_test PUBLIC
   common_crypto
   common_testing
