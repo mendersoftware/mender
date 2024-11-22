@@ -16,6 +16,7 @@
 
 #include <fcntl.h>
 
+#include <cerrno>
 #include <filesystem>
 #include <string>
 
@@ -27,6 +28,33 @@ namespace path {
 
 using namespace std;
 namespace fs = std::filesystem;
+
+static unordered_map<Perms, mode_t> perm_map = {
+	{Perms::Owner_read, S_IRUSR},
+	{Perms::Owner_write, S_IWUSR},
+	{Perms::Owner_exec, S_IXUSR},
+	{Perms::Group_read, S_IRGRP},
+	{Perms::Group_write, S_IWGRP},
+	{Perms::Group_exec, S_IXGRP},
+	{Perms::Others_read, S_IROTH},
+	{Perms::Others_write, S_IWOTH},
+	{Perms::Others_exec, S_IXOTH},
+};
+
+expected::ExpectedInt FileCreate(const string &path, vector<Perms> perms) {
+	mode_t mode = 0;
+	std::for_each(
+		perms.cbegin(), perms.cend(), [&mode](const Perms perm) { mode |= perm_map.at(perm); });
+	int fd = open(path.c_str(), O_CREAT | O_EXCL | O_WRONLY | O_TRUNC, mode);
+	int err = errno;
+	if (fd != -1) {
+		return fd;
+	}
+
+	return expected::unexpected(error::Error(
+		std::generic_category().default_error_condition(err),
+		"Failed to create file '" + path + "': " + strerror(err)));
+}
 
 error::Error DataSyncRecursively(const string &dir) {
 	// We need to be careful which method we use to sync data to disk. `sync()` is tempting,
