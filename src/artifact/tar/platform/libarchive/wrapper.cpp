@@ -104,8 +104,7 @@ int FreeLibArchiveHandle(archive *a) {
 
 Handle::Handle(io::Reader &reader) :
 	archive_(archive_read_new(), FreeLibArchiveHandle),
-	reader_container_ {reader, libarchive_read_buffer_size},
-	small_buf_(1) {
+	reader_container_ {reader, libarchive_read_buffer_size} {
 	auto err = Init();
 	if (error::NoError != err) {
 		log::Error("Failed to initialize the Archive handle: " + err.message);
@@ -137,12 +136,22 @@ ExpectedSize Handle::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iter
 }
 
 error::Error Handle::EnsureEOF() {
-	auto ret = reader_container_.reader_.Read(small_buf_.begin(), small_buf_.end());
-	if (!ret) {
-		return ret.error();
-	} else if (ret.value() != 0) {
-		return tar::MakeError(tar::TarExtraDataError, "");
-	}
+	expected::ExpectedSize ret;
+	do {
+		ret = reader_container_.reader_.Read(
+			reader_container_.buff_.begin(), reader_container_.buff_.end());
+		if (!ret) {
+			return ret.error();
+		} else if (
+			(ret.value() > 0)
+			&& std::any_of(
+				reader_container_.buff_.cbegin(),
+				reader_container_.buff_.cbegin() + ret.value(),
+				[](uint8_t byte) { return byte != 0; })) {
+			return tar::MakeError(
+				tar::TarExtraDataError, "Only zero bytes allowed after an end of archive");
+		}
+	} while (ret && (ret.value() > 0));
 
 	return error::NoError;
 }

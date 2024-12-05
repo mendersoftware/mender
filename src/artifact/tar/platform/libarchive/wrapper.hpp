@@ -64,8 +64,6 @@ private:
 	 further read from */
 	ReaderContainer reader_container_;
 
-	vector<uint8_t> small_buf_;
-
 public:
 	Handle(io::Reader &reader);
 
