@@ -14,13 +14,15 @@ set -e
 # Set default value for DeviceTypeFile
 default_device_type_file="/var/lib/mender/device_type"
 
+# Poor man's case insensitive match.
 # Read mender.conf file to find the DeviceTypeFile key if it exists prioritizing /etc over /var/lib
-if grep -q '"DeviceTypeFile"' /etc/mender/mender.conf; then
-    device_type_file=$(grep '"DeviceTypeFile"' /etc/mender/mender.conf | awk -F ': ' '{print $2}' | tr -d '"' | tr -d ',')
-elif grep -q '"DeviceTypeFile"' /var/lib/mender/mender.conf; then
-    device_type_file=$(grep '"DeviceTypeFile"' /var/lib/mender/mender.conf | awk -F ': ' '{print $2}' | tr -d '"' | tr -d ',')
-else
-    device_type_file="$default_device_type_file"
+MATCH="[Dd][Ee][Vv][Ii][Cc][Ee][Tt][Yy][Pp][Ee][Ff][Ii][Ll][Ee]"
+if [ -f /etc/mender/mender.conf ]; then
+    device_type_file=$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "/etc/mender/mender.conf" || true)
+fi
+
+if [ -z "$device_type_file" ] && [ -f /var/lib/mender/mender.conf ]; then
+    device_type_file=$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "/var/lib/mender/mender.conf" || true)
 fi
 
 # Use default if DeviceTypeFile is not set, empty, or the file does not exist
