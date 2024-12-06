@@ -59,6 +59,10 @@ protected:
     cp ${DIRNAME}/test.tar ${DIRNAME}/test-corrupt.tar
     dd if=/dev/random of=${DIRNAME}/test-corrupt.tar seek=10 count=5 bs=1 conv=notrunc
 
+    # Create a valid tar file with trailing zeroes
+    cp ${DIRNAME}/test-large.tar ${DIRNAME}/test-large-with-zeroes.tar
+    dd if=/dev/zero bs=1K count=3 >> ${DIRNAME}/test-large.tar
+
 		exit 0
 		)";
 
@@ -205,9 +209,28 @@ TEST_F(TarTestEnv, TestTarReaderExtraDataAtEOF) {
 
 	mender::tar::ExpectedEntry next_tar_entry = tar_reader.Next();
 
-	EXPECT_FALSE(next_tar_entry);
+	ASSERT_FALSE(next_tar_entry);
 	EXPECT_EQ(next_tar_entry.error().code, tar::MakeError(tar::TarExtraDataError, "").code);
-	EXPECT_EQ(next_tar_entry.error().message, "Reached the end of the archive: ");
+	EXPECT_EQ(
+		next_tar_entry.error().message,
+		"Reached the end of the archive: Only zero bytes allowed after an end of archive");
+}
+
+TEST_F(TarTestEnv, TestTarReaderExtraZeroesAtEOF) {
+	std::ifstream fs {tmpdir->Path() + "/test-large-with-zeroes.tar"};
+	mender::common::io::StreamReader sr {fs};
+	mender::tar::Reader tar_reader {sr};
+	mender::tar::ExpectedEntry tar_entry = tar_reader.Next();
+	ASSERT_TRUE(tar_entry);
+
+	io::Discard discard;
+	EXPECT_EQ(io::Copy(discard, tar_entry.value()), error::NoError);
+
+	mender::tar::ExpectedEntry next_tar_entry = tar_reader.Next();
+
+	ASSERT_FALSE(next_tar_entry);
+	EXPECT_EQ(next_tar_entry.error().code, tar::MakeError(tar::TarEOFError, "").code);
+	EXPECT_EQ(next_tar_entry.error().message, "Reached the end of the archive");
 }
 
 TEST_F(TarTestEnv, TestCorruptTar) {
