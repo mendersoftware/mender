@@ -1,0 +1,14 @@
+[Unit]
+Description=Mender persistent data dir
+After=data.mount
+Before=mender-authd.service mender-updated.service
+ConditionPathExists=!/data/mender
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/bin/mkdir -p -m 0700 /data/mender
+
+[Install]
+WantedBy=mender-authd.service mender-updated.service

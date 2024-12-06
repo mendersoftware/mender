@@ -2,6 +2,8 @@ set(SYSTEMD_UNIT_DIR /lib/systemd/system CACHE STRING "Directory where systemd u
 
 include(GNUInstallDirs)
 
+option(MENDER_DATA_DIR_SYSTEMD_UNIT "Install the mender-data-dir.service file" OFF)
+
 set(DBUS_POLICY_FILES
   dbus/io.mender.AuthenticationManager.conf
 )
@@ -35,6 +37,10 @@ set(SYSTEMD_UNITS
   mender-updated.service
   mender-authd.service
 )
+
+if(MENDER_DATA_DIR_SYSTEMD_UNIT)
+  list(APPEND SYSTEMD_UNITS mender-data-dir.service)
+endif()
 
 install(PROGRAMS ${INVENTORYSCRIPTS}
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/mender/inventory

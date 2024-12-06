@@ -1,7 +1,7 @@
 [Unit]
 Description=Mender authentication service
 Wants=network-online.target
-After=systemd-resolved.service network-online.target mender-client-data-dir.service data.mount
+After=systemd-resolved.service network-online.target mender-data-dir.service data.mount
 Conflicts=mender.service
 
 [Service]
