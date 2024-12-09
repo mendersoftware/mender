@@ -15,11 +15,33 @@ include:
     file: '.gitlab-ci-check-commits.yml'
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-license.yml'
-  - project: 'Northern.tech/Mender/mendertesting'
-    file: '.gitlab-ci-check-c++.yml'
+      #- project: 'Northern.tech/Mender/mendertesting'
+      #  file: '.gitlab-ci-check-c++.yml'
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
+
+test:format:
+  variables:
+    GIT_SUBMODULE_STRATEGY: normal
+    GIT_SUBMODULE_DEPTH: 1
+  tags:
+    - mender-qa-worker-generic-light
+  stage: test
+  needs: []
+  image: alpine:3.17
+  before_script:
+    # Install compile dependencies
+    - apk add git curl clang15-extra-tools
+    # Copy .clang-format
+    - if [ ! -f .clang-format ]; then
+    -   curl -f
+          https://raw.githubusercontent.com/mendersoftware/mendertesting/master/.clang-format
+          --output .clang-format
+    - fi
+  script:
+    - git ls-tree --name-only --full-name -r HEAD | grep -E '\.([ch](pp)?|cc)$' | xargs clang-format -i --style=file:.clang-format
+    - git diff --exit-code
 
 test:no-tests:
   stage: test
