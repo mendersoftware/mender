@@ -103,7 +103,7 @@ ExpectedOptionalStateData LoadStateData(database::KeyValueDatabase &db) {
 
 	if (dst.version == 1) {
 		// In version 1, if there is any data at all, it is equivalent to this:
-		dst.in_state = StateData::kInStateArtifactCommit_Enter;
+		dst.in_state = StateData::kBeforeStateArtifactCommit_Enter;
 		dst.failed = false;
 		dst.rolled_back = false;
 
