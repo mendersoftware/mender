@@ -7,6 +7,8 @@ stages:
 variables:
   LICENSE_HEADERS_IGNORE_FILES_REGEXP: "./ltmain.sh"
   DEBIAN_FRONTEND: noninteractive
+  GIT_SUBMODULE_STRATEGY: recursive
+  GIT_SUBMODULE_DEPTH: 1
 
 include:
   - project: 'Northern.tech/Mender/mendertesting'
