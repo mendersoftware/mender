@@ -20,8 +20,10 @@ include:
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-c++.yml'
 
-variables:
-  GIT_SUBMODULE_STRATEGY: recursive
+default:
+  tags:
+    # Don't run gitlab hosted runners by default
+    - hetzner-amd-beefy
 
 test:no-tests:
   stage: test
@@ -29,8 +31,6 @@ test:no-tests:
   script:
     - cmake -D BUILD_TESTS=OFF .
     - make --jobs=$(nproc --all) --keep-going
-  tags:
-    - mender-qa-worker-generic
 
 test:unit:
   stage: test
@@ -44,8 +44,6 @@ test:unit:
   script:
     - cmake -D COVERAGE=ON .
     - make --jobs=$(nproc --all) --keep-going coverage
-  tags:
-    - mender-qa-worker-generic
   artifacts:
     expire_in: 2w
     reports:
@@ -71,8 +69,6 @@ test:backward-compat:
   script:
     - cmake -D MENDER_DOWNLOAD_BOOST=ON .
     - make --jobs=$(nproc --all) --keep-going
-  tags:
-    - mender-qa-worker-generic
 
 .test:static-template:
   stage: test
@@ -99,8 +95,6 @@ test:backward-compat:
       ${EXTRA_CMAKE_ARGS}
       .
     - make --jobs=$(nproc --all) --keep-going check
-  tags:
-    - mender-qa-worker-generic
 
 test:static:asan:
   variables:
