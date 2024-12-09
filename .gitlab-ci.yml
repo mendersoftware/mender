@@ -26,7 +26,7 @@ test:format:
     GIT_SUBMODULE_STRATEGY: normal
     GIT_SUBMODULE_DEPTH: 1
   tags:
-    - mender-qa-worker-generic-light
+    - hetzner-amd-beefy
   stage: test
   needs: []
   image: alpine:3.17
