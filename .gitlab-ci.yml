@@ -20,6 +20,8 @@ include:
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
+  GIT_TRACE: 1
+  GIT_TRACE_SETUP: 1
 
 test:no-tests:
   stage: test
