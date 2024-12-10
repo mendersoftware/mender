@@ -7,6 +7,11 @@ stages:
 variables:
   LICENSE_HEADERS_IGNORE_FILES_REGEXP: "./ltmain.sh"
   DEBIAN_FRONTEND: noninteractive
+  GIT_SUBMODULE_STRATEGY: recursive
+  GIT_SUBMODULE_DEPTH: 1
+  DOCKER_VERSION:
+    value: "27.3"
+    description: "Version of docker to use in pipelines"
 
 include:
   - project: 'Northern.tech/Mender/mendertesting'
@@ -18,8 +23,10 @@ include:
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-c++.yml'
 
-variables:
-  GIT_SUBMODULE_STRATEGY: recursive
+default:
+  tags:
+    # Don't run gitlab hosted runners by default
+    - hetzner-amd-beefy
 
 test:no-tests:
   stage: test
@@ -27,12 +34,10 @@ test:no-tests:
   script:
     - cmake -D BUILD_TESTS=OFF .
     - make --jobs=$(nproc --all) --keep-going
-  tags:
-    - mender-qa-worker-generic
 
 test:unit:
   stage: test
-  image: debian:11
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:11
   before_script:
     - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat
     # mender-artifact install
@@ -42,8 +47,6 @@ test:unit:
   script:
     - cmake -D COVERAGE=ON .
     - make --jobs=$(nproc --all) --keep-going coverage
-  tags:
-    - mender-qa-worker-generic
   artifacts:
     expire_in: 2w
     reports:
@@ -54,7 +57,7 @@ test:unit:
 test:backward-compat:
   stage: test
   # Keep the image aligned with the oldest LTS at mender-dist-packages
-  image: debian:10
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:10
   before_script:
     - apt update && apt install -yyq g++ git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libboost-regex-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus
     # backport CMake
@@ -69,12 +72,10 @@ test:backward-compat:
   script:
     - cmake -D MENDER_DOWNLOAD_BOOST=ON .
     - make --jobs=$(nproc --all) --keep-going
-  tags:
-    - mender-qa-worker-generic
 
 .test:static-template:
   stage: test
-  image: ubuntu:22.04
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
   before_script:
     - apt update && apt install -yyq clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat
     # mender-artifact install
@@ -96,8 +97,6 @@ test:backward-compat:
       -D CMAKE_BUILD_TYPE=${BUILD_TYPE}
       .
     - make --jobs=$(nproc --all) --keep-going check
-  tags:
-    - mender-qa-worker-generic
 
 test:static:asan:
   variables:
@@ -121,7 +120,7 @@ test:static:release:
 
 test:modules-artifact-gen:
   stage: test
-  image: ubuntu:22.04
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
   before_script:
     - apt update && apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
     # mender-artifact
@@ -134,17 +133,18 @@ test:modules-artifact-gen:
     - python3 -m pytest support/modules-artifact-gen/tests
 
 test:docker:
-  image: docker
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker:${DOCKER_VERSION}
   needs: []
   services:
-    - docker:dind
+    - name: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker:${DOCKER_VERSION}-dind
+      alias: docker
   stage: test
   script:
     - ./tests/build-docker
 
 publish:tests:
   stage: publish
-  image: python:3.11
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/python:3.11
   dependencies:
     - test:unit
   before_script:
@@ -170,7 +170,7 @@ publish:tests:
       --lcov-file coverage.lcov
 
 generate-qa-trigger:
-  image: python:alpine
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/python:alpine
   stage: trigger_prep
   rules:
     - if: '$CI_COMMIT_BRANCH =~ /^(master|[0-9]+\.[0-9]+\.x)$/'
