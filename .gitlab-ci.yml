@@ -9,6 +9,9 @@ variables:
   DEBIAN_FRONTEND: noninteractive
   GIT_SUBMODULE_STRATEGY: recursive
   GIT_SUBMODULE_DEPTH: 1
+  DOCKER_VERSION:
+    value: "27.3"
+    description: "Version of docker to use in pipelines"
 
 include:
   - project: 'Northern.tech/Mender/mendertesting'
@@ -136,10 +139,11 @@ test:modules-artifact-gen:
     - python3 -m pytest support/modules-artifact-gen/tests
 
 test:docker:
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker:${DOCKER_VERSION}
   needs: []
   services:
-    - docker:dind
+    - name: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker:${DOCKER_VERSION}-dind
+      alias: docker
   stage: test
   script:
     - ./tests/build-docker
