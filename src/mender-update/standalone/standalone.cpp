@@ -103,7 +103,7 @@ ExpectedOptionalStateData LoadStateData(database::KeyValueDatabase &db) {
 
 	if (dst.version == 1) {
 		// In version 1, if there is any data at all, it is equivalent to this:
-		dst.in_state = StateData::kInStateArtifactCommit_Enter;
+		dst.in_state = StateData::kBeforeStateArtifactCommit_Enter;
 		dst.failed = false;
 		dst.rolled_back = false;
 
@@ -170,7 +170,7 @@ error::Error SaveStateData(database::Transaction &txn, const StateData &data) {
 	ss << "\"" << keys.artifact_group << "\":\"" << data.artifact_group << "\"";
 
 	ss << ",";
-	ss << "\"" << keys.payload_types << "\": [";
+	ss << "\"" << keys.payload_types << "\":[";
 	bool first = true;
 	for (auto elem : data.payload_types) {
 		if (!first) {
@@ -183,7 +183,7 @@ error::Error SaveStateData(database::Transaction &txn, const StateData &data) {
 
 	if (data.artifact_provides) {
 		ss << ",";
-		ss << "\"" << keys.artifact_provides << "\": {";
+		ss << "\"" << keys.artifact_provides << "\":{";
 		bool first = true;
 		for (auto elem : data.artifact_provides.value()) {
 			if (!first) {
@@ -197,7 +197,7 @@ error::Error SaveStateData(database::Transaction &txn, const StateData &data) {
 
 	if (data.artifact_clears_provides) {
 		ss << ",";
-		ss << "\"" << keys.artifact_clears_provides << "\": [";
+		ss << "\"" << keys.artifact_clears_provides << "\":[";
 		bool first = true;
 		for (auto elem : data.artifact_clears_provides.value()) {
 			if (!first) {
