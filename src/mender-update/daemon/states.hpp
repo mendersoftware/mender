@@ -103,6 +103,11 @@ private:
 	static void DoDownload(Context &ctx, sm::EventPoster<StateEvent> &poster);
 };
 
+class UpdateDownloadCancelState : virtual public StateType {
+public:
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+};
+
 class SendStatusUpdateState : virtual public StateType {
 public:
 	// Ignore-failure version.

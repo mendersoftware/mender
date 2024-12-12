@@ -280,7 +280,6 @@ void UpdateDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 			if (resp->GetStatusCode() != http::StatusOK) {
 				log::Error(
 					"Unexpected status code while fetching artifact: " + resp->GetStatusMessage());
-				ctx.download_client->Cancel();
 				poster.PostEvent(StateEvent::Failure);
 				return;
 			}
@@ -288,7 +287,6 @@ void UpdateDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 			auto http_reader = resp->MakeBodyAsyncReader();
 			if (!http_reader) {
 				log::Error(http_reader.error().String());
-				ctx.download_client->Cancel();
 				poster.PostEvent(StateEvent::Failure);
 				return;
 			}
@@ -453,6 +451,12 @@ void UpdateDownloadState::DoDownload(Context &ctx, sm::EventPoster<StateEvent> &
 		ctx.deployment.update_module->AsyncDownload(
 			ctx.event_loop, *ctx.deployment.artifact_payload, handler);
 	}
+}
+
+void UpdateDownloadCancelState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	log::Debug("Entering DownloadCancel state");
+	ctx.download_client->Cancel();
+	poster.PostEvent(StateEvent::Success);
 }
 
 SendStatusUpdateState::SendStatusUpdateState(optional<deployments::DeploymentStatus> status) :

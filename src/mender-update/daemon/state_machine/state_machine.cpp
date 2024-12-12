@@ -124,8 +124,11 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
 	main_states_.AddTransition(update_download_state_,                  se::Success,                     ss.download_leave_,                      tf::Immediate);
 	main_states_.AddTransition(update_download_state_,                  se::StateLoopDetected,           state_loop_state_,                       tf::Immediate);
-	main_states_.AddTransition(update_download_state_,                  se::Failure,                     ss.download_error_,                      tf::Immediate);
+	main_states_.AddTransition(update_download_state_,                  se::Failure,                     update_download_cancel_state_,           tf::Immediate);
 	main_states_.AddTransition(update_download_state_,                  se::NothingToDo,                 ss.download_leave_save_provides,         tf::Immediate);
+
+	// Cannot fail because download cancellation is a void function as there's nothing to do if it fails, anyway.
+	main_states_.AddTransition(update_download_cancel_state_,           se::Success,                     ss.download_error_,                      tf::Immediate);
 
 	main_states_.AddTransition(ss.download_leave_,                      se::Success,                     send_install_status_state_,              tf::Immediate);
 	main_states_.AddTransition(ss.download_leave_,                      se::Failure,                     ss.download_error_,                      tf::Immediate);

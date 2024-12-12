@@ -422,6 +422,9 @@ http::OutgoingRequestPtr DownloadResumerClient::RemainingRangeRequest() const {
 };
 
 error::Error DownloadResumerClient::ScheduleNextResumeRequest() {
+	// In any case, make sure the previous HTTP request is cancelled.
+	client_.Cancel();
+
 	auto exp_interval = retry_.backoff.NextInterval();
 	if (!exp_interval) {
 		return http::MakeError(
