@@ -72,6 +72,7 @@ private:
 	PollForDeploymentState poll_for_deployment_state_;
 	SendStatusUpdateState send_download_status_state_;
 	UpdateDownloadState update_download_state_;
+	UpdateDownloadCancelState update_download_cancel_state_;
 	SendStatusUpdateState send_install_status_state_;
 	UpdateInstallState update_install_state_;
 
