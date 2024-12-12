@@ -22,6 +22,10 @@
 #include <mender-update/daemon/context.hpp>
 #include <mender-update/inventory.hpp>
 
+#ifdef MENDER_USE_DBUS
+#include <common/platform/dbus.hpp>
+#endif
+
 namespace mender {
 namespace update {
 namespace daemon {
@@ -32,6 +36,10 @@ namespace events = mender::common::events;
 namespace kv_db = mender::common::key_value_database;
 namespace path = mender::common::path;
 namespace log = mender::common::log;
+
+#ifdef MENDER_USE_DBUS
+namespace dbus = mender::common::dbus;
+#endif
 
 namespace main_context = mender::update::context;
 namespace inventory = mender::update::inventory;
@@ -106,8 +114,26 @@ void IdleState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 void SubmitInventoryState::DoSubmitInventory(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Submitting inventory");
 
-	auto handler = [&ctx, &poster](error::Error err) {
+	auto handler = [this, &ctx, &poster](error::Error err) {
 		if (err != error::NoError) {
+#ifdef MENDER_USE_DBUS
+			// If we get a DBus reply error, we should retry the polling with a short interval
+			// to allow the DBus authentication to be retried.
+			if (err.code == error_condition(dbus::ReplyError, dbus::DBusErrorCategory)) {
+				log::Error("Authentication over DBus failed, retrying");
+				poll_timer_.Cancel();
+				poll_timer_.AsyncWait(chrono::seconds(5), [&poster](error::Error err) {
+					if (err != error::NoError) {
+						if (err.code != make_error_condition(errc::operation_canceled)) {
+							log::Error("DBus poll timer caused error: " + err.String());
+						}
+					} else {
+						poster.PostEvent(StateEvent::InventoryPollingTriggered);
+					}
+				});
+			}
+#endif
+			void(this);
 			log::Error("Failed to submit inventory: " + err.String());
 			poster.PostEvent(StateEvent::Failure);
 			return;
@@ -173,8 +199,27 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 	auto err = ctx.deployment_client->CheckNewDeployments(
 		ctx.mender_context,
 		ctx.http_client,
-		[&ctx, &poster](mender::update::deployments::CheckUpdatesAPIResponse response) {
+		[this, &ctx, &poster](mender::update::deployments::CheckUpdatesAPIResponse response) {
 			if (!response) {
+#ifdef MENDER_USE_DBUS
+				// If we get a DBus reply error, we should retry the polling with a short interval
+				// to allow the DBus authentication to be retried.
+				if (response.error().code
+					== error_condition(dbus::ReplyError, dbus::DBusErrorCategory)) {
+					log::Error("Authentication over DBus failed, retrying");
+					poll_timer_.Cancel();
+					poll_timer_.AsyncWait(chrono::seconds(5), [&poster](error::Error err) {
+						if (err != error::NoError) {
+							if (err.code != make_error_condition(errc::operation_canceled)) {
+								log::Error("DBus poll timer caused error: " + err.String());
+							}
+						} else {
+							poster.PostEvent(StateEvent::DeploymentPollingTriggered);
+						}
+					});
+				}
+#endif
+				void(this);
 				log::Error("Error while polling for deployment: " + response.error().String());
 
 				// When unauthenticated,
