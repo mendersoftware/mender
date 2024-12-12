@@ -10,6 +10,33 @@ set -e
 # Also submit device_type, which is in a separate file, not in the database. We don't know if the
 # file contains a newline, so it's important that this is done last, to avoid corrupting other
 # entries.
-grep '^device_type=' /var/lib/mender/device_type
+
+# Set default values for configuration directories
+mender_conf_dir=${MENDER_CONF_DIR:-/etc/mender}
+mender_datastore_dir=${MENDER_DATASTORE_DIR:-/var/lib/mender}
+
+# Set default value for DeviceTypeFile
+default_device_type_file="$mender_datastore_dir/device_type"
+
+# Poor man's case insensitive match.
+# Read mender.conf file to find the DeviceTypeFile key if it exists prioritizing /etc over /var/lib
+match="[Dd][Ee][Vv][Ii][Cc][Ee][Tt][Yy][Pp][Ee][Ff][Ii][Ll][Ee]"
+if [ -f "$mender_conf_dir/mender.conf" ]; then
+    device_type_file=$(sed -ne '/"'"$match"'" *: *"[^"]*"/ { s/.*"'"$match"'" *: *"\([^"]*\)".*/\1/; p }' "$mender_conf_dir/mender.conf" || true)
+fi
+
+if [ -f "$mender_datastore_dir/mender.conf" ]; then
+    if [ -z "$device_type_file" ] || [ ! -f "$device_type_file" ]; then
+        device_type_file=$(sed -ne '/"'"$match"'" *: *"[^"]*"/ { s/.*"'"$match"'" *: *"\([^"]*\)".*/\1/; p }' "$mender_datastore_dir/mender.conf" || true)
+    fi
+fi
+
+# Use default if DeviceTypeFile is not set, empty, or the file does not exist
+if [ -z "$device_type_file" ] || [ ! -f "$device_type_file" ]; then
+    device_type_file="$default_device_type_file"
+fi
+
+# Extract the device_type value from the file specified by DeviceTypeFile
+grep '^device_type=' "$device_type_file"
 
 exit 0
