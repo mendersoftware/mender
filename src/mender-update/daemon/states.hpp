@@ -58,25 +58,32 @@ public:
 
 class PollForDeploymentState : virtual public StateType {
 public:
-	PollForDeploymentState(events::EventLoop &loop) :
-		poll_timer_(loop) {
-	}
+	PollForDeploymentState(
+		events::EventLoop &event_loop, int retry_interval_seconds, int retry_count);
+
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
 private:
-	events::Timer poll_timer_;
+	void HandlePollingError(Context &ctx, sm::EventPoster<StateEvent> &poster);
+	struct {
+		http::ExponentialBackoff backoff;
+		events::Timer wait_timer;
+	} retry_;
 };
 
 class SubmitInventoryState : virtual public StateType {
 public:
-	SubmitInventoryState(events::EventLoop &loop) :
-		poll_timer_(loop) {
-	}
+	SubmitInventoryState(
+		events::EventLoop &event_loop, int retry_interval_seconds, int retry_count);
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
 private:
+	void HandlePollingError(Context &ctx, sm::EventPoster<StateEvent> &poster);
 	void DoSubmitInventory(Context &ctx, sm::EventPoster<StateEvent> &poster);
-	events::Timer poll_timer_;
+	struct {
+		http::ExponentialBackoff backoff;
+		events::Timer wait_timer;
+	} retry_;
 };
 
 class SaveState : virtual public StateType {

@@ -103,15 +103,60 @@ void IdleState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering Idle state");
 }
 
+SubmitInventoryState::SubmitInventoryState(
+	events::EventLoop &event_loop, int retry_interval_seconds, int retry_count) :
+	retry_ {
+		http::ExponentialBackoff(chrono::seconds(retry_interval_seconds), retry_count),
+		event_loop} {
+}
+
+void SubmitInventoryState::HandlePollingError(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	// When using short polling inteervals, we should adjust the backoff to ensure
+	// that the intervals do not exceed the maximum retry polling interval, which
+	// converts the backoff to a fixed interval.
+	chrono::milliseconds max_interval =
+		chrono::seconds(ctx.mender_context.GetConfig().retry_poll_interval_seconds);
+	if (max_interval < retry_.backoff.SmallestInterval()) {
+		retry_.backoff.SetSmallestInterval(max_interval);
+		retry_.backoff.SetMaxInterval(max_interval);
+	}
+	auto exp_interval = retry_.backoff.NextInterval();
+	if (!exp_interval) {
+		log::Debug(
+			"Not retrying with backoff, retrying InventoryPollIntervalSeconds: "
+			+ exp_interval.error().String());
+		return;
+	}
+	log::Info(
+		"Retrying inventory polling in "
+		+ to_string(chrono::duration_cast<chrono::seconds>(*exp_interval).count()) + " seconds");
+
+	retry_.wait_timer.Cancel();
+	retry_.wait_timer.AsyncWait(*exp_interval, [&poster](error::Error err) {
+		if (err != error::NoError) {
+			if (err.code != make_error_condition(errc::operation_canceled)) {
+				log::Error("Retry poll timer caused error: " + err.String());
+			}
+		} else {
+			poster.PostEvent(StateEvent::InventoryPollingTriggered);
+		}
+	});
+}
+
 void SubmitInventoryState::DoSubmitInventory(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Submitting inventory");
 
-	auto handler = [&ctx, &poster](error::Error err) {
+	auto handler = [this, &ctx, &poster](error::Error err) {
 		if (err != error::NoError) {
 			log::Error("Failed to submit inventory: " + err.String());
+			if (err.code != auth::MakeError(auth::UnauthorizedError, "").code) {
+				// Replace the inventory poll timer with a backoff
+				HandlePollingError(ctx, poster);
+			}
 			poster.PostEvent(StateEvent::Failure);
 			return;
 		}
+		retry_.backoff.Reset();
 		ctx.has_submitted_inventory = true;
 		poster.PostEvent(StateEvent::Success);
 	};
@@ -135,7 +180,7 @@ void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	log::Debug(
 		"Scheduling the next inventory submission in: "
 		+ to_string(ctx.mender_context.GetConfig().inventory_poll_interval_seconds) + " seconds");
-	poll_timer_.AsyncWait(
+	retry_.wait_timer.AsyncWait(
 		chrono::seconds(ctx.mender_context.GetConfig().inventory_poll_interval_seconds),
 		[&poster](error::Error err) {
 			if (err != error::NoError) {
@@ -150,6 +195,46 @@ void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	DoSubmitInventory(ctx, poster);
 }
 
+PollForDeploymentState::PollForDeploymentState(
+	events::EventLoop &event_loop, int retry_interval_seconds, int retry_count) :
+	retry_ {
+		http::ExponentialBackoff(chrono::seconds(retry_interval_seconds), retry_count),
+		event_loop} {
+}
+
+void PollForDeploymentState::HandlePollingError(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	// When using short polling inteervals, we should adjust the backoff to ensure
+	// that the intervals do not exceed the maximum retry polling interval, which
+	// converts the backoff to a fixed interval.
+	chrono::milliseconds max_interval =
+		chrono::seconds(ctx.mender_context.GetConfig().retry_poll_interval_seconds);
+	if (max_interval < retry_.backoff.SmallestInterval()) {
+		retry_.backoff.SetSmallestInterval(max_interval);
+		retry_.backoff.SetMaxInterval(max_interval);
+	}
+	auto exp_interval = retry_.backoff.NextInterval();
+	if (!exp_interval) {
+		log::Debug(
+			"Not retrying with backoff, retrying with UpdatePollIntervalSeconds: "
+			+ exp_interval.error().String());
+		return;
+	}
+	log::Info(
+		"Retrying deployment polling in "
+		+ to_string(chrono::duration_cast<chrono::seconds>(*exp_interval).count()) + " seconds");
+
+	retry_.wait_timer.Cancel();
+	retry_.wait_timer.AsyncWait(*exp_interval, [&poster](error::Error err) {
+		if (err != error::NoError) {
+			if (err.code != make_error_condition(errc::operation_canceled)) {
+				log::Error("Retry poll timer caused error: " + err.String());
+			}
+		} else {
+			poster.PostEvent(StateEvent::DeploymentPollingTriggered);
+		}
+	});
+}
+
 void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Polling for update");
 
@@ -158,7 +243,7 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 	log::Debug(
 		"Scheduling the next deployment check in: "
 		+ to_string(ctx.mender_context.GetConfig().update_poll_interval_seconds) + " seconds");
-	poll_timer_.AsyncWait(
+	retry_.wait_timer.AsyncWait(
 		chrono::seconds(ctx.mender_context.GetConfig().update_poll_interval_seconds),
 		[&poster](error::Error err) {
 			if (err != error::NoError) {
@@ -173,17 +258,21 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 	auto err = ctx.deployment_client->CheckNewDeployments(
 		ctx.mender_context,
 		ctx.http_client,
-		[&ctx, &poster](mender::update::deployments::CheckUpdatesAPIResponse response) {
+		[this, &ctx, &poster](mender::update::deployments::CheckUpdatesAPIResponse response) {
 			if (!response) {
 				log::Error("Error while polling for deployment: " + response.error().String());
 
 				// When unauthenticated,
 				// invalidate the cached inventory data so that it can be sent again
 				// and set clear the context flag so that it is triggered on re-authorization
-				if ((response.error().code == auth::MakeError(auth::UnauthorizedError, "").code)
-					&& ctx.has_submitted_inventory) {
-					ctx.inventory_client->ClearDataCache();
-					ctx.has_submitted_inventory = false;
+				if (response.error().code == auth::MakeError(auth::UnauthorizedError, "").code) {
+					if (ctx.has_submitted_inventory) {
+						ctx.inventory_client->ClearDataCache();
+						ctx.has_submitted_inventory = false;
+					}
+				} else {
+					// Replace the update poll timer with a backoff
+					HandlePollingError(ctx, poster);
 				}
 				poster.PostEvent(StateEvent::Failure);
 				return;
@@ -201,8 +290,10 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 					poster.PostEvent(StateEvent::InventoryPollingTriggered);
 				}
 
+				retry_.backoff.Reset();
 				return;
 			}
+			retry_.backoff.Reset();
 
 			auto exp_data = ApiResponseJsonToStateData(response.value().value());
 			if (!exp_data) {
