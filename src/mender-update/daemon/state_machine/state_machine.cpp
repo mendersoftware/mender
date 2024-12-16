@@ -34,8 +34,14 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	check_update_handler_(event_loop),
 	inventory_update_handler_(event_loop),
 	termination_handler_(event_loop),
-	submit_inventory_state_(event_loop),
-	poll_for_deployment_state_(event_loop),
+	submit_inventory_state_(
+		event_loop,
+		ctx.mender_context.GetConfig().retry_poll_interval_seconds,
+		ctx.mender_context.GetConfig().retry_poll_count),
+	poll_for_deployment_state_(
+		event_loop,
+		ctx.mender_context.GetConfig().retry_poll_interval_seconds,
+		ctx.mender_context.GetConfig().retry_poll_count),
 	send_download_status_state_(deployments::DeploymentStatus::Downloading),
 	send_install_status_state_(deployments::DeploymentStatus::Installing),
 	send_reboot_status_state_(deployments::DeploymentStatus::Rebooting),
