@@ -79,10 +79,19 @@ public:
 		authenticator_.ExpireToken();
 	}
 
+	bool HasReauthenticated() {
+		return reauthenticated_;
+	}
+
+	void SetReauthenticated(bool reauthenticated) {
+		reauthenticated_ = reauthenticated;
+	}
+
 private:
 	events::EventLoop &event_loop_;
 	http::Client http_client_;
 	auth::Authenticator &authenticator_;
+	bool reauthenticated_ {false};
 };
 
 } // namespace api
