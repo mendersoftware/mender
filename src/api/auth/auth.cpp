@@ -80,7 +80,6 @@ error::Error Authenticator::WithToken(AuthenticatedAction action) {
 	}
 	// else record that token is already being fetched (by GetJwtToken()).
 	token_fetch_in_progress_ = true;
-
 	return error::NoError;
 }
 
@@ -151,7 +150,9 @@ void Authenticator::HandleReceivedToken(
 			return;
 		}
 	}
-
+	if (no_token == NoTokenAction::Finish && action_ != nullptr) {
+		action_();
+	}
 	PostPendingActions(ex_auth_data);
 }
 
