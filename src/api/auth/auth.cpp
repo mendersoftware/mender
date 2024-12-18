@@ -294,6 +294,9 @@ error::Error Authenticator::StartWatchingTokenSignal() {
 
 				AuthData auth_data {server_url, token};
 				ex_auth_data = ExpectedAuthData(std::move(auth_data));
+				if (action_ != nullptr) {
+					action_();
+				}
 			}
 			PostPendingActions(ex_auth_data);
 		});
@@ -443,10 +446,8 @@ error::Error Authenticator::WithToken(AuthenticatedAction action) {
 	}
 	// else record that token is already being fetched (by GetJwtToken()).
 	token_fetch_in_progress_ = true;
-
 	return error::NoError;
 }
-
 } // namespace auth
 } // namespace api
 } // namespace mender

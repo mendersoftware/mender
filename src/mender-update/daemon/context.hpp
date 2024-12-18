@@ -156,11 +156,8 @@ public:
 	mender::update::context::MenderContext &mender_context;
 	events::EventLoop &event_loop;
 
-private:
-	// This is just a prerequisite for another member, so make it private.
 	auth::Authenticator authenticator;
 
-public:
 	// For polling, and for making status updates.
 	api::HTTPClient http_client;
 	// For the artifact download.
@@ -168,8 +165,6 @@ public:
 
 	shared_ptr<deployments::DeploymentAPI> deployment_client;
 	shared_ptr<inventory::InventoryAPI> inventory_client;
-
-	bool has_submitted_inventory {false};
 
 	struct {
 		unique_ptr<StateData> state_data;
