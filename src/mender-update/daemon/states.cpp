@@ -157,7 +157,7 @@ void SubmitInventoryState::DoSubmitInventory(Context &ctx, sm::EventPoster<State
 			return;
 		}
 		retry_.backoff.Reset();
-		ctx.has_submitted_inventory = true;
+		ctx.inventory_client->has_submitted_inventory = true;
 		poster.PostEvent(StateEvent::Success);
 	};
 
@@ -261,16 +261,7 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 		[this, &ctx, &poster](mender::update::deployments::CheckUpdatesAPIResponse response) {
 			if (!response) {
 				log::Error("Error while polling for deployment: " + response.error().String());
-
-				// When unauthenticated,
-				// invalidate the cached inventory data so that it can be sent again
-				// and set clear the context flag so that it is triggered on re-authorization
-				if (response.error().code == auth::MakeError(auth::UnauthorizedError, "").code) {
-					if (ctx.has_submitted_inventory) {
-						ctx.inventory_client->ClearDataCache();
-						ctx.has_submitted_inventory = false;
-					}
-				} else {
+				if (response.error().code != auth::MakeError(auth::UnauthorizedError, "").code) {
 					// Replace the update poll timer with a backoff
 					HandlePollingError(ctx, poster);
 				}
@@ -279,13 +270,7 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 			} else if (!response.value()) {
 				log::Info("No update available");
 				poster.PostEvent(StateEvent::NothingToDo);
-				if (ctx.http_client.HasReauthenticated()) {
-					log::Debug("Client has reauthenticated, clear inventory data cache");
-					ctx.inventory_client->ClearDataCache();
-					ctx.has_submitted_inventory = false;
-					ctx.http_client.SetReauthenticated(false);
-				}
-				if (not ctx.has_submitted_inventory) {
+				if (not ctx.inventory_client->has_submitted_inventory) {
 					// If we have not submitted inventory successfully at least
 					// once, schedule this after receiving a successful response
 					// with no update. This enables inventory to be submitted
