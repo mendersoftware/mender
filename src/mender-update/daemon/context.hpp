@@ -160,13 +160,6 @@ public:
 	mender::update::context::MenderContext &mender_context;
 	events::EventLoop &event_loop;
 
-#ifdef MENDER_USE_DBUS
-	auth::AuthenticatorDBus authenticator;
-#elif defined(MENDER_EMBED_MENDER_AUTH)
-	mender::auth::api::auth::AuthenticatorHttp authenticator;
-#endif
-
-public:
 	// For polling, and for making status updates.
 	api::HTTPClient http_client;
 	// For the artifact download.
@@ -175,7 +168,11 @@ public:
 	shared_ptr<deployments::DeploymentAPI> deployment_client;
 	shared_ptr<inventory::InventoryAPI> inventory_client;
 
-	bool has_submitted_inventory {false};
+#ifdef MENDER_USE_DBUS
+	auth::AuthenticatorDBus authenticator;
+#elif defined(MENDER_EMBED_MENDER_AUTH)
+	mender::auth::api::auth::AuthenticatorHttp authenticator;
+#endif
 
 	struct {
 		unique_ptr<StateData> state_data;

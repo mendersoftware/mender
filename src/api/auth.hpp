@@ -33,6 +33,11 @@
 #include <common/optional.hpp>
 
 namespace mender {
+namespace update {
+namespace inventory {
+class InventoryAPI;
+}
+} // namespace update
 namespace api {
 namespace auth {
 
@@ -71,8 +76,12 @@ using AuthenticatedAction = function<void(ExpectedAuthData)>;
 
 class Authenticator {
 public:
-	Authenticator(events::EventLoop &loop, chrono::seconds auth_timeout = chrono::minutes {1}) :
+	Authenticator(
+		events::EventLoop &loop,
+		std::shared_ptr<mender::update::inventory::InventoryAPI> inventory,
+		chrono::seconds auth_timeout = chrono::minutes {1}) :
 		loop_ {loop},
+		inventory_ {inventory},
 		auth_timeout_ {auth_timeout},
 		auth_timeout_timer_ {loop} {
 	}
@@ -98,6 +107,7 @@ protected:
 
 	events::EventLoop &loop_;
 
+	std::shared_ptr<mender::update::inventory::InventoryAPI> inventory_;
 	bool token_fetch_in_progress_ = false;
 	vector<AuthenticatedAction> pending_actions_;
 	chrono::seconds auth_timeout_;
@@ -107,8 +117,11 @@ protected:
 #ifdef MENDER_USE_DBUS
 class AuthenticatorDBus : public Authenticator {
 public:
-	AuthenticatorDBus(events::EventLoop &loop, chrono::seconds auth_timeout = chrono::minutes {1}) :
-		Authenticator(loop, auth_timeout),
+	AuthenticatorDBus(
+		events::EventLoop &loop,
+		std::shared_ptr<mender::update::inventory::InventoryAPI> inventory,
+		chrono::seconds auth_timeout = chrono::minutes {1}) :
+		Authenticator(loop, inventory, auth_timeout),
 		dbus_client_ {loop} {
 	}
 
