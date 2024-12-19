@@ -16,6 +16,8 @@
 
 #include <common/log.hpp>
 
+#include <mender-update/inventory.hpp>
+
 namespace mender {
 namespace api {
 namespace auth {
@@ -80,7 +82,6 @@ error::Error Authenticator::WithToken(AuthenticatedAction action) {
 	}
 	// else record that token is already being fetched (by GetJwtToken()).
 	token_fetch_in_progress_ = true;
-
 	return error::NoError;
 }
 
@@ -123,6 +124,7 @@ error::Error Authenticator::RequestNewToken() {
 			PostPendingActions(ex_auth_data);
 		}
 	});
+
 	return error::NoError;
 }
 
@@ -130,6 +132,7 @@ void Authenticator::HandleReceivedToken(
 	common::ExpectedStringPair ex_auth_dbus_data, NoTokenAction no_token) {
 	auth_timeout_timer_.Cancel();
 	ExpectedAuthData ex_auth_data;
+
 	if (!ex_auth_dbus_data) {
 		mlog::Error("Error receiving the JWT token: " + ex_auth_dbus_data.error().String());
 		ex_auth_data = expected::unexpected(ex_auth_dbus_data.error());
@@ -151,7 +154,11 @@ void Authenticator::HandleReceivedToken(
 			return;
 		}
 	}
-
+	if (no_token == NoTokenAction::Finish && inventory_->has_submitted_inventory) {
+		mlog::Debug("Client has reauthenticated, clear inventory data cache");
+		inventory_->ClearDataCache();
+		inventory_->has_submitted_inventory = false;
+	}
 	PostPendingActions(ex_auth_data);
 }
 

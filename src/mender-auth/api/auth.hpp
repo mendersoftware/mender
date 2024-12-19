@@ -76,8 +76,9 @@ public:
 	AuthenticatorHttp(
 		events::EventLoop &loop,
 		const conf::MenderConfig &config,
+		std::shared_ptr<mender::update::inventory::InventoryAPI> inventory,
 		chrono::seconds auth_timeout = chrono::minutes {1}) :
-		Authenticator {loop, auth_timeout},
+		Authenticator {loop, inventory, auth_timeout},
 		config_ {config},
 		client_ {config.GetHttpClientConfig(), loop} {
 	}

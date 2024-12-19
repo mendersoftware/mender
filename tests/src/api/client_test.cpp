@@ -34,6 +34,8 @@
 #include <common/platform/testing_dbus.hpp>
 #endif
 
+#include <mender-update/inventory.hpp>
+
 using namespace std;
 
 namespace api = mender::api;
@@ -55,6 +57,22 @@ namespace testing_dbus = mender::common::testing::dbus;
 using TestEventLoop = mender::common::testing::TestEventLoop;
 
 const string TEST_PORT = "8088";
+
+class NoopInventoryClient : virtual public mender::update::inventory::InventoryAPI {
+	error::Error PushData(
+		const string &inventory_generators_dir,
+		events::EventLoop &loop,
+		mender::api::Client &client,
+		mender::update::inventory::APIResponseHandler api_handler) override {
+		api_handler(error::NoError);
+		return error::NoError;
+	}
+	void ClearDataCache() override {
+	}
+};
+
+shared_ptr<mender::update::inventory::InventoryAPI> inventory_client =
+	make_shared<NoopInventoryClient>();
 
 #ifdef MENDER_USE_DBUS
 class APIClientTests : public testing_dbus::DBusTests {
@@ -136,7 +154,7 @@ TEST_F(APIClientTests, ClientBasicTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, inventory_client, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
 	api::HTTPClient client {client_config, loop, authenticator};
@@ -243,7 +261,7 @@ TEST_F(APIClientTests, TwoClientsTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, inventory_client, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
 	api::HTTPClient client1 {client_config, loop, authenticator};
@@ -425,7 +443,7 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, inventory_client, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
 	api::HTTPClient client {client_config, loop, authenticator};
@@ -529,7 +547,7 @@ TEST_F(APIClientTests, ClientEarlyAuthErrorTest) {
 
 	// no DBus server to handle auth here
 
-	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, inventory_client, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
 	api::HTTPClient client {client_config, loop, authenticator};
@@ -641,7 +659,7 @@ TEST_F(APIClientTests, ClientAuthenticationTimeoutFailureTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, inventory_client, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
 	api::HTTPClient client {client_config, loop, authenticator};
@@ -807,7 +825,7 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, inventory_client, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
 	api::HTTPClient client {client_config, loop, authenticator};

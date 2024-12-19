@@ -30,6 +30,8 @@
 #include <common/platform/testing_dbus.hpp>
 #endif
 
+#include <mender-update/inventory.hpp>
+
 using namespace std;
 
 namespace auth = mender::api::auth;
@@ -52,6 +54,22 @@ class AuthDBusTests : public testing_dbus::DBusTests {};
 class AuthDBusTests : public testing::Test {};
 #endif
 
+class NoopInventoryClient : virtual public mender::update::inventory::InventoryAPI {
+	error::Error PushData(
+		const string &inventory_generators_dir,
+		events::EventLoop &loop,
+		mender::api::Client &client,
+		mender::update::inventory::APIResponseHandler api_handler) override {
+		api_handler(error::NoError);
+		return error::NoError;
+	}
+	void ClearDataCache() override {
+	}
+};
+
+shared_ptr<mender::update::inventory::InventoryAPI> inventory_client =
+	make_shared<NoopInventoryClient>();
+
 TEST_F(AuthDBusTests, AuthenticatorBasicTest) {
 #ifndef MENDER_USE_DBUS
 	GTEST_SKIP();
@@ -70,7 +88,7 @@ TEST_F(AuthDBusTests, AuthenticatorBasicTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::AuthenticatorDBus authenticator {loop};
+	auth::AuthenticatorDBus authenticator {loop, inventory_client};
 
 	bool action_called = false;
 	auto err = authenticator.WithToken(
@@ -107,7 +125,7 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::AuthenticatorDBus authenticator {loop};
+	auth::AuthenticatorDBus authenticator {loop, inventory_client};
 
 	bool action1_called = false;
 	bool action2_called = false;
@@ -177,7 +195,7 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, inventory_client, chrono::seconds {2}};
 
 	bool action1_called = false;
 	bool action2_called = false;
@@ -240,7 +258,7 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearAndTimeoutTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, inventory_client, chrono::seconds {2}};
 
 	bool action1_called = false;
 	bool action2_called = false;
@@ -302,7 +320,7 @@ TEST_F(AuthDBusTests, AuthenticatorBasicRealLifeTest) {
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
 
-	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
+	auth::AuthenticatorDBus authenticator {loop, inventory_client, chrono::seconds {2}};
 
 	bool action_called = false;
 	auto err = authenticator.WithToken(
@@ -328,7 +346,7 @@ TEST(AuthNoDBusTests, AuthenticatorAttemptNoDBus) {
 	setenv("DBUS_SYSTEM_BUS_ADDRESS", "dummy-address", 1);
 
 	TestEventLoop loop;
-	auth::AuthenticatorDBus authenticator {loop};
+	auth::AuthenticatorDBus authenticator {loop, inventory_client};
 
 	int action_called = false;
 	auto err = authenticator.WithToken(
