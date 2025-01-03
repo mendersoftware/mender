@@ -68,6 +68,7 @@ struct AuthData {
 using ExpectedAuthData = expected::expected<AuthData, error::Error>;
 
 using AuthenticatedAction = function<void(ExpectedAuthData)>;
+using ReAuthenticatedAction = function<void()>;
 
 class Authenticator {
 public:
@@ -78,8 +79,14 @@ public:
 	}
 
 	void ExpireToken();
-
 	error::Error WithToken(AuthenticatedAction action);
+
+	// Register a callback to be called on re-authentication. Will overwrite the
+	// stored callback with the new one.
+	void RegisterTokenReceivedCallback(ReAuthenticatedAction action) {
+		action_ = action;
+	}
+
 
 protected:
 	enum class NoTokenAction {
@@ -97,11 +104,11 @@ protected:
 	void HandleReceivedToken(common::ExpectedStringPair ex_auth_dbus_data, NoTokenAction no_token);
 
 	events::EventLoop &loop_;
-
 	bool token_fetch_in_progress_ = false;
 	vector<AuthenticatedAction> pending_actions_;
 	chrono::seconds auth_timeout_;
 	events::Timer auth_timeout_timer_;
+	ReAuthenticatedAction action_ {nullptr};
 };
 
 #ifdef MENDER_USE_DBUS

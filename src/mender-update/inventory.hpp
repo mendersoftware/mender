@@ -72,6 +72,8 @@ public:
 		APIResponseHandler api_handler) = 0;
 
 	virtual void ClearDataCache() = 0;
+
+	bool has_submitted_inventory {false};
 };
 
 class InventoryClient : public InventoryAPI {
