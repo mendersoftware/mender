@@ -68,6 +68,8 @@ private:
 	InitState init_state_;
 
 	IdleState idle_state_;
+	ScheduleNextPollState schedule_submit_inventory_state_;
+	ScheduleNextPollState schedule_poll_for_deployment_state_;
 	SubmitInventoryState submit_inventory_state_;
 	PollForDeploymentState poll_for_deployment_state_;
 	SendStatusUpdateState send_download_status_state_;
