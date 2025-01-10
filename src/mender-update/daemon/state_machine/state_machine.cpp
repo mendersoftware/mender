@@ -34,12 +34,20 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	check_update_handler_(event_loop),
 	inventory_update_handler_(event_loop),
 	termination_handler_(event_loop),
+	schedule_submit_inventory_state_(
+		ctx.inventory_timer,
+		"inventory submission",
+		StateEvent::InventoryPollingTriggered,
+		ctx.mender_context.GetConfig().inventory_poll_interval_seconds),
+	schedule_poll_for_deployment_state_(
+		ctx.deployment_timer,
+		"deployment check",
+		StateEvent::DeploymentPollingTriggered,
+		ctx.mender_context.GetConfig().update_poll_interval_seconds),
 	submit_inventory_state_(
-		event_loop,
 		ctx.mender_context.GetConfig().retry_poll_interval_seconds,
 		ctx.mender_context.GetConfig().retry_poll_count),
 	poll_for_deployment_state_(
-		event_loop,
 		ctx.mender_context.GetConfig().retry_poll_interval_seconds,
 		ctx.mender_context.GetConfig().retry_poll_count),
 	send_download_status_state_(deployments::DeploymentStatus::Downloading),
@@ -91,8 +99,12 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	main_states_.AddTransition(ss.idle_enter_,                          se::Success,                     idle_state_,                             tf::Immediate);
 	main_states_.AddTransition(ss.idle_enter_,                          se::Failure,                     idle_state_,                             tf::Immediate);
 
-	main_states_.AddTransition(idle_state_,                             se::DeploymentPollingTriggered,  ss.idle_leave_deploy_,                   tf::Deferred);
-	main_states_.AddTransition(idle_state_,                             se::InventoryPollingTriggered,   ss.idle_leave_inv_,                      tf::Deferred);
+	main_states_.AddTransition(idle_state_,                             se::DeploymentPollingTriggered,  schedule_poll_for_deployment_state_,     tf::Deferred);
+	main_states_.AddTransition(idle_state_,                             se::InventoryPollingTriggered,   schedule_submit_inventory_state_,        tf::Deferred);
+
+	// The schedule states cannot fail
+	main_states_.AddTransition(schedule_poll_for_deployment_state_,     se::Success,                     ss.idle_leave_deploy_,                   tf::Immediate);
+	main_states_.AddTransition(schedule_submit_inventory_state_,        se::Success,                     ss.idle_leave_inv_,                      tf::Immediate);
 
 	main_states_.AddTransition(ss.idle_leave_deploy_,                   se::Success,                     ss.sync_enter_deployment_,               tf::Immediate);
 	main_states_.AddTransition(ss.idle_leave_deploy_,                   se::Failure,                     ss.sync_enter_deployment_,               tf::Immediate);
