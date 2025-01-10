@@ -174,6 +174,9 @@ public:
 	shared_ptr<deployments::DeploymentAPI> deployment_client;
 	shared_ptr<inventory::InventoryAPI> inventory_client;
 
+	events::Timer deployment_timer;
+	events::Timer inventory_timer;
+
 	struct {
 		unique_ptr<StateData> state_data;
 		io::ReaderPtr artifact_reader;
