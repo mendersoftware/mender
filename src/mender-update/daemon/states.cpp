@@ -149,10 +149,8 @@ void SubmitInventoryState::DoSubmitInventory(Context &ctx, sm::EventPoster<State
 	auto handler = [this, &ctx, &poster](error::Error err) {
 		if (err != error::NoError) {
 			log::Error("Failed to submit inventory: " + err.String());
-			if (err.code != auth::MakeError(auth::UnauthorizedError, "").code) {
-				// Replace the inventory poll timer with a backoff
-				HandlePollingError(ctx, poster);
-			}
+			// Replace the inventory poll timer with a backoff
+			HandlePollingError(ctx, poster);
 			poster.PostEvent(StateEvent::Failure);
 			return;
 		}
@@ -261,10 +259,8 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 		[this, &ctx, &poster](mender::update::deployments::CheckUpdatesAPIResponse response) {
 			if (!response) {
 				log::Error("Error while polling for deployment: " + response.error().String());
-				if (response.error().code != auth::MakeError(auth::UnauthorizedError, "").code) {
-					// Replace the update poll timer with a backoff
-					HandlePollingError(ctx, poster);
-				}
+				// Replace the update poll timer with a backoff
+				HandlePollingError(ctx, poster);
 				poster.PostEvent(StateEvent::Failure);
 				return;
 			} else if (!response.value()) {
