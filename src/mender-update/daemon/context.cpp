@@ -160,7 +160,9 @@ Context::Context(
 	download_client(make_shared<http_resumer::DownloadResumerClient>(
 		mender_context.GetConfig().GetHttpClientConfig(), event_loop)),
 	deployment_client(make_shared<deployments::DeploymentClient>()),
-	inventory_client(make_shared<inventory::InventoryClient>()) {
+	inventory_client(make_shared<inventory::InventoryClient>()),
+	deployment_timer(event_loop),
+	inventory_timer(event_loop) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
