@@ -68,8 +68,14 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	runner_(ctx) {
 	runner_.AddStateMachine(deployment_tracking_.states_);
 	runner_.AddStateMachine(main_states_);
-
 	runner_.AttachToEventLoop(event_loop_);
+	ctx.authenticator.RegisterTokenReceivedCallback([&ctx]() {
+		if (ctx.inventory_client->has_submitted_inventory) {
+			log::Debug("Client has re-authenticated - clear inventory data cache");
+			ctx.inventory_client->ClearDataCache();
+			ctx.inventory_client->has_submitted_inventory = false;
+		}
+	});
 
 	using se = StateEvent;
 	using tf = sm::TransitionFlag;

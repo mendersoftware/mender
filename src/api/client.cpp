@@ -87,7 +87,6 @@ error::Error HTTPClient::AsyncCall(
 				});
 				return;
 			}
-			reauthenticated_ = true;
 		};
 
 	return authenticator_.WithToken(
