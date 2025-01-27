@@ -103,24 +103,44 @@ void IdleState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering Idle state");
 }
 
-SubmitInventoryState::SubmitInventoryState(
-	events::EventLoop &event_loop, int retry_interval_seconds, int retry_count) :
-	retry_ {
-		http::ExponentialBackoff(chrono::seconds(retry_interval_seconds), retry_count),
-		event_loop} {
+ScheduleNextPollState::ScheduleNextPollState(
+	events::Timer &timer, const string &poll_action, const StateEvent event, int interval) :
+	timer_ {timer},
+	poll_action_ {poll_action},
+	event_ {event},
+	interval_ {interval} {
+}
+
+void ScheduleNextPollState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	log::Debug("Scheduling the next " + poll_action_ + " in: " + to_string(interval_) + " seconds");
+	timer_.AsyncWait(chrono::seconds(interval_), [this, &poster](error::Error err) {
+		if (err != error::NoError) {
+			if (err.code != make_error_condition(errc::operation_canceled)) {
+				log::Error("Timer caused error: " + err.String());
+			}
+		} else {
+			poster.PostEvent(event_);
+		}
+	});
+
+	poster.PostEvent(StateEvent::Success);
+}
+
+SubmitInventoryState::SubmitInventoryState(int retry_interval_seconds, int retry_count) :
+	backoff_ {chrono::seconds(retry_interval_seconds), retry_count} {
 }
 
 void SubmitInventoryState::HandlePollingError(Context &ctx, sm::EventPoster<StateEvent> &poster) {
-	// When using short polling inteervals, we should adjust the backoff to ensure
+	// When using short polling intervals, we should adjust the backoff to ensure
 	// that the intervals do not exceed the maximum retry polling interval, which
 	// converts the backoff to a fixed interval.
 	chrono::milliseconds max_interval =
 		chrono::seconds(ctx.mender_context.GetConfig().retry_poll_interval_seconds);
-	if (max_interval < retry_.backoff.SmallestInterval()) {
-		retry_.backoff.SetSmallestInterval(max_interval);
-		retry_.backoff.SetMaxInterval(max_interval);
+	if (max_interval < backoff_.SmallestInterval()) {
+		backoff_.SetSmallestInterval(max_interval);
+		backoff_.SetMaxInterval(max_interval);
 	}
-	auto exp_interval = retry_.backoff.NextInterval();
+	auto exp_interval = backoff_.NextInterval();
 	if (!exp_interval) {
 		log::Debug(
 			"Not retrying with backoff, retrying InventoryPollIntervalSeconds: "
@@ -131,8 +151,8 @@ void SubmitInventoryState::HandlePollingError(Context &ctx, sm::EventPoster<Stat
 		"Retrying inventory polling in "
 		+ to_string(chrono::duration_cast<chrono::seconds>(*exp_interval).count()) + " seconds");
 
-	retry_.wait_timer.Cancel();
-	retry_.wait_timer.AsyncWait(*exp_interval, [&poster](error::Error err) {
+	ctx.inventory_timer.Cancel();
+	ctx.inventory_timer.AsyncWait(*exp_interval, [&poster](error::Error err) {
 		if (err != error::NoError) {
 			if (err.code != make_error_condition(errc::operation_canceled)) {
 				log::Error("Retry poll timer caused error: " + err.String());
@@ -143,7 +163,7 @@ void SubmitInventoryState::HandlePollingError(Context &ctx, sm::EventPoster<Stat
 	});
 }
 
-void SubmitInventoryState::DoSubmitInventory(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Submitting inventory");
 
 	auto handler = [this, &ctx, &poster](error::Error err) {
@@ -154,7 +174,7 @@ void SubmitInventoryState::DoSubmitInventory(Context &ctx, sm::EventPoster<State
 			poster.PostEvent(StateEvent::Failure);
 			return;
 		}
-		retry_.backoff.Reset();
+		backoff_.Reset();
 		ctx.inventory_client->has_submitted_inventory = true;
 		poster.PostEvent(StateEvent::Success);
 	};
@@ -172,45 +192,21 @@ void SubmitInventoryState::DoSubmitInventory(Context &ctx, sm::EventPoster<State
 	}
 }
 
-void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
-	// Schedule timer for next update first, so that long running submissions do not postpone
-	// the schedule.
-	log::Debug(
-		"Scheduling the next inventory submission in: "
-		+ to_string(ctx.mender_context.GetConfig().inventory_poll_interval_seconds) + " seconds");
-	retry_.wait_timer.AsyncWait(
-		chrono::seconds(ctx.mender_context.GetConfig().inventory_poll_interval_seconds),
-		[&poster](error::Error err) {
-			if (err != error::NoError) {
-				if (err.code != make_error_condition(errc::operation_canceled)) {
-					log::Error("Inventory poll timer caused error: " + err.String());
-				}
-			} else {
-				poster.PostEvent(StateEvent::InventoryPollingTriggered);
-			}
-		});
-
-	DoSubmitInventory(ctx, poster);
-}
-
-PollForDeploymentState::PollForDeploymentState(
-	events::EventLoop &event_loop, int retry_interval_seconds, int retry_count) :
-	retry_ {
-		http::ExponentialBackoff(chrono::seconds(retry_interval_seconds), retry_count),
-		event_loop} {
+PollForDeploymentState::PollForDeploymentState(int retry_interval_seconds, int retry_count) :
+	backoff_ {chrono::seconds(retry_interval_seconds), retry_count} {
 }
 
 void PollForDeploymentState::HandlePollingError(Context &ctx, sm::EventPoster<StateEvent> &poster) {
-	// When using short polling inteervals, we should adjust the backoff to ensure
+	// When using short polling intervals, we should adjust the backoff to ensure
 	// that the intervals do not exceed the maximum retry polling interval, which
 	// converts the backoff to a fixed interval.
 	chrono::milliseconds max_interval =
 		chrono::seconds(ctx.mender_context.GetConfig().retry_poll_interval_seconds);
-	if (max_interval < retry_.backoff.SmallestInterval()) {
-		retry_.backoff.SetSmallestInterval(max_interval);
-		retry_.backoff.SetMaxInterval(max_interval);
+	if (max_interval < backoff_.SmallestInterval()) {
+		backoff_.SetSmallestInterval(max_interval);
+		backoff_.SetMaxInterval(max_interval);
 	}
-	auto exp_interval = retry_.backoff.NextInterval();
+	auto exp_interval = backoff_.NextInterval();
 	if (!exp_interval) {
 		log::Debug(
 			"Not retrying with backoff, retrying with UpdatePollIntervalSeconds: "
@@ -221,8 +217,8 @@ void PollForDeploymentState::HandlePollingError(Context &ctx, sm::EventPoster<St
 		"Retrying deployment polling in "
 		+ to_string(chrono::duration_cast<chrono::seconds>(*exp_interval).count()) + " seconds");
 
-	retry_.wait_timer.Cancel();
-	retry_.wait_timer.AsyncWait(*exp_interval, [&poster](error::Error err) {
+	ctx.deployment_timer.Cancel();
+	ctx.deployment_timer.AsyncWait(*exp_interval, [&poster](error::Error err) {
 		if (err != error::NoError) {
 			if (err.code != make_error_condition(errc::operation_canceled)) {
 				log::Error("Retry poll timer caused error: " + err.String());
@@ -235,23 +231,6 @@ void PollForDeploymentState::HandlePollingError(Context &ctx, sm::EventPoster<St
 
 void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Polling for update");
-
-	// Schedule timer for next update first, so that long running submissions do not postpone
-	// the schedule.
-	log::Debug(
-		"Scheduling the next deployment check in: "
-		+ to_string(ctx.mender_context.GetConfig().update_poll_interval_seconds) + " seconds");
-	retry_.wait_timer.AsyncWait(
-		chrono::seconds(ctx.mender_context.GetConfig().update_poll_interval_seconds),
-		[&poster](error::Error err) {
-			if (err != error::NoError) {
-				if (err.code != make_error_condition(errc::operation_canceled)) {
-					log::Error("Update poll timer caused error: " + err.String());
-				}
-			} else {
-				poster.PostEvent(StateEvent::DeploymentPollingTriggered);
-			}
-		});
 
 	auto err = ctx.deployment_client->CheckNewDeployments(
 		ctx.mender_context,
@@ -276,10 +255,10 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 					poster.PostEvent(StateEvent::InventoryPollingTriggered);
 				}
 
-				retry_.backoff.Reset();
+				backoff_.Reset();
 				return;
 			}
-			retry_.backoff.Reset();
+			backoff_.Reset();
 
 			auto exp_data = ApiResponseJsonToStateData(response.value().value());
 			if (!exp_data) {
