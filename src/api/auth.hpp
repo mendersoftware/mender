@@ -69,6 +69,7 @@ using APIResponse = ExpectedAuthData;
 using APIResponseHandler = function<void(APIResponse)>;
 
 using AuthenticatedAction = function<void(ExpectedAuthData)>;
+using ReAuthenticatedAction = function<void()>;
 
 error::Error FetchJWTToken(
 	mender::http::Client &client,
@@ -87,8 +88,13 @@ public:
 		auth_timeout_timer_ {loop} {};
 
 	void ExpireToken();
-
 	error::Error WithToken(AuthenticatedAction action);
+
+	// Register a callback to be called on re-authentication. Will overwrite the
+	// stored callback with the new one.
+	void RegisterTokenReceivedCallback(ReAuthenticatedAction action) {
+		action_ = action;
+	}
 
 private:
 	void PostPendingActions(ExpectedAuthData &ex_auth_data);
@@ -101,6 +107,7 @@ private:
 	chrono::seconds auth_timeout_;
 	events::Timer auth_timeout_timer_;
 	vector<AuthenticatedAction> pending_actions_;
+	ReAuthenticatedAction action_ {nullptr};
 	bool watching_token_signal_ {false};
 };
 
