@@ -57,18 +57,9 @@ test:unit:
 test:backward-compat:
   stage: test
   # Keep the image aligned with the oldest LTS at mender-dist-packages
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:10
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:11
   before_script:
-    - apt update && apt install -yyq ccache g++ git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libboost-regex-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus
-    # backport CMake
-    - echo "deb http://archive.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/buster-backports_deps.list
-    - |
-      cat <<EOF> /etc/apt/preferences.d/prefer_backports.pref
-      Package: cmake*
-      Pin: release a=buster-backports
-      Pin-Priority: 999
-      EOF
-    - apt update && apt install -yyq --allow-unauthenticated cmake
+    - apt update && apt install -yyq ccache g++ git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libboost-regex-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus cmake
   script:
     - cmake -D MENDER_DOWNLOAD_BOOST=ON .
     - make --jobs=$(nproc --all) --keep-going
