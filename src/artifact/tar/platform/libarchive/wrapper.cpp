@@ -72,7 +72,7 @@ Error Handle::Init() {
 #ifdef MENDER_ARTIFACT_ZSTD_COMPRESSION
 	r = archive_read_support_filter_zstd(archive_.get());
 	if (r != ARCHIVE_OK) {
-		return MakeError(error::GenericError, "xz compression is not supported on this platform");
+		return MakeError(error::GenericError, "zstd compression is not supported on this platform");
 	}
 #endif // MENDER_ARTIFACT_ZSTD_COMPRESSION
 	r = archive_read_support_format_tar(archive_.get());
