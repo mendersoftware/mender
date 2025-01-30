@@ -133,7 +133,7 @@ class TestModulesArtifactGen:
             update_file = os.path.join(file_tree, "my-file")
             with open(update_file, "w") as fd:
                 fd.write("my-content")
-            os.chmod(update_file, 0o664)
+            os.chmod(update_file, 0o600)
 
             artifact_file = os.path.join(file_tree, "my-artifact.mender")
 
@@ -192,7 +192,7 @@ class TestModulesArtifactGen:
             with open(os.path.join(file_tree, "filename")) as fd:
                 assert "my-file" == fd.read().strip()
             with open(os.path.join(file_tree, "permissions")) as fd:
-                assert "664" == fd.read().strip()
+                assert "600" == fd.read().strip()
             with open(os.path.join(file_tree, "my-file")) as fd:
                 assert "my-content" == fd.read().strip()
 
