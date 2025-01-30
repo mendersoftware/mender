@@ -155,7 +155,6 @@ TEST(ParserTest, TestParseManifestFormatErrorNewlineSeparators) {
 }
 
 TEST(ParserTest, TestParseManifestFormatStripCompressionSuffixes) {
-	/* Two characters missing from the shasum */
 	std::string manifest_data =
 		R"(aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  data/0000.tar.xz
 aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  manifest.zst
