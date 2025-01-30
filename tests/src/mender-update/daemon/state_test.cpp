@@ -4075,7 +4075,7 @@ TEST(DBSchemaMigrationTest, TestFromVersion1To2) {
   "UpdateInfo": {
     "Artifact": {
       "Source": {
-        "URI": "https:s3.docker.mender.io:9000/mender-artifact-storage/c58c5f0e-6bb0-4905-a31c-8c0c0096f89b?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minio%2F20231106%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20231106T085837Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&response-content-disposition=attachment%3B%20filename%3D%22mender-98415760.mender%22&response-content-type=application%2Fvnd.mender-artifact&x-id=GetObject&X-Amz-Signature=eb326892ece383484c229f2a1dff50e9c4bd6c9f016a3db2aeebf76b67e4e4f3",
+        "URI": "https://s3.docker.mender.io:9000/mender-artifact-storage/c58c5f0e-6bb0-4905-a31c-8c0c0096f89b?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minio%2F20231106%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20231106T085837Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&response-content-disposition=attachment%3B%20filename%3D%22mender-98415760.mender%22&response-content-type=application%2Fvnd.mender-artifact&x-id=GetObject&X-Amz-Signature=eb326892ece383484c229f2a1dff50e9c4bd6c9f016a3db2aeebf76b67e4e4f3",
         "Expire": "2023-11-07T08:58:37.023637656Z"
       },
       "device_types_compatible": [
