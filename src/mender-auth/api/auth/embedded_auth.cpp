@@ -49,7 +49,7 @@ void AuthenticatorHttp::FetchJwtTokenHandler(APIResponse resp) {
 		log::Error("Failed to fetch new token: " + resp.error().String());
 	}
 
-	PostPendingActions(mender::api::auth::AuthData {token_, server_url_});
+	PostPendingActions(mender::api::auth::AuthData {server_url_, token_});
 }
 
 error::Error AuthenticatorHttp::FetchJwtToken() {
