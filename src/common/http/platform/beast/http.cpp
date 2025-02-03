@@ -327,7 +327,7 @@ error::Error Client::Initialize() {
 			}
 
 			const int ret =
-				SSL_CTX_use_PrivateKey(ssl_ctx_[i].native_handle(), exp_key.value().Get());
+				SSL_CTX_use_PrivateKey(ssl_ctx_[i].native_handle(), exp_key.value()->Get());
 			if (ret != 1) {
 				return MakeError(
 					HTTPInitError,
