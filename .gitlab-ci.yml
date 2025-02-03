@@ -67,6 +67,26 @@ test:backward-compat:
     - cmake -D MENDER_DOWNLOAD_BOOST=ON .
     - make --jobs=$(nproc --all) --keep-going
 
+test:forward-compat:
+  stage: test
+  variables:
+    BOOST_VERSION_MINOR: "87"
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:testing
+  before_script:
+    - apt update && apt install -yyq ccache g++ git wget bzip2 make pkg-config liblmdb++-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus cmake
+    - (
+    -   cd /
+    -   wget --progress=dot:giga
+          https://archives.boost.io/release/1.${BOOST_VERSION_MINOR}.0/source/boost_1_${BOOST_VERSION_MINOR}_0.tar.bz2
+    -   tar --bzip2 -xf boost_1_${BOOST_VERSION_MINOR}_0.tar.bz2
+    -   cd boost_1_${BOOST_VERSION_MINOR}_0
+    -   ./bootstrap.sh --with-libraries=log,regex,beast,asio
+    -   ./b2 install
+    - )
+  script:
+    - cmake .
+    - make --jobs=$(nproc --all) --keep-going
+
 .test:static-template:
   stage: test
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
