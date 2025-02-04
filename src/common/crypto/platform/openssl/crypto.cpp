@@ -603,7 +603,6 @@ expected::ExpectedString Sign(const Args &args, const vector<uint8_t> &raw_data)
 	return EncodeBase64(signature);
 }
 
-const size_t mender_decode_buf_size = 256;
 const size_t ecdsa256keySize = 32;
 
 // Try and decode the keys from pure binary, assuming that the points on the
@@ -665,19 +664,25 @@ static expected::ExpectedBytes TryASN1EncodeMenderCustomBinaryECFormat(
 	r.release();
 	s.release();
 
-	/* Allocate some array guaranteed to hold the DER-encoded structure */
-	vector<uint8_t> der_encoded_byte_array(mender_decode_buf_size);
-	unsigned char *arr_p = &der_encoded_byte_array[0];
-	int len = i2d_ECDSA_SIG(ecSig.get(), &arr_p);
+	/* Get the expected length in bytes of the DER encoded signature */
+	int len = i2d_ECDSA_SIG(ecSig.get(), NULL);
 	if (len < 0) {
 		return expected::unexpected(MakeError(
 			SetupError,
 			"Failed to set the signature parts in the ECDSA structure: "
 				+ GetOpenSSLErrorMessage()));
 	}
-	/* Resize to the actual size of the DER-encoded signature */
-	der_encoded_byte_array.resize(len);
 
+	/* Allocate an array guaranteed to hold the DER-encoded structure */
+	vector<unsigned char> der_encoded_byte_array(len);
+	unsigned char *arr_p = der_encoded_byte_array.data();
+	len = i2d_ECDSA_SIG(ecSig.get(), &arr_p);
+	if (len < 0) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to set the signature parts in the ECDSA structure: "
+				+ GetOpenSSLErrorMessage()));
+	}
 	return der_encoded_byte_array;
 }
 
