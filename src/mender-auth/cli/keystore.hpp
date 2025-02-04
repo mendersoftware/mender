@@ -81,7 +81,7 @@ private:
 	string ssl_engine_;
 	StaticKey static_key_;
 	string passphrase_;
-	crypto::PrivateKey key_;
+	std::unique_ptr<crypto::PrivateKey> key_;
 };
 
 } // namespace cli

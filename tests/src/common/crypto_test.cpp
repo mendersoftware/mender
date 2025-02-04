@@ -248,7 +248,7 @@ TEST(CryptoTest, TestPrivateKeySaveToPEM) {
 
 	mtesting::TemporaryDirectory tmpdir;
 	string tmpfile = path::Join(tmpdir.Path(), "private.key");
-	auto err = private_key.SaveToPEM(tmpfile);
+	auto err = private_key->SaveToPEM(tmpfile);
 	EXPECT_EQ(error::NoError, err);
 	fs::perms perms = fs::status(tmpfile).permissions();
 	EXPECT_EQ(perms, fs::perms::owner_read | fs::perms::owner_write);
@@ -268,7 +268,7 @@ TEST(CryptoTest, TestPrivateKeySaveToPEM) {
 		 path::Perms::Others_write});
 	EXPECT_EQ(error::NoError, err);
 
-	err = private_key.SaveToPEM(tmpfile);
+	err = private_key->SaveToPEM(tmpfile);
 	EXPECT_EQ(error::NoError, err);
 	perms = fs::status(tmpfile).permissions();
 	EXPECT_EQ(perms, fs::perms::owner_read | fs::perms::owner_write);

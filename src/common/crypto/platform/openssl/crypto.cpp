@@ -189,7 +189,7 @@ ExpectedPrivateKey LoadFromHSMEngine(const Args &args) {
 
 	auto handle = unique_ptr<OpenSSLResourceHandle, void (*)(OpenSSLResourceHandle *)>(
 		new OpenSSLResourceHandle {std::move(engine)}, resource_handle_free_func);
-	return PrivateKey(std::move(private_key), std::move(handle));
+	return std::make_unique<PrivateKey>(std::move(private_key), std::move(handle));
 }
 
 #ifdef MENDER_CRYPTO_OPENSSL_LEGACY
@@ -216,7 +216,7 @@ ExpectedPrivateKey LoadFrom(const Args &args) {
 				+ GetOpenSSLErrorMessage()));
 	}
 
-	return PrivateKey(std::move(private_key));
+	return std::make_unique<PrivateKey>(std::move(private_key));
 }
 #endif // MENDER_CRYPTO_OPENSSL_LEGACY
 
@@ -267,8 +267,7 @@ ExpectedPrivateKey LoadFrom(const Args &args) {
 					"Failed to load the private key: " + args.private_key_path
 						+ " error: " + GetOpenSSLErrorMessage()));
 			}
-
-			return PrivateKey(std::move(private_key));
+			return std::make_unique<PrivateKey>(std::move(private_key));
 		}
 		default:
 			const string info_type_string = OSSL_STORE_INFO_type_string(type_info);
@@ -345,7 +344,7 @@ ExpectedPrivateKey PrivateKey::Generate() {
 	}
 
 	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(pkey, pkey_free_func);
-	return PrivateKey(std::move(private_key));
+	return std::make_unique<PrivateKey>(std::move(private_key));
 }
 
 expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode) {
@@ -418,7 +417,7 @@ expected::ExpectedString ExtractPublicKey(const Args &args) {
 				+ "):" + GetOpenSSLErrorMessage()));
 	}
 
-	int ret = PEM_write_bio_PUBKEY(bio_public_key.get(), exp_private_key.value().Get());
+	int ret = PEM_write_bio_PUBKEY(bio_public_key.get(), exp_private_key.value()->Get());
 	if (ret != OPENSSL_SUCCESS) {
 		return expected::unexpected(MakeError(
 			SetupError,
@@ -528,9 +527,10 @@ static expected::ExpectedBytes SignED25519(EVP_PKEY *pkey, const vector<uint8_t>
 	return sig;
 }
 
-expected::ExpectedBytes SignGeneric(PrivateKey &private_key, const vector<uint8_t> &digest) {
+expected::ExpectedBytes SignGeneric(
+	std::unique_ptr<PrivateKey> &&private_key, const vector<uint8_t> &digest) {
 	auto pkey_signer_ctx = unique_ptr<EVP_PKEY_CTX, void (*)(EVP_PKEY_CTX *)>(
-		EVP_PKEY_CTX_new(private_key.Get(), nullptr), pkey_ctx_free_func);
+		EVP_PKEY_CTX_new(private_key->Get(), nullptr), pkey_ctx_free_func);
 
 	if (EVP_PKEY_sign_init(pkey_signer_ctx.get()) <= 0) {
 		return expected::unexpected(MakeError(
@@ -575,12 +575,12 @@ expected::ExpectedBytes SignData(const Args &args, const vector<uint8_t> &raw_da
 
 	log::Info("Signing with: " + args.private_key_path);
 
-	auto key_type = EVP_PKEY_base_id(exp_private_key.value().Get());
+	auto key_type = EVP_PKEY_base_id(exp_private_key.value()->Get());
 
 	// ED25519 signatures need to be handled independently, because of how the
 	// signature scheme is designed.
 	if (key_type == EVP_PKEY_ED25519) {
-		return SignED25519(exp_private_key.value().Get(), raw_data);
+		return SignED25519(exp_private_key.value()->Get(), raw_data);
 	}
 
 	auto exp_shasum = mender::sha::Shasum(raw_data);
@@ -590,7 +590,7 @@ expected::ExpectedBytes SignData(const Args &args, const vector<uint8_t> &raw_da
 	auto digest = exp_shasum.value(); /* The shasummed data = digest in crypto world */
 	log::Debug("Shasum is: " + digest.String());
 
-	return SignGeneric(exp_private_key.value(), digest);
+	return SignGeneric(std::move(exp_private_key.value()), digest);
 }
 
 expected::ExpectedString Sign(const Args &args, const vector<uint8_t> &raw_data) {

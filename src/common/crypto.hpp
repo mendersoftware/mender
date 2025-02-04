@@ -44,7 +44,7 @@ struct Args {
 };
 
 class PrivateKey;
-using ExpectedPrivateKey = expected::expected<PrivateKey, error::Error>;
+using ExpectedPrivateKey = expected::expected<std::unique_ptr<PrivateKey>, error::Error>;
 
 #ifdef MENDER_CRYPTO_OPENSSL
 class OpenSSLResourceHandle;
@@ -55,6 +55,8 @@ using PkeyPtr = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>;
 class PrivateKey {
 public:
 	PrivateKey() {};
+	PrivateKey(const PrivateKey &) = delete;
+	PrivateKey &operator=(const PrivateKey &) = delete;
 
 	static ExpectedPrivateKey Load(const Args &args);
 	static ExpectedPrivateKey Generate();
