@@ -31,15 +31,7 @@ RUN mender-artifact write bootstrap-artifact \
 FROM ubuntu:22.04
 
 RUN mkdir -p /run/dbus
-RUN apt update && apt install -y openssh-server libboost-log1.74.0 liblmdb0 libarchive13 dbus iproute2
-
-# Set no password
-RUN sed -ie 's/^root:[^:]*:/root::/' /etc/shadow
-RUN sed -ie 's/^UsePAM/#UsePam/' /etc/ssh/sshd_config
-RUN echo 'PermitEmptyPasswords yes\n\
-PermitRootLogin yes\n\
-Port 22\n\
-Port 8822\n' >> /etc/ssh/sshd_config
+RUN apt update && apt install -y libboost-log1.74.0 liblmdb0 libarchive13 dbus iproute2
 
 COPY --from=build /mender-install/usr/bin/mender-update /usr/bin/mender-update
 COPY --from=build /mender-install/usr/bin/mender-auth /usr/bin/mender-auth
