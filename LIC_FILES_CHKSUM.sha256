@@ -4,8 +4,8 @@
 5e0df8c845c742e76f2f64d2d9ce1b7e74a2422fddbc577ae6a56319083de0bf  src/common/vendor/yaml-cpp/test/gtest-1.11.0/googlemock/scripts/generator/LICENSE
 #
 # MIT clause license
-bcf7b8d2662716afdcd77ae5e76c0b9ae5f9ba4c10a7cfc397253b81a7c41f3c  src/common/vendor/json/LICENSE.MIT
-fd1d291046af6714295250488e8eeef3336bf89f63beea9cd1f358668585de58  src/common/vendor/json/docs/mkdocs/docs/home/license.md
+46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603  src/common/vendor/json/LICENSE.MIT
+d4b7ed0261c2c840e9ccc7d483b3b659bfddc8be797f3007da080f0c4a78d960  src/common/vendor/json/docs/mkdocs/docs/home/license.md
 2aefa40fa7e1c0fab18fbad5b15b02406eea1399d3cca42cc1012b65b4a56f74  src/common/vendor/tiny-process-library/LICENSE
 aa6fcc27be034e41e21dd832f9175bfe694a48491d9e14ff0fa278e19ad14f1b  src/common/vendor/yaml-cpp/LICENSE
 #
