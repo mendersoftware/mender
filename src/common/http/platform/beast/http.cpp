@@ -458,6 +458,8 @@ static inline error::Error AddProxyAuthHeader(OutgoingRequest &req, BrokenDownUr
 		return ex_encoded_creds.error();
 	}
 	req.SetHeader("Proxy-Authorization", "Basic " + ex_encoded_creds.value());
+	log::Warning(
+		"Avoid using basic authentication if possible, and make sure if it's used, it's through HTTPS");
 
 	return error::NoError;
 }
