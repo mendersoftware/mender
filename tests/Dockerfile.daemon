@@ -17,11 +17,16 @@ RUN mkdir -p /mender-install/etc/mender/
 RUN jq ".ServerCertificate=\"/usr/share/doc/mender-auth/examples/demo.crt\" | .ServerURL=\"https://docker.mender.io/\"" \
     < examples/mender.conf.demo > /mender-install/etc/mender/mender.conf
 
-# Install mender-artifact from upstream
-RUN curl -fsSL https://downloads.mender.io/repos/debian/gpg > /etc/apt/trusted.gpg.d/mender.asc && \
-    echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/$(. /etc/lsb-release && echo $DISTRIB_CODENAME)/experimental main" > \
-        /etc/apt/sources.list.d/mender.list && \
-    apt-get update && apt-get -y install mender-artifact
+# Install mender-artifact taking the version from the CI manifest file
+RUN MENDER_ARTIFACT_VERSION=$(sed -n 's/.*MENDER_ARTIFACT_VERSION: \(.*\)/\1/p' .gitlab-ci.yml); \
+    if [ -z "$MENDER_ARTIFACT_VERSION" ]; then \
+        echo "Could not parse  MENDER_ARTIFACT_VERSION from .gitlab-ci.yml" 1>&2; \
+        exit 1; \
+    fi; \
+    curl "https://downloads.mender.io/repos/debian/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1+ubuntu+jammy_amd64.deb" \
+        --output /mender-artifact.deb && \
+    dpkg --install /mender-artifact.deb && \
+    rm /mender-artifact.deb
 RUN mender-artifact write bootstrap-artifact \
         --artifact-name original \
         --device-type docker-client \
