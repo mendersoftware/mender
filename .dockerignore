@@ -1,0 +1,2 @@
+tests/Dockerfile.daemon
+tests/build-docker
