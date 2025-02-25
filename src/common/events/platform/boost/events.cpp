@@ -45,7 +45,7 @@ void EventLoop::Stop() {
 }
 
 void EventLoop::Post(std::function<void()> func) {
-	ctx_.post(func);
+	asio::post(ctx_, func);
 }
 
 Timer::Timer(EventLoop &loop) :
