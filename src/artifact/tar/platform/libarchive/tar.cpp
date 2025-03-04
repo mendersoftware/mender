@@ -85,13 +85,13 @@ ExpectedEntry Reader::Next() {
 			MakeError(TarReaderError, "Failed to get the name of the archive entry"));
 	}
 
-	const la_int64_t archive_entry_size_ {archive_entry_size(current_entry)};
+	const int64_t archive_entry_size_ {archive_entry_size(current_entry)};
 	if (archive_entry_size_ < 0) {
 		return expected::unexpected(
 			MakeError(TarReaderError, "Failed to get the size of the archive"));
 	}
 
-	return Entry(archive_name, static_cast<size_t>(archive_entry_size_), *this);
+	return Entry(archive_name, archive_entry_size_, *this);
 }
 
 } // namespace tar
