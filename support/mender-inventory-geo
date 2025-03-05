@@ -40,7 +40,7 @@ ATTR_NAME_LAT="geo-lat"
 ATTR_NAME_LON="geo-lon"
 
 if [ ! -f "${TEMPFILE}" ]; then
-    ipinfo=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout \
+    ipinfo=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout --tries=2 \
                   --header 'Accept: application/json' \
                   https://ipinfo.io)
     if [ $? != 0 ] || [ -z "${ipinfo}" ]; then
