@@ -351,8 +351,8 @@ error::Error MenderContext::CommitArtifactData(
 		string artifact_provides_str {"{"};
 		for (const auto &it : modified_provides) {
 			if (it.first != "artifact_name" && it.first != "artifact_group") {
-				artifact_provides_str +=
-					"\"" + it.first + "\":" + "\"" + json::EscapeString(it.second) + "\",";
+				artifact_provides_str += "\"" + json::EscapeString(it.first) + "\":" + "\""
+										 + json::EscapeString(it.second) + "\",";
 			}
 		}
 
