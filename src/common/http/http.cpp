@@ -202,6 +202,10 @@ expected::ExpectedString URLDecode(const string &value) {
 			}
 			unsigned int num;
 			sscanf(value.substr(i + 1, 2).c_str(), "%x", &num);
+			if (num < 0x20) {
+				return expected::unexpected(
+					MakeError(InvalidUrlError, "Invalid encoding in '" + value + "'"));
+			}
 			unescaped << static_cast<char>(num);
 			i += 2;
 		}
