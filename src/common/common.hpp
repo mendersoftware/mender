@@ -133,6 +133,7 @@ static inline bool VectorContainsString(const vector<string> &vec, const string 
 	return std::find(vec.begin(), vec.end(), str) != vec.end();
 }
 
+// Should not be used with user provided data
 static inline string StringVectorToString(const vector<string> &vec, const string delim = ",") {
 	string ret = "{";
 	auto sz = vec.size();
