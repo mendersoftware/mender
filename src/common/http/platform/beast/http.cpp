@@ -356,7 +356,7 @@ error::Error Client::Initialize() {
 		if (client_config_.server_cert_path != "") {
 			ssl_ctx_[i].load_verify_file(client_config_.server_cert_path, ec);
 			if (ec) {
-				log::Warning("Failed to load the server certificate! Falling back to the CA store");
+				log::Error("Failed to load the server certificate! Falling back to the CA store");
 			}
 		}
 	}
