@@ -144,10 +144,10 @@ error::Error SaveStateData(database::KeyValueDatabase &db, const StateData &data
 	ss << "\"" << keys.version << "\":" << data.version;
 
 	ss << ",";
-	ss << "\"" << keys.artifact_name << "\":\"" << data.artifact_name << "\"";
+	ss << "\"" << keys.artifact_name << "\":\"" << json::EscapeString(data.artifact_name) << "\"";
 
 	ss << ",";
-	ss << "\"" << keys.artifact_group << "\":\"" << data.artifact_group << "\"";
+	ss << "\"" << keys.artifact_group << "\":\"" << json::EscapeString(data.artifact_group) << "\"";
 
 	ss << ",";
 	ss << "\"" << keys.payload_types << "\": [";
@@ -156,7 +156,7 @@ error::Error SaveStateData(database::KeyValueDatabase &db, const StateData &data
 		if (!first) {
 			ss << ",";
 		}
-		ss << "\"" << elem << "\"";
+		ss << "\"" << json::EscapeString(elem) << "\"";
 		first = false;
 	}
 	ss << "]";
@@ -169,7 +169,8 @@ error::Error SaveStateData(database::KeyValueDatabase &db, const StateData &data
 			if (!first) {
 				ss << ",";
 			}
-			ss << "\"" << elem.first << "\":\"" << elem.second << "\"";
+			ss << "\"" << json::EscapeString(elem.first) << "\":\""
+			   << json::EscapeString(elem.second) << "\"";
 			first = false;
 		}
 		ss << "}";
@@ -183,7 +184,7 @@ error::Error SaveStateData(database::KeyValueDatabase &db, const StateData &data
 			if (!first) {
 				ss << ",";
 			}
-			ss << "\"" << elem << "\"";
+			ss << "\"" << json::EscapeString(elem) << "\"";
 			first = false;
 		}
 		ss << "]";
