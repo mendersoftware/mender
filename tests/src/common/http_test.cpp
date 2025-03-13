@@ -119,6 +119,9 @@ TEST(URLTest, URLEncodeDecode) {
 
 	ex_dec = http::URLDecode("no%alone");
 	ASSERT_FALSE(ex_dec);
+
+	ex_dec = http::URLDecode("no%00controlchar");
+	ASSERT_FALSE(ex_dec);
 }
 
 TEST(URLTest, BreakDownUrl) {
