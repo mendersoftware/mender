@@ -341,6 +341,7 @@ error::Error Client::Initialize() {
 				"Cannot set only one of client certificate, and client certificate private key");
 		}
 
+		bool cert_loaded = true;
 		ssl_ctx_[i].set_default_verify_paths(ec); // Load the default CAs
 		if (ec) {
 			auto err = error::Error(
@@ -351,12 +352,18 @@ error::Error Client::Initialize() {
 			} else {
 				// We have a dedicated certificate, so this is not fatal.
 				log::Info(err.String());
+				cert_loaded = false;
 			}
 		}
 		if (client_config_.server_cert_path != "") {
 			ssl_ctx_[i].load_verify_file(client_config_.server_cert_path, ec);
 			if (ec) {
-				log::Error("Failed to load the server certificate! Falling back to the CA store");
+				log::Warning("Failed to load the server certificate! Falling back to the CA store");
+				if (!cert_loaded) {
+					return error::Error(
+						ec.default_error_condition(),
+						"Failed to load SSL default directory and server certificate");
+				}
 			}
 		}
 	}
