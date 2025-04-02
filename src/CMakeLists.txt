@@ -20,4 +20,3 @@ add_subdirectory(client_shared)
 add_subdirectory(mender-update)
 add_subdirectory(mender-auth)
 add_subdirectory(artifact)
-

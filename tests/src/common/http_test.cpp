@@ -26,6 +26,8 @@
 #include <common/testing.hpp>
 #include <common/processes.hpp>
 
+#include <mender-version.h>
+
 using namespace std;
 
 namespace error = mender::common::error;
@@ -415,6 +417,9 @@ void TestHeaders() {
 
 			ASSERT_TRUE(req->GetHeader("X-MyrequestHeader"));
 			EXPECT_EQ(req->GetHeader("X-MyrequestHeader").value(), "header_value");
+
+			ASSERT_TRUE(req->GetHeader("User-Agent"));
+			EXPECT_EQ(req->GetHeader("User-Agent").value(), "Mender/" MENDER_VERSION);
 		},
 		[&server_hit_body](http::ExpectedIncomingRequestPtr exp_req) {
 			server_hit_body = true;
@@ -425,6 +430,9 @@ void TestHeaders() {
 
 			ASSERT_TRUE(req->GetHeader("X-MyrequestHeader"));
 			EXPECT_EQ(req->GetHeader("X-MyrequestHeader").value(), "header_value");
+
+			ASSERT_TRUE(req->GetHeader("User-Agent"));
+			EXPECT_EQ(req->GetHeader("User-Agent").value(), "Mender/" MENDER_VERSION);
 
 			auto exp_resp = req->MakeResponse();
 			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
