@@ -24,6 +24,8 @@
 #include <common/common.hpp>
 #include <common/crypto.hpp>
 
+#include <mender-version.h>
+
 namespace mender {
 namespace common {
 namespace http {
@@ -424,6 +426,9 @@ error::Error Client::AsyncCall(
 	req->SetHeader("HOST", header_url);
 
 	log::Trace("Setting HOST address: " + header_url);
+
+	// Add User-Agent header for all requests
+	req->SetHeader("User-Agent", "Mender/" MENDER_VERSION);
 
 	header_handler_ = header_handler;
 	body_handler_ = body_handler;
