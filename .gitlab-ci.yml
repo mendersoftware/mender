@@ -71,8 +71,8 @@ test:backward-compat:
   stage: test
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
   tags:
-    # QA-866: Ubuntu 24.04 image cannot properly run on our private runners.
-    - mender-qa-worker-generic-light
+    # QA-866: Ubuntu 24.04 image cannot properly run on sysbox-runc runners
+    - hetzner-podman
   before_script:
     - apt update && apt install -yyq ccache clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget
     # mender-artifact install
@@ -92,11 +92,19 @@ test:static:asan:
   variables:
     BUILD_TYPE: ASan
   extends: .test:static-template
+  tags:
+    # hetzner podman fails with result: segmentation fault
+    # falling back to gcp runners
+    - mender-qa-worker-generic-light
 
 test:static:threadsan:
   extends: .test:static-template
   variables:
     BUILD_TYPE: ThreadSan
+  tags:
+    # hetzner podman fails with result: segmentation fault
+    # falling back to gcp runners
+    - mender-qa-worker-generic-light
 
 test:static:undefinedsan:
   extends: .test:static-template
@@ -117,8 +125,8 @@ test:modules-artifact-gen:
   stage: test
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
   tags:
-    # QA-866: Ubuntu 24.04 image cannot properly run on our private runners.
-    - mender-qa-worker-generic-light
+    # QA-866: Ubuntu 24.04 image cannot properly run on sysbox-runc runners
+    - hetzner-podman
   before_script:
     - apt update && apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
     # mender-artifact
