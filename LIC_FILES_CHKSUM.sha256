@@ -1,8 +1,6 @@
 # Apache-2.0 license.
 38791d93beae962b266e11ac888ea2af4f07578b272c2f9dcb05f54f32960a76  LICENSE
 #
-5e0df8c845c742e76f2f64d2d9ce1b7e74a2422fddbc577ae6a56319083de0bf  src/common/vendor/yaml-cpp/test/gtest-1.11.0/googlemock/scripts/generator/LICENSE
-#
 # MIT clause license
 46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603  src/common/vendor/json/LICENSE.MIT
 d4b7ed0261c2c840e9ccc7d483b3b659bfddc8be797f3007da080f0c4a78d960  src/common/vendor/json/docs/mkdocs/docs/home/license.md
@@ -19,4 +17,4 @@ a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499  src/common/ven
 c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566  src/common/vendor/optional-lite/LICENSE.txt
 #
 # BSD-3
-9702de7e4117a8e2b20dafab11ffda58c198aede066406496bef670d40a22138  src/common/vendor/yaml-cpp/test/gtest-1.11.0/LICENSE
+9702de7e4117a8e2b20dafab11ffda58c198aede066406496bef670d40a22138  src/common/vendor/yaml-cpp/test/googletest-1.13.0/LICENSE
