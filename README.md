@@ -226,6 +226,19 @@ During the current, early stage of development using a higher, cross-compilation
 system such as Yocto is advisable. Once things are sufficiently stabilized, a set of steps for
 manual cross-compilation will be added here.
 
+### Aarch64
+
+Install the requirements for aarch64, e.g. for a Debian-based system:
+```
+sudo dpkg --add-architecture arm64
+sudo apt update && sudo apt install git crossbuild-essential-arm64 cmake libarchive-dev:arm64 liblmdb++-dev:arm64 libboost-log-dev:arm64 libssl-dev:arm64 libdbus-1-dev:arm64 libsystemd-dev:arm64
+```
+
+Configure and build:
+```
+cmake -DCMAKE_TOOLCHAIN_FILE=cmake/aarch64.cmake -B build .
+cmake --build build
+```
 ### QNX
 
 **Note that QNX support is still experimental, and not supported.**
