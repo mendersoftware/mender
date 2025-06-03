@@ -17,6 +17,19 @@ RUN mkdir -p /mender-install/etc/mender/
 RUN jq ".ServerCertificate=\"/usr/share/doc/mender-auth/examples/demo.crt\" | .ServerURL=\"https://docker.mender.io/\"" \
     < examples/mender.conf.demo > /mender-install/etc/mender/mender.conf
 
+# Install mender-flash taking the version from the CI manifest file
+RUN MENDER_FLASH_VERSION=$(sed -n 's/.*MENDER_FLASH_VERSION: \(.*\)/\1/p' .gitlab-ci.yml); \
+    if [ -z "$MENDER_FLASH_VERSION" ]; then \
+        echo "Could not parse  MENDER_FLASH_VERSION from .gitlab-ci.yml" 1>&2; \
+        exit 1; \
+    fi;
+RUN mkdir /tmp/mender-flash_build
+# TODO: Download/clone if not present
+RUN cmake -S /go/src/github.com/mendersoftware/mender-flash -B /tmp/mender-flash_build
+RUN cmake --build /tmp/mender-flash_build --parallel $(nproc --all)
+RUN DESTDIR=/mender-install cmake --install /tmp/mender-flash_build --prefix /usr
+
+
 # Install mender-artifact taking the version from the CI manifest file
 RUN MENDER_ARTIFACT_VERSION=$(sed -n 's/.*MENDER_ARTIFACT_VERSION: \(.*\)/\1/p' .gitlab-ci.yml); \
     if [ -z "$MENDER_ARTIFACT_VERSION" ]; then \
@@ -40,6 +53,7 @@ RUN apt update && apt install -y libboost-log1.74.0 liblmdb0 libarchive13 dbus i
 
 COPY --from=build /mender-install/usr/bin/mender-update /usr/bin/mender-update
 COPY --from=build /mender-install/usr/bin/mender-auth /usr/bin/mender-auth
+COPY --from=build /mender-install/usr/bin/mender-flash /usr/bin/mender-flash
 COPY --from=build /mender-install/etc/mender /etc/mender
 COPY --from=build /mender-install/usr/share/mender /usr/share/mender
 COPY --from=build /mender-install/usr/share/doc/mender-auth /usr/share/doc/mender-auth

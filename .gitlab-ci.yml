@@ -15,6 +15,8 @@ variables:
 
   # mender-artifact version for tests
   MENDER_ARTIFACT_VERSION: 4.0.0
+  # mender-flash version for tests
+  MENDER_FLASH_VERSION: 1.0.1
 
 include:
   - project: 'Northern.tech/Mender/mendertesting'
