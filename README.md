@@ -65,11 +65,11 @@ environments*, and high-quality software (see the test coverage badge).
 
 ## Where to start?
 
-| **Mender enterprise**| **Mender Open Source** |
+| **Mender (Commercial)** | **Mender (Open source)** |
 | ------------- | ------------- |
-| Ready to get started on an enterprise-grade OTA software update solution? Capabilities include advanced fleet management, security, and compliance: role-based access control (RBAC), dynamic groups, delta updates, and mutual TLS support. Get started with [hosted Mender](https://hosted.mender.io/ui/signup) and evaluate Mender for free. | Alternatively, the Mender open-source option allows you to start doing smart device updates in a quick, secure, and robust method. Check out [how to get started](https://docs.mender.io/get-started). <br /> In order to support rollback, the Mender client depends on integration with the boot loader and the partition layout. It is, therefore, most easily built as part of your Yocto Project image by using the [meta layer for the Yocto Project](https://github.com/mendersoftware/meta-mender). |
+| Ready to get started immediately? The commercial version of Mender allows you to simply connect your devices to a hosted, enterprise-grade, and multi-region backend. Capabilities include: advanced fleet management, top-tier security, regulatory compliance features, role-based access control (RBAC), dynamic groups, delta updates, and mutual TLS support.<br><br>Free for 12 months, up to 10 devices, [get started with Mender today](https://docs.mender.io/get-started). | Alternatively, the open-source version of Mender allows you to start updating devices in a quick, secure, and robust method. Learn more about how to get started.<br><br>*For rollback functionality, the Mender client requires an integration with the boot loader and a partition layout. Support for rollback functionality is most easily built as part of your Yocto Project image by using the [meta layer for the Yocto Project](https://github.com/mendersoftware/meta-mender).* |
 
-If you want to compare the options available, look at our
+Compare the complete list of features and functionality available at the
 [features](https://mender.io/product/features) page.
 
 ### Mender documentation
