@@ -49,6 +49,10 @@ parse_conf_file() {
             ${MENDER_DATASTORE_DIR:-/var/lib/mender}/mender.conf \
             ${MENDER_CONF_DIR:-/etc/mender}/mender.conf \
     ; do
+        if [ ! -f "$CONF_FILE" ]; then
+            continue
+        fi
+
         if [ "$JQ_AVAILABLE" = 1 ]; then
             # Use the alternative operator "//" to set tmp to "" instead of "null"
             tmp="$(jq -r '.RootfsPartA // empty' < "$CONF_FILE" || true)"
