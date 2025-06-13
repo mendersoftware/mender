@@ -1,14 +1,11 @@
 version: 2
 updates:
-
   - package-ecosystem: pip
     commit-message:
       prefix: "chore"
     directory: /support/modules-artifact-gen/tests
     schedule:
       interval: weekly
-    reviewers:
-      - "mendersoftware/client-dependabot-reviewers"
 
   - package-ecosystem: gitsubmodule
     commit-message:
@@ -16,8 +13,6 @@ updates:
     directory: /
     schedule:
       interval: monthly
-    reviewers:
-      - "mendersoftware/client-dependabot-reviewers"
 
   - package-ecosystem: docker
     commit-message:
@@ -25,5 +20,3 @@ updates:
     directory: /tests
     schedule:
       interval: monthly
-    reviewers:
-      - "mendersoftware/client-dependabot-reviewers"
