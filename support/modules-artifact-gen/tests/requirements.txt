@@ -12,7 +12,9 @@ packaging==23.1
     # via pytest
 pluggy==1.5.0
     # via pytest
-pytest==8.3.5
+pygments==2.19.1
+    # via pytest
+pytest==8.4.0
     # via -r requirements.in
 tomli==2.0.1
     # via pytest
