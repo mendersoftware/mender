@@ -5,6 +5,8 @@
 
 # Overview
 
+**This branch is EOL!**
+
 Mender is an open-source, over-the-air (OTA) update manager for IoT and embedded Linux devices. Its
 client-server architecture enables the central management of software deployments, including
 functionality such as dynamic grouping, phased deployments, and delta updates. Mender also supports
