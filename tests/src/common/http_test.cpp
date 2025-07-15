@@ -927,6 +927,88 @@ TEST(HttpTest, TestChunkedResponseBody) {
 	loop.Run();
 }
 
+TEST(HttpTest, TestChunkedResponseBodyTwoRequests) {
+	int count = 0;
+
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::TestServer server(server_config, loop);
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&loop, &count](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Transfer-Encoding", "chunked");
+			resp->SetBodyReader(make_shared<BodyOfXes>());
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([&loop, &count](error::Error err) {
+				ASSERT_EQ(error::NoError, err);
+				if (++count >= 2) {
+					loop.Stop();
+				}
+			});
+		});
+
+	http::ClientConfig client_config;
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+
+	auto header_handler = [&received_body](http::ExpectedIncomingResponsePtr exp_resp) {
+		ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+		auto resp = exp_resp.value();
+
+		auto transfer_encoding = resp->GetHeader("Transfer-Encoding");
+		ASSERT_TRUE(transfer_encoding);
+		ASSERT_EQ(transfer_encoding.value(), "chunked");
+
+		auto body_writer = make_shared<io::ByteWriter>(received_body);
+		body_writer->SetUnlimited(true);
+		resp->SetBodyWriter(body_writer);
+	};
+
+	auto body_handler = [&received_body, &loop, &count](
+							http::ExpectedIncomingResponsePtr exp_resp) {
+		ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+
+		vector<uint8_t> expected_body;
+		io::ByteWriter expected_writer(expected_body);
+		expected_writer.SetUnlimited(true);
+		io::Copy(expected_writer, *make_shared<BodyOfXes>());
+
+		EXPECT_EQ(received_body.size(), expected_body.size());
+		EXPECT_EQ(received_body, expected_body)
+			<< "Body not received correctly. Difference at index "
+				   + to_string(
+					   mismatch(received_body.begin(), received_body.end(), expected_body.begin())
+						   .first
+					   - received_body.begin());
+		if (++count >= 2) {
+			loop.Stop();
+		}
+	};
+	client.AsyncCall(req, header_handler, body_handler);
+	loop.Run();
+
+	// Now perform the same request again, using the same Client (and Server)
+	// instance, to make sure the first request doesn't leave things in a broken
+	// state.
+	count = 0;
+	received_body.clear();
+	client.AsyncCall(req, header_handler, body_handler);
+	loop.Run();
+}
+
 TEST(HttpTest, TestMissingResponseBody) {
 	TestEventLoop loop;
 
