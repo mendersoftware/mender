@@ -659,8 +659,22 @@ void Client::ResolveHandler(
 	stream_ = make_shared<ssl::stream<ssl::stream<tcp::socket>>>(
 		ssl::stream<tcp::socket>(GetAsioIoContext(event_loop_), ssl_ctx_[0]), ssl_ctx_[1]);
 
-	if (!response_data_.response_buffer_) {
-		// We can reuse this if preexisting.
+	if (response_data_.response_buffer_) {
+		// We can reuse this if preexisting, just make sure we start with a
+		// clean state (while avoiding shrinking/discarding the buffer, see
+		// https://www.boost.org/doc/libs/1_70_0/libs/beast/doc/html/beast/ref/boost__beast__basic_flat_buffer/clear.html
+		// for details).
+		// Since there should be no leftover bytes from previous responses, we
+		// log if there are some, but let's not bother all users with a warning,
+		// there is nothing they could do about it. However, for
+		// testing/debugging/CI, it can be useful to have this information.
+		if (response_data_.response_buffer_->size() > 0) {
+			logger_.Debug(
+				"Leftover data from the previous response! ("
+				+ to_string(response_data_.response_buffer_->size()) + " bytes)");
+		}
+		response_data_.response_buffer_->clear();
+	} else {
 		response_data_.response_buffer_ = make_shared<beast::flat_buffer>();
 
 		// This is equivalent to:
