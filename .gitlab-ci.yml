@@ -59,6 +59,8 @@ test:backward-compat:
   # Keep the image aligned with the oldest LTS at mender-dist-packages
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:10
   before_script:
+    # Debian 10 is EOL
+    - sed -i 's/deb\.debian/archive.debian/' /etc/apt/sources.list
     - apt update && apt install -yyq g++ git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libboost-regex-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus
     # backport CMake
     - echo "deb http://archive.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/buster-backports_deps.list
