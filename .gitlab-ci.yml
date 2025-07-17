@@ -80,7 +80,7 @@ test:backward-compat:
     - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/jammy/experimental main"
       > /etc/apt/sources.list.d/mender.list
     - apt-get update
-    - apt install mender-artifact
+    - apt install -yyq mender-artifact
     - export CC=$(which clang)
     - export CXX=$(which clang++)
   script:

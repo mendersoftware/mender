@@ -21,7 +21,7 @@ RUN jq ".ServerCertificate=\"/usr/share/doc/mender-auth/examples/demo.crt\" | .S
 RUN curl -fsSL https://downloads.mender.io/repos/debian/gpg > /etc/apt/trusted.gpg.d/mender.asc && \
     echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/$(. /etc/lsb-release && echo $DISTRIB_CODENAME)/experimental main" > \
         /etc/apt/sources.list.d/mender.list && \
-    apt-get update && apt-get install mender-artifact
+    apt-get update && apt-get -y install mender-artifact
 RUN mender-artifact write bootstrap-artifact \
         --artifact-name original \
         --device-type docker-client \
