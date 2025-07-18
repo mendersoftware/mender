@@ -19,7 +19,7 @@
 # The example script collects information on geo localization
 
 err() {
- local rc=$1
+ rc=$1
 
  shift
  echo "${0}: $*" >&2
@@ -39,20 +39,41 @@ ATTR_NAME_TIMEZONE="geo-timezone"
 ATTR_NAME_LAT="geo-lat"
 ATTR_NAME_LON="geo-lon"
 
-if [ ! -f "${TEMPFILE}" ]; then
-    ipinfo=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout --tries=2 \
-                  --header 'Accept: application/json' \
-                  https://ipinfo.io)
-    if [ $? != 0 ] || [ -z "${ipinfo}" ]; then
-        err 2 "Unable to get IP info from ipinfo.io"
+# Check if wget is a full version or is it provided by BusyBox
+# Limit retries to 2 to avoid waiting a long time in case of failures
+fetch_ipinfo() {
+    WGET_BUSYBOX=0
+    WGET_OUTPUT="$(wget 2>&1)"
+
+    case "$WGET_OUTPUT" in
+        *"BusyBox"*) WGET_BUSYBOX=1 ;;
+    esac
+
+    if [ "$WGET_BUSYBOX" -eq 1 ]; then
+        for i in 1 2; do
+            IP_INFO=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout \
+                --header 'Accept: application/json' \
+                https://ipinfo.io) && break
+        done
+    else
+        IP_INFO=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout --tries=2 \
+            --header 'Accept: application/json' \
+            https://ipinfo.io)
     fi
 
+    if [ $? != 0 ] || [ -z "${IP_INFO}" ]; then
+        err 2 "Unable to get IP info from ipinfo.io"
+    fi
+}
+
+if [ ! -f "${TEMPFILE}" ]; then
+    fetch_ipinfo
     # Fetch and cache geo location data
     mkdir -p $(dirname "${TEMPFILE}") || \
         err $? "Failed to create temporary storage for geo location data."
 
     # Convert JSON (Object{string -> string}) to key=value format.
-    ipinfo=$(echo "${ipinfo}" | \
+    IP_INFO=$(echo "${IP_INFO}" | \
                  tr -d "\n" | \
                  sed 's/^\s*{\(.*\)\s*"\s*}\s*$/\1/' | \
                  sed 's/\([^\\]\)",/\1\n/g' | \
@@ -60,7 +81,7 @@ if [ ! -f "${TEMPFILE}" ]; then
                  sed 's/\([^\\]\)\s*"\s*:\s*"/\1=/'
           )
 
-    echo "${ipinfo}" | \
+    echo "${IP_INFO}" | \
         awk -F'=' -v attr_ip="${ATTR_NAME_IP}" \
             -v attr_city="${ATTR_NAME_CITY}" \
             -v attr_lat="${ATTR_NAME_LAT}" \
