@@ -136,30 +136,25 @@ EOF
 check_device_matches_root() {
     case "$1" in
         /dev/ubi*)
-            # UBI is a bit peculiar. Trying to take the device number of the root device does not
-            # match the major/minor number of the UBI device file, even though that filesystem is
-            # mounted. So fall back on name comparison for UBI.
-
             # Standardize on the `/dev/` variant. The kernel only accepts an argument without
             # `/dev/`, but all userspace tools use the `/dev/` variant.
             ROOT_DEVICE="$(mount | grep -F ' on / ' | sed -e 's/ .*//; s,^ubi,/dev/ubi,')"
-            if [ "$1" = "$ROOT_DEVICE" ]; then
-                return 0
-            else
-                echo "Mounted root ($ROOT_DEVICE) does not match boot loader environment ($1)!" 1>&2
-                return 1
-            fi
             ;;
         *)
-            # Match major/minor device number against mounted root device.
+            # Match major/minor device number against mounted root device if possible.
             if [ "$(stat -L -c %02t%02T "$1")" = "$(stat -L -c %04D /)" ]; then
                 return 0
-            else
-                echo "Mounted root does not match boot loader environment ($1)!" 1>&2
-                return 1
             fi
+            ROOT_DEVICE="$(findfs "$(grep -o '\(^\| \)root=[^ ]*' /proc/cmdline | cut -d= -f2-)")"
             ;;
     esac
+
+    if [ "$1" = "$ROOT_DEVICE" ]; then
+        return 0
+    else
+        echo "Mounted root ($ROOT_DEVICE) does not match boot loader environment ($1)!" 1>&2
+        return 1
+    fi
 }
 
 check_requirements() {
