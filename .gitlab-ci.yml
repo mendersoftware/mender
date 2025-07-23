@@ -13,9 +13,6 @@ variables:
     value: "27.3"
     description: "Version of docker to use in pipelines"
 
-  # mender-artifact version for tests
-  MENDER_ARTIFACT_VERSION: 4.0.0
-
 include:
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-github-status-updates.yml'
@@ -25,6 +22,7 @@ include:
     file: '.gitlab-ci-check-license.yml'
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-c++.yml'
+  - component: gitlab.com/Northern.tech/Mender/mendertesting/workstation-tools-repository@master
 
 default:
   tags:
@@ -44,9 +42,7 @@ test:unit:
   before_script:
     - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget
     # mender-artifact install
-    - wget "https://downloads.mender.io/repos/debian/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bdebian%2bbullseye_amd64.deb"
-      --output-document mender-artifact.deb
-    - dpkg --install mender-artifact.deb
+    - !reference [.install_mender_artifact]
   script:
     - cmake -D COVERAGE=ON .
     - make --jobs=$(nproc --all) --keep-going coverage
@@ -75,10 +71,8 @@ test:backward-compat:
     - hetzner-podman
   before_script:
     - apt update && apt install -yyq ccache clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget
-    # mender-artifact install
-    - wget "https://downloads.mender.io/repos/debian/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bubuntu%2bjammy_amd64.deb"
-      --output-document mender-artifact.deb
-    - dpkg --install mender-artifact.deb
+    # mender-artifact install from the repository
+    - !reference [.install_mender_artifact]
     - export CC=$(which clang)
     - export CXX=$(which clang++)
   script:
@@ -129,10 +123,8 @@ test:modules-artifact-gen:
     - hetzner-podman
   before_script:
     - apt update && apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
-    # mender-artifact
-    - curl -fsSL https://downloads.mender.io/repos/debian/gpg | tee /etc/apt/trusted.gpg.d/mender.asc
-    - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/jammy/experimental main" | tee /etc/apt/sources.list.d/mender.list
-    - apt update && apt install -yy mender-artifact
+    # mender-artifact install from the repository
+    - !reference [.install_mender_artifact]
     # Test dependencies
     - pip install -r support/modules-artifact-gen/tests/requirements.txt
   script:
