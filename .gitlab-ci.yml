@@ -14,7 +14,7 @@ variables:
     description: "Version of docker to use in pipelines"
 
   # mender-artifact version for tests
-  MENDER_ARTIFACT_VERSION: 4.0.0
+  MENDER_ARTIFACT_VERSION: 4.1.0
 
 include:
   - project: 'Northern.tech/Mender/mendertesting'
@@ -44,7 +44,7 @@ test:unit:
   before_script:
     - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget
     # mender-artifact install
-    - wget "https://downloads.mender.io/repos/debian/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bdebian%2bbullseye_amd64.deb"
+    - wget "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bdebian%2bbullseye_amd64.deb"
       --output-document mender-artifact.deb
     - dpkg --install mender-artifact.deb
   script:
@@ -76,7 +76,7 @@ test:backward-compat:
   before_script:
     - apt update && apt install -yyq ccache clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget
     # mender-artifact install
-    - wget "https://downloads.mender.io/repos/debian/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bubuntu%2bjammy_amd64.deb"
+    - wget "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bubuntu%2bjammy_amd64.deb"
       --output-document mender-artifact.deb
     - dpkg --install mender-artifact.deb
     - export CC=$(which clang)

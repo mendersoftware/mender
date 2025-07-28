@@ -23,7 +23,7 @@ RUN MENDER_ARTIFACT_VERSION=$(sed -n 's/.*MENDER_ARTIFACT_VERSION: \(.*\)/\1/p' 
         echo "Could not parse  MENDER_ARTIFACT_VERSION from .gitlab-ci.yml" 1>&2; \
         exit 1; \
     fi; \
-    curl "https://downloads.mender.io/repos/debian/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1+ubuntu+noble_amd64.deb" \
+    curl "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1+ubuntu+noble_amd64.deb" \
         --output /mender-artifact.deb && \
     dpkg --install /mender-artifact.deb && \
     rm /mender-artifact.deb
