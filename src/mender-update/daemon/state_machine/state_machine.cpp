@@ -139,6 +139,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
 	// Cannot fail due to FailureMode::Ignore.
 	main_states_.AddTransition(send_download_status_state_,             se::Success,                     ss.download_enter_,                      tf::Immediate);
+	main_states_.AddTransition(send_download_status_state_,             se::DeploymentAborted,           ss.download_leave_,                      tf::Immediate);
 
 	main_states_.AddTransition(ss.download_enter_,                      se::Success,                     update_download_state_,                  tf::Immediate);
 	main_states_.AddTransition(ss.download_enter_,                      se::Failure,                     ss.download_error_,                      tf::Immediate);
@@ -165,6 +166,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
 	// Cannot fail due to FailureMode::Ignore.
 	main_states_.AddTransition(send_install_status_state_,              se::Success,                     ss.install_enter_,                       tf::Immediate);
+	main_states_.AddTransition(send_install_status_state_,              se::DeploymentAborted,           clear_artifact_data_state_,              tf::Immediate);
 
 	main_states_.AddTransition(update_install_state_,                   se::Success,                     ss.install_leave_,                       tf::Immediate);
 	main_states_.AddTransition(update_install_state_,                   se::Failure,                     ss.install_error_rollback_,              tf::Immediate);
@@ -187,6 +189,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
 	// Cannot fail due to FailureMode::Ignore.
 	main_states_.AddTransition(send_reboot_status_state_,               se::Success,                     ss.reboot_enter_,                        tf::Immediate);
+	main_states_.AddTransition(send_reboot_status_state_,               se::DeploymentAborted,           clear_artifact_data_state_,              tf::Immediate);
 
 	main_states_.AddTransition(ss.reboot_enter_,                        se::Success,                     update_reboot_state_,                    tf::Immediate);
 	main_states_.AddTransition(ss.reboot_enter_,                        se::Failure,                     ss.reboot_error_,                        tf::Immediate);
@@ -210,6 +213,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
 	main_states_.AddTransition(send_commit_status_state_,               se::Success,                     ss.commit_enter_,                        tf::Immediate);
 	main_states_.AddTransition(send_commit_status_state_,               se::Failure,                     update_check_rollback_state_,            tf::Immediate);
+	main_states_.AddTransition(send_commit_status_state_,               se::DeploymentAborted,           update_check_rollback_state_,            tf::Immediate);
 
 	main_states_.AddTransition(ss.commit_enter_,                        se::Success,                     update_commit_state_,                    tf::Immediate);
 	main_states_.AddTransition(ss.commit_enter_,                        se::Failure,                     ss.commit_error_,                        tf::Immediate);
@@ -296,6 +300,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
 	main_states_.AddTransition(send_final_status_state_,                se::Success,                     clear_artifact_data_state_,              tf::Immediate);
 	main_states_.AddTransition(send_final_status_state_,                se::Failure,                     clear_artifact_data_state_,              tf::Immediate);
+	main_states_.AddTransition(send_final_status_state_,                se::DeploymentAborted,           clear_artifact_data_state_,              tf::Immediate);
 
 	main_states_.AddTransition(clear_artifact_data_state_,              se::Success,                     end_of_deployment_state_,                tf::Immediate);
 	main_states_.AddTransition(clear_artifact_data_state_,              se::Failure,                     end_of_deployment_state_,                tf::Immediate);
