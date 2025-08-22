@@ -26,6 +26,7 @@ enum class StateEvent {
 	Failure,
 	NothingToDo,
 	Retry,
+	DeploymentAborted,
 	InventoryPollingTriggered,
 	DeploymentPollingTriggered,
 	StateLoopDetected,
@@ -48,6 +49,8 @@ inline std::string StateEventToString(const StateEvent &event) {
 		return "NothingToDo";
 	case StateEvent::Retry:
 		return "Retry";
+	case StateEvent::DeploymentAborted:
+		return "DeploymentAborted";
 	case StateEvent::InventoryPollingTriggered:
 		return "InventoryPollingTriggered";
 	case StateEvent::DeploymentPollingTriggered:
