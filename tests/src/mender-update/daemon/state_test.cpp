@@ -2866,7 +2866,46 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 		},
 
 		StateTransitionsTestCase {
-			.case_name = "Aborted_update",
+			.case_name = "Aborted_update_before_download",
+			.status_log =
+				{
+					// "downloading", // Missing because of fail_status_report_status below
+					"failure",
+				},
+			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.fail_status_report_count = 100,
+			.fail_status_report_status = deployments::DeploymentStatus::Downloading,
+			.fail_status_aborted = true,
+			// When aborting an update, it should react immediately.
+			.long_retry_times = true,
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Aborted_update_before_install",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
+					"Download",
+					"Download_Leave_00",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					// "installing", // Missing because of fail_status_report_status below
+					"failure",
+				},
+			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.fail_status_report_count = 100,
+			.fail_status_report_status = deployments::DeploymentStatus::Installing,
+			.fail_status_aborted = true,
+			// When aborting an update, it should react immediately.
+			.long_retry_times = true,
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Aborted_update_before_reboot",
 			.state_chain =
 				{
 					"Download_Enter_00",
@@ -2876,10 +2915,6 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactInstall_Enter_00",
 					"ArtifactInstall",
 					"ArtifactInstall_Leave_00",
-					"ArtifactReboot_Enter_00",
-					"ArtifactReboot",
-					"ArtifactVerifyReboot",
-					"ArtifactReboot_Leave_00",
 					"ArtifactRollback_Enter_00",
 					"ArtifactRollback",
 					"ArtifactRollback_Leave_00",
@@ -2895,13 +2930,13 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.status_log =
 				{
 					"downloading",
-					// "installing", // Missing because of fail_status_report_status below
-					"rebooting",
+					"installing",
+					// "rebooting", // Missing because of fail_status_report_status below
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
 			.fail_status_report_count = 100,
-			.fail_status_report_status = deployments::DeploymentStatus::Installing,
+			.fail_status_report_status = deployments::DeploymentStatus::Rebooting,
 			.fail_status_aborted = true,
 			// When aborting an update, it should react immediately.
 			.long_retry_times = true,
