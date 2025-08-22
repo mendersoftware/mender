@@ -137,8 +137,9 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	main_states_.AddTransition(ss.sync_error_download_,                 se::Success,                     end_of_deployment_state_,                tf::Immediate);
 	main_states_.AddTransition(ss.sync_error_download_,                 se::Failure,                     end_of_deployment_state_,                tf::Immediate);
 
-	// Cannot fail due to FailureMode::Ignore.
+	// Fail the deployment if it's aborted. All other failures will be ignored due to FailureMode::Ignore
 	main_states_.AddTransition(send_download_status_state_,             se::Success,                     ss.download_enter_,                      tf::Immediate);
+	main_states_.AddTransition(send_download_status_state_,             se::DeploymentAborted,           update_cleanup_state_,                   tf::Immediate);
 
 	main_states_.AddTransition(ss.download_enter_,                      se::Success,                     update_download_state_,                  tf::Immediate);
 	main_states_.AddTransition(ss.download_enter_,                      se::Failure,                     ss.download_error_,                      tf::Immediate);
@@ -163,8 +164,9 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	main_states_.AddTransition(ss.install_enter_,                       se::Success,                     update_install_state_,                   tf::Immediate);
 	main_states_.AddTransition(ss.install_enter_,                       se::Failure,                     ss.install_error_rollback_,              tf::Immediate);
 
-	// Cannot fail due to FailureMode::Ignore.
+	// Fail the deployment if it's aborted. All other failures will be ignored due to FailureMode::Ignore
 	main_states_.AddTransition(send_install_status_state_,              se::Success,                     ss.install_enter_,                       tf::Immediate);
+	main_states_.AddTransition(send_install_status_state_,              se::DeploymentAborted,           update_cleanup_state_,                   tf::Immediate);
 
 	main_states_.AddTransition(update_install_state_,                   se::Success,                     ss.install_leave_,                       tf::Immediate);
 	main_states_.AddTransition(update_install_state_,                   se::Failure,                     ss.install_error_rollback_,              tf::Immediate);
@@ -185,8 +187,9 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	main_states_.AddTransition(update_check_reboot_state_,              se::Failure,                     update_check_rollback_state_,            tf::Immediate);
 	main_states_.AddTransition(update_check_reboot_state_,              se::StateLoopDetected,           state_loop_state_,                       tf::Immediate);
 
-	// Cannot fail due to FailureMode::Ignore.
+	// Fail the deployment if it's aborted. All other failures will be ignored due to FailureMode::Ignore
 	main_states_.AddTransition(send_reboot_status_state_,               se::Success,                     ss.reboot_enter_,                        tf::Immediate);
+	main_states_.AddTransition(send_reboot_status_state_,               se::DeploymentAborted,           update_check_rollback_state_,            tf::Immediate);
 
 	main_states_.AddTransition(ss.reboot_enter_,                        se::Success,                     update_reboot_state_,                    tf::Immediate);
 	main_states_.AddTransition(ss.reboot_enter_,                        se::Failure,                     ss.reboot_error_,                        tf::Immediate);
@@ -208,8 +211,10 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	// Cannot fail.
 	main_states_.AddTransition(update_before_commit_state_,             se::Success,                     send_commit_status_state_,               tf::Immediate);
 
+	// From here on out we treat any failure (including DeploymentAborted) the same way
 	main_states_.AddTransition(send_commit_status_state_,               se::Success,                     ss.commit_enter_,                        tf::Immediate);
 	main_states_.AddTransition(send_commit_status_state_,               se::Failure,                     update_check_rollback_state_,            tf::Immediate);
+	main_states_.AddTransition(send_commit_status_state_,               se::DeploymentAborted,           update_check_rollback_state_,            tf::Immediate);
 
 	main_states_.AddTransition(ss.commit_enter_,                        se::Success,                     update_commit_state_,                    tf::Immediate);
 	main_states_.AddTransition(ss.commit_enter_,                        se::Failure,                     ss.commit_error_,                        tf::Immediate);
@@ -296,6 +301,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
 	main_states_.AddTransition(send_final_status_state_,                se::Success,                     clear_artifact_data_state_,              tf::Immediate);
 	main_states_.AddTransition(send_final_status_state_,                se::Failure,                     clear_artifact_data_state_,              tf::Immediate);
+	main_states_.AddTransition(send_final_status_state_,                se::DeploymentAborted,           clear_artifact_data_state_,              tf::Immediate);
 
 	main_states_.AddTransition(clear_artifact_data_state_,              se::Success,                     end_of_deployment_state_,                tf::Immediate);
 	main_states_.AddTransition(clear_artifact_data_state_,              se::Failure,                     end_of_deployment_state_,                tf::Immediate);
@@ -307,6 +313,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	dt.states_.AddTransition(dt.idle_state_,                            se::DeploymentStarted,           dt.no_failures_state_,                   tf::Immediate);
 
 	dt.states_.AddTransition(dt.no_failures_state_,                     se::Failure,                     dt.failure_state_,                       tf::Immediate);
+	dt.states_.AddTransition(dt.no_failures_state_,                     se::DeploymentAborted,           dt.failure_state_,                       tf::Immediate);
 	dt.states_.AddTransition(dt.no_failures_state_,                     se::DeploymentEnded,             dt.idle_state_,                          tf::Immediate);
 
 	dt.states_.AddTransition(dt.failure_state_,                         se::RollbackStarted,             dt.rollback_attempted_state_,            tf::Immediate);
