@@ -1,6 +1,15 @@
-# Default owners for everything
-* @mendersoftware/client-dependabot-reviewers
+# Dependency updates
+go.mod @mendersoftware/client-dependabot-reviewers
+go.sum @mendersoftware/client-dependabot-reviewers
+Dockerfile* @mendersoftware/client-dependabot-reviewers
+*requirements*.txt @mendersoftware/client-dependabot-reviewers
+package.json @mendersoftware/client-dependabot-reviewers
+package-lock.json @mendersoftware/client-dependabot-reviewers
 
-# Test directories
-/support/modules-artifact-gen/tests/ @mendersoftware/client-dependabot-reviewers
-/tests/ @mendersoftware/client-dependabot-reviewers
+# Git submodules
+src/common/vendor/json/ @mendersoftware/client-dependabot-reviewers
+src/common/vendor/lmdbxx/ @mendersoftware/client-dependabot-reviewers
+src/common/vendor/tiny-process-library/ @mendersoftware/client-dependabot-reviewers
+src/common/vendor/expected/ @mendersoftware/client-dependabot-reviewers
+src/common/vendor/optional-lite/ @mendersoftware/client-dependabot-reviewers
+src/common/vendor/yaml-cpp/ @mendersoftware/client-dependabot-reviewers
