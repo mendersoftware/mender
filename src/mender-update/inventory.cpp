@@ -14,6 +14,7 @@
 
 #include <mender-update/inventory.hpp>
 
+#include <cmath>
 #include <functional>
 #include <sstream>
 #include <string>
@@ -71,6 +72,28 @@ error::Error MakeError(InventoryErrorCode code, const string &msg) {
 
 const string uri = "/api/devices/v1/inventory/device/attributes";
 
+enum class ValueType { Integer, Float, String };
+
+static inline ValueType GetValueType(const string &value) {
+	if (value.empty()) {
+		return ValueType::String;
+	}
+
+	// First check if it's an integer
+	auto int_result = common::StringToLongLong(value);
+	if (int_result) {
+		return ValueType::Integer;
+	}
+
+	// Then check if it's a floating point number
+	auto double_result = common::StringToDouble(value);
+	if (double_result && std::isfinite(double_result.value())) {
+		return ValueType::Float;
+	}
+
+	return ValueType::String;
+}
+
 error::Error PushInventoryData(
 	const string &inventory_generators_dir,
 	events::EventLoop &loop,
@@ -98,12 +121,29 @@ error::Error PushInventoryData(
 		top_ss << json::EscapeString(key);
 		top_ss << R"(","value":)";
 		if (inv_data[key].size() == 1) {
-			top_ss << "\"" + json::EscapeString(inv_data[key][0]) + "\"";
+			const string &value = inv_data[key][0];
+			ValueType value_type = GetValueType(value);
+
+			if (value_type == ValueType::Integer || value_type == ValueType::Float) {
+				// Serialize numeric values without quotes
+				top_ss << value;
+			} else {
+				// Serialize string values with quotes and escaping
+				top_ss << "\"" << json::EscapeString(value) << "\"";
+			}
 		} else {
 			stringstream items_ss;
 			items_ss << "[";
 			for (const auto &str : inv_data[key]) {
-				items_ss << "\"" + json::EscapeString(str) + "\",";
+				ValueType value_type = GetValueType(str);
+
+				if (value_type == ValueType::Integer || value_type == ValueType::Float) {
+					// Serialize numeric values without quotes
+					items_ss << str << ",";
+				} else {
+					// Serialize string values with quotes and escaping
+					items_ss << "\"" << json::EscapeString(str) << "\",";
+				}
 			}
 			auto items_str = items_ss.str();
 			// replace the trailing comma with the closing square bracket
