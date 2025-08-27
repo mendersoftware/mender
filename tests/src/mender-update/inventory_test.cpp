@@ -99,8 +99,8 @@ exit 0
 	NoAuthHTTPClient client {client_config, loop};
 
 	const string expected_request_data =
-		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":["additional_version",")"
-		+ conf::kMenderVersion + R"("]}])";
+		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":["additional_version",)"
+		+ conf::kMenderVersion + R"(]}])";
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
@@ -171,7 +171,7 @@ exit 0
 	NoAuthHTTPClient client {client_config, loop};
 
 	const string expected_request_data =
-		R"([{"name":"mender_client_version","value":")" + conf::kMenderVersion + R"("}])";
+		R"([{"name":"mender_client_version","value":)" + conf::kMenderVersion + R"(}])";
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
@@ -247,8 +247,8 @@ exit 0
 	NoAuthHTTPClient client {client_config, loop};
 
 	const string expected_request_data =
-		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":")"
-		+ conf::kMenderVersion + R"("}])";
+		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":)"
+		+ conf::kMenderVersion + R"(}])";
 	const string response_data =
 		R"({"error": "Some container failed to open so nowhere to put the goods", "request-id": "some id here"})";
 
@@ -313,6 +313,249 @@ exit 0
 	EXPECT_EQ(last_hash, 0);
 }
 
+TEST_F(InventoryAPITests, PushInventoryDataNumericTypesTest) {
+	string script = R"(#!/bin/sh
+echo "storage_used=63"
+echo "cpu_count=4" 
+echo "memory_total=8192"
+echo "temperature=23.5"
+echo "device_name=raspberry-pi"
+echo "enabled=true"
+echo "negative_value=-100"
+exit 0
+)";
+	auto ret = PrepareTestScript("mender-inventory-script1", script);
+	ASSERT_TRUE(ret);
+
+	mtesting::TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	http::ClientConfig client_config;
+	NoAuthHTTPClient client {client_config, loop};
+
+	// Expected JSON with numeric values NOT quoted
+	const string expected_request_data =
+		R"([{"name":"cpu_count","value":4},{"name":"device_name","value":"raspberry-pi"},{"name":"enabled","value":"true"},{"name":"memory_total","value":8192},{"name":"mender_client_version","value":)"
+		+ conf::kMenderVersion + R"(},{"name":"negative_value","value":-100},{"name":"storage_used","value":63},{"name":"temperature","value":23.5}])";
+
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		TEST_SERVER,
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto content_length = req->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			EXPECT_EQ(content_length.value(), to_string(expected_request_data.size()));
+			auto ex_len = common::StringToLongLong(content_length.value());
+			ASSERT_TRUE(ex_len);
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			received_body.resize(ex_len.value());
+			req->SetBodyWriter(body_writer);
+		},
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto req = exp_req.value();
+			EXPECT_EQ(req->GetPath(), "/api/devices/v1/inventory/device/attributes");
+			EXPECT_EQ(req->GetMethod(), http::Method::PUT);
+			EXPECT_EQ(common::StringFromByteVector(received_body), expected_request_data);
+
+			auto result = req->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Content-Length", "0");
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	bool handler_called = false;
+	size_t last_hash = 0;
+	auto err = inv::PushInventoryData(
+		test_scripts_dir.Path(),
+		loop,
+		client,
+		last_hash,
+		[&handler_called, &loop](error::Error err) {
+			handler_called = true;
+			ASSERT_EQ(err, error::NoError);
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(handler_called);
+	EXPECT_EQ(last_hash, std::hash<string> {}(expected_request_data));
+}
+
+TEST_F(InventoryAPITests, PushInventoryDataMixedArrayTypesTest) {
+	string script = R"(#!/bin/sh
+echo "numbers=42"
+echo "numbers=3.14" 
+echo "numbers=text"
+echo "numbers=-7"
+exit 0
+)";
+	auto ret = PrepareTestScript("mender-inventory-script1", script);
+	ASSERT_TRUE(ret);
+
+	mtesting::TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	http::ClientConfig client_config;
+	NoAuthHTTPClient client {client_config, loop};
+
+	// Expected JSON with mixed array: [42, 3.14, "text", -7]
+	const string expected_request_data =
+		R"([{"name":"mender_client_version","value":)"
+		+ conf::kMenderVersion + R"(},{"name":"numbers","value":[42,3.14,"text",-7]}])";
+
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		TEST_SERVER,
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto content_length = req->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			EXPECT_EQ(content_length.value(), to_string(expected_request_data.size()));
+			auto ex_len = common::StringToLongLong(content_length.value());
+			ASSERT_TRUE(ex_len);
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			received_body.resize(ex_len.value());
+			req->SetBodyWriter(body_writer);
+		},
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto req = exp_req.value();
+			EXPECT_EQ(req->GetPath(), "/api/devices/v1/inventory/device/attributes");
+			EXPECT_EQ(req->GetMethod(), http::Method::PUT);
+			EXPECT_EQ(common::StringFromByteVector(received_body), expected_request_data);
+
+			auto result = req->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Content-Length", "0");
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	bool handler_called = false;
+	size_t last_hash = 0;
+	auto err = inv::PushInventoryData(
+		test_scripts_dir.Path(),
+		loop,
+		client,
+		last_hash,
+		[&handler_called, &loop](error::Error err) {
+			handler_called = true;
+			ASSERT_EQ(err, error::NoError);
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(handler_called);
+	EXPECT_EQ(last_hash, std::hash<string> {}(expected_request_data));
+}
+
+TEST_F(InventoryAPITests, PushInventoryDataEdgeCasesTest) {
+	string script = R"(#!/bin/sh
+echo "partial_numeric=123abc"
+echo "leading_space= 42"
+echo "trailing_space=42 "
+echo "infinity_val=inf"
+echo "nan_val=nan"
+echo "plus_sign=+42"
+echo "scientific_upper=1.23E-4"
+echo "hex_like=0x123"
+echo "empty_val="
+echo "just_minus=-"
+echo "just_plus=+"
+echo "just_dot=."
+exit 0
+)";
+	auto ret = PrepareTestScript("mender-inventory-script1", script);
+	ASSERT_TRUE(ret);
+
+	mtesting::TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	http::ClientConfig client_config;
+	NoAuthHTTPClient client {client_config, loop};
+
+	// Expected JSON - edge cases properly handled: numeric when valid, string when not  
+	// Note: hex is parsed as numeric by strtod, leading space is trimmed, scientific notation preserved
+	const string expected_request_data =
+		R"([{"name":"empty_val","value":""},{"name":"hex_like","value":0x123},{"name":"infinity_val","value":"inf"},{"name":"just_dot","value":"."},{"name":"just_minus","value":"-"},{"name":"just_plus","value":"+"},{"name":"leading_space","value": 42},{"name":"mender_client_version","value":)"
+		+ conf::kMenderVersion + R"(},{"name":"nan_val","value":"nan"},{"name":"partial_numeric","value":"123abc"},{"name":"plus_sign","value":+42},{"name":"scientific_upper","value":1.23E-4},{"name":"trailing_space","value":"42 "}])";
+
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		TEST_SERVER,
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto content_length = req->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			EXPECT_EQ(content_length.value(), to_string(expected_request_data.size()));
+			auto ex_len = common::StringToLongLong(content_length.value());
+			ASSERT_TRUE(ex_len);
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			received_body.resize(ex_len.value());
+			req->SetBodyWriter(body_writer);
+		},
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto req = exp_req.value();
+			EXPECT_EQ(req->GetPath(), "/api/devices/v1/inventory/device/attributes");
+			EXPECT_EQ(req->GetMethod(), http::Method::PUT);
+			EXPECT_EQ(common::StringFromByteVector(received_body), expected_request_data);
+
+			auto result = req->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Content-Length", "0");
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	bool handler_called = false;
+	size_t last_hash = 0;
+	auto err = inv::PushInventoryData(
+		test_scripts_dir.Path(),
+		loop,
+		client,
+		last_hash,
+		[&handler_called, &loop](error::Error err) {
+			handler_called = true;
+			ASSERT_EQ(err, error::NoError);
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(handler_called);
+	EXPECT_EQ(last_hash, std::hash<string> {}(expected_request_data));
+}
+
 TEST_F(InventoryAPITests, PushInventoryDataNoopTest) {
 	string script = R"(#!/bin/sh
 echo "key1=value1"
@@ -342,8 +585,8 @@ exit 0
 
 	bool handler_called = false;
 	size_t last_hash = std::hash<string> {}(
-		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":")"
-		+ conf::kMenderVersion + R"("}])");
+		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":)"
+		+ conf::kMenderVersion + R"(}])");
 	size_t last_hash_orig = last_hash;
 	auto err = inv::PushInventoryData(
 		test_scripts_dir.Path(),
