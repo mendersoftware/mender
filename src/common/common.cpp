@@ -39,6 +39,24 @@ mender::common::expected::ExpectedLongLong StringToLongLong(const string &str, i
 	return num;
 }
 
+mender::common::expected::ExpectedDouble StringToDouble(const string &str) {
+	char *end;
+	errno = 0;
+	double num = strtod(str.c_str(), &end);
+	if (errno != 0) {
+		int int_error = errno;
+		return expected::unexpected(mender::common::error::Error(
+			std::generic_category().default_error_condition(int_error), ""));
+	}
+	if (end != &*str.end()) {
+		return expected::unexpected(mender::common::error::Error(
+			std::make_error_condition(errc::invalid_argument),
+			str + " had trailing non-numeric data"));
+	}
+
+	return num;
+}
+
 string StringToLower(const string &str) {
 	string lower_str(str.length(), ' ');
 	std::transform(
