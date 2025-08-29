@@ -291,7 +291,8 @@ Client::Client(
 	no_proxy_ {client.no_proxy},
 	cancelled_ {make_shared<bool>(true)},
 	resolver_(GetAsioIoContext(event_loop)),
-	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
+	body_buffer_(HTTP_BEAST_BUFFER_SIZE),
+	read_timeout_timer_(event_loop) {
 }
 
 Client::~Client() {
@@ -1156,8 +1157,24 @@ void Client::AsyncReadNextBodyPart(
 	auto &cancelled = cancelled_;
 	auto &response_data = response_data_;
 
+	// Add a timeout timer to ensure we don't get stuck if we lose connection
+	read_timeout_timer_.AsyncWait(chrono::minutes(5), [this, cancelled](error::Error err) {
+		if (!*cancelled) {
+			if (err != error::NoError) {
+				if (err.code != make_error_condition(errc::operation_canceled)) {
+					log::Error("Read timeout timer caused error: " + err.String());
+					CallErrorHandler(err, request_, body_handler_);
+				}
+			} else {
+				CallErrorHandler(
+					MakeError(DownloadResumerError, "Read timed out"), request_, body_handler_);
+			}
+		}
+	});
+
 	auto async_handler = [this, cancelled, response_data](const error_code &ec, size_t num_read) {
 		if (!*cancelled) {
+			read_timeout_timer_.Cancel();
 			ReadBodyHandler(ec, num_read);
 		}
 	};
@@ -1268,6 +1285,7 @@ void Client::Cancel() {
 
 void Client::DoCancel() {
 	resolver_.cancel();
+	read_timeout_timer_.Cancel();
 	if (stream_) {
 		stream_->lowest_layer().cancel();
 		stream_->lowest_layer().close();
