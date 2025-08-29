@@ -524,6 +524,9 @@ private:
 
 	vector<uint8_t> body_buffer_;
 
+	// Timer for read timeouts to prevent hanging on connection loss
+	events::Timer read_timeout_timer_;
+
 	asio::ip::tcp::resolver::results_type resolver_results_;
 
 	// The reason that these are inside a struct is a bit complicated. We need to deal with what
