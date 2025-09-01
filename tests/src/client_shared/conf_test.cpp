@@ -339,21 +339,21 @@ TEST(ConfTests, LogLevel) {
 	{
 		vector<string> args {"--log-level", "error"};
 		conf::MenderConfig config;
-		config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
+		ASSERT_TRUE(config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {}));
 		EXPECT_EQ(mlog::Level(), mlog::LogLevel::Error);
 	}
 
 	{
 		vector<string> args {"--log-level", "debug", "--config", conf_file};
 		conf::MenderConfig config;
-		config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
+		ASSERT_TRUE(config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {}));
 		EXPECT_EQ(mlog::Level(), mlog::LogLevel::Debug);
 	}
 
 	{
 		vector<string> args {"--config", conf_file};
 		conf::MenderConfig config;
-		config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
+		ASSERT_TRUE(config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {}));
 		EXPECT_EQ(mlog::Level(), mlog::LogLevel::Warning);
 	}
 }
@@ -372,7 +372,7 @@ TEST(ConfTests, UpdateLogPath) {
 
 	vector<string> args {"--config", conf_file};
 	conf::MenderConfig config;
-	config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
+	ASSERT_TRUE(config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {}));
 	EXPECT_EQ(config.paths.GetUpdateLogPath(), update_log_path);
 }
 
@@ -844,7 +844,7 @@ TEST(ConfTests, FallbackConfig) {
 
 	vector<string> args {"--config", conf_file, "--fallback-config", fallback_conf_file};
 	conf::MenderConfig config;
-	config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
+	ASSERT_TRUE(config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {}));
 	ASSERT_EQ(config.servers.size(), 1);
 	EXPECT_EQ(config.servers[0], "https://right-server.com");
 }

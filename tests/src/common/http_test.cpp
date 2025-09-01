@@ -1819,7 +1819,7 @@ TEST(HttpTest, TestResponseBodyReaderFailure) {
 						return io::Repeat::No;
 					}
 					got_read_success = true;
-					body_writer->Write(buf.begin(), buf.begin() + result.value());
+					EXPECT_TRUE(body_writer->Write(buf.begin(), buf.begin() + result.value()));
 					return io::Repeat::Yes;
 				});
 		},
@@ -1873,7 +1873,7 @@ TEST(HttpTest, TestRequestBodyReaderFailure) {
 						return io::Repeat::No;
 					}
 					got_read_success = true;
-					body_writer->Write(buf.begin(), buf.begin() + result.value());
+					EXPECT_TRUE(body_writer->Write(buf.begin(), buf.begin() + result.value()));
 					return io::Repeat::Yes;
 				});
 		},

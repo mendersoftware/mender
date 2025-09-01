@@ -44,22 +44,22 @@ TEST(ProgressReaderTests, RegularRead) {
 
 	// Read < 1 %
 	std::vector<uint8_t> tmp(1024 * 100);
-	reader.Read(tmp.begin(), std::next(tmp.begin(), 10));
+	ASSERT_TRUE(reader.Read(tmp.begin(), std::next(tmp.begin(), 10)));
 
 	// Read 5%
-	reader.Read(tmp.begin(), std::next(tmp.begin(), 5 * 1024));
+	ASSERT_TRUE(reader.Read(tmp.begin(), std::next(tmp.begin(), 5 * 1024)));
 
 	// Read < 1%
-	reader.Read(tmp.begin(), std::next(tmp.begin(), 10));
+	ASSERT_TRUE(reader.Read(tmp.begin(), std::next(tmp.begin(), 10)));
 
 	// Read 25%
-	reader.Read(tmp.begin(), std::next(tmp.begin(), 20 * 1024));
+	ASSERT_TRUE(reader.Read(tmp.begin(), std::next(tmp.begin(), 20 * 1024)));
 
 	// Read 90%
-	reader.Read(tmp.begin(), std::next(tmp.begin(), 65 * 1024));
+	ASSERT_TRUE(reader.Read(tmp.begin(), std::next(tmp.begin(), 65 * 1024)));
 
 	// Read 100%
-	reader.Read(tmp.begin(), std::next(tmp.begin(), 10 * 1024));
+	ASSERT_TRUE(reader.Read(tmp.begin(), std::next(tmp.begin(), 10 * 1024)));
 
 	std::string output = testing::internal::GetCapturedStderr();
 
