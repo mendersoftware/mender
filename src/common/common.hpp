@@ -77,6 +77,7 @@ inline static string StringFromByteVector(const vector<uint8_t> &vec) {
 }
 
 mender::common::expected::ExpectedLongLong StringToLongLong(const string &str, int base = 10);
+mender::common::expected::ExpectedDouble StringToDouble(const string &str);
 
 template <typename T>
 expected::expected<T, error::Error> StringTo(const string &str, int base = 10) {
