@@ -7,9 +7,9 @@ package.json @mendersoftware/client-dependabot-reviewers
 package-lock.json @mendersoftware/client-dependabot-reviewers
 
 # Git submodules
-src/common/vendor/json/ @mendersoftware/client-dependabot-reviewers
-src/common/vendor/lmdbxx/ @mendersoftware/client-dependabot-reviewers
-src/common/vendor/tiny-process-library/ @mendersoftware/client-dependabot-reviewers
-src/common/vendor/expected/ @mendersoftware/client-dependabot-reviewers
-src/common/vendor/optional-lite/ @mendersoftware/client-dependabot-reviewers
-src/common/vendor/yaml-cpp/ @mendersoftware/client-dependabot-reviewers
+/src/common/vendor/json @mendersoftware/client-dependabot-reviewers
+/src/common/vendor/lmdbxx @mendersoftware/client-dependabot-reviewers
+/src/common/vendor/tiny-process-library @mendersoftware/client-dependabot-reviewers
+/src/common/vendor/expected @mendersoftware/client-dependabot-reviewers
+/src/common/vendor/optional-lite @mendersoftware/client-dependabot-reviewers
+/src/common/vendor/yaml-cpp @mendersoftware/client-dependabot-reviewers
