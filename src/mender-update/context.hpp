@@ -81,6 +81,10 @@ public:
 	ExpectedProvidesData LoadProvides();
 	ExpectedProvidesData LoadProvides(kv_db::Transaction &txn);
 	expected::ExpectedString GetDeviceType();
+#ifdef MENDER_USE_YAML_CPP
+	expected::ExpectedString GetSystemType();
+#endif // MENDER_USE_YAML_CPP
+	expected::ExpectedString GetCompatibleType(const string &payload_type = "");
 	// Stores new artifact data, taking existing provides, and clears_provides, into account.
 	error::Error CommitArtifactData(
 		string artifact_name,
@@ -96,6 +100,11 @@ public:
 
 	// Suffix used for updates that either can't roll back or fail their rollback.
 	static const string broken_artifact_name_suffix;
+
+	// The payload type of mender-orchestrator manifests
+	// Used to identify artifacts containing a mender-orchestrator manifest and to handle it
+	// accordingly. See GetCompatibleType()
+	static const string orchestrator_manifest_payload_type;
 
 	// DATABASE KEYS ------------------------------------------------------
 
@@ -155,7 +164,9 @@ private:
 
 // Only here to make testing easier, use MenderContext::MatchesArtifactDepends().
 expected::ExpectedBool ArtifactMatchesContext(
-	const ProvidesData &provides, const string &device_type, const artifact::HeaderView &hdr_view);
+	const ProvidesData &provides,
+	const string &compatible_type,
+	const artifact::HeaderView &hdr_view);
 
 error::Error FilterProvides(
 	const ProvidesData &new_provides,

@@ -35,6 +35,7 @@ const string complete_config = R"({
   "UpdateLogPath": "UpdateLogPath_value",
   "TenantToken": "TenantToken_value",
   "DaemonLogLevel": "DaemonLogLevel_value",
+  "DeviceTier": "DeviceTier_value",
 
   "SkipVerify": true,
   "DBus": { "Enabled": true },
@@ -97,6 +98,7 @@ TEST(ConfigParserDefaultsTests, ConfigParserDefaults) {
 	EXPECT_EQ(mc.update_log_path, "");
 	EXPECT_EQ(mc.tenant_token, "");
 	EXPECT_EQ(mc.daemon_log_level, "");
+	EXPECT_EQ(mc.device_tier, "");
 
 	EXPECT_FALSE(mc.skip_verify);
 
@@ -136,6 +138,7 @@ TEST_F(ConfigParserTests, LoadComplete) {
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
+	EXPECT_EQ(mc.device_tier, "DeviceTier_value");
 
 	EXPECT_TRUE(mc.skip_verify);
 
@@ -186,6 +189,7 @@ TEST_F(ConfigParserTests, LoadPartial) {
 	EXPECT_EQ(mc.update_log_path, "");
 	EXPECT_EQ(mc.tenant_token, "");
 	EXPECT_EQ(mc.daemon_log_level, "");
+	EXPECT_EQ(mc.device_tier, "");
 
 	EXPECT_FALSE(mc.skip_verify);
 
@@ -247,6 +251,7 @@ TEST_F(ConfigParserTests, LoadOverrides) {
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
+	EXPECT_EQ(mc.device_tier, "DeviceTier_value");
 
 	EXPECT_FALSE(mc.skip_verify);
 
@@ -299,6 +304,7 @@ TEST_F(ConfigParserTests, LoadNoOverrides) {
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
+	EXPECT_EQ(mc.device_tier, "DeviceTier_value");
 
 	EXPECT_TRUE(mc.skip_verify);
 
@@ -351,6 +357,7 @@ TEST_F(ConfigParserTests, LoadInvalidOverrides) {
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
+	EXPECT_EQ(mc.device_tier, "DeviceTier_value");
 
 	EXPECT_TRUE(mc.skip_verify);
 
@@ -410,6 +417,7 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
+	EXPECT_EQ(mc.device_tier, "DeviceTier_value");
 
 	EXPECT_FALSE(mc.skip_verify);
 
@@ -471,6 +479,7 @@ TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
+	EXPECT_EQ(mc.device_tier, "DeviceTier_value");
 
 	EXPECT_TRUE(mc.skip_verify);
 
@@ -514,6 +523,7 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 	EXPECT_EQ(mc.update_log_path, "");
 	EXPECT_EQ(mc.tenant_token, "");
 	EXPECT_EQ(mc.daemon_log_level, "");
+	EXPECT_EQ(mc.device_tier, "");
 
 	EXPECT_FALSE(mc.skip_verify);
 

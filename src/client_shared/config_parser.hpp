@@ -163,6 +163,9 @@ public:
 	/** Server JWT TenantToken */
 	string tenant_token;
 
+	/** Device tier classification */
+	string device_tier;
+
 	/** List of available servers, to which client can fall over */
 	vector<string> servers;
 

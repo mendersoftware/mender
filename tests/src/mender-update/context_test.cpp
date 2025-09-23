@@ -830,3 +830,146 @@ TEST(ContextArtifactTests, ArtifactMatchesContextErrorsTest) {
 	ASSERT_FALSE(ex_match);
 #endif
 }
+
+#ifdef MENDER_USE_YAML_CPP
+TEST_F(ContextTests, GetSystemType) {
+	conf::MenderConfig cfg;
+	cfg.paths.SetDataStore(test_state_dir.Path());
+
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
+	ASSERT_EQ(err, error::NoError);
+
+	string topology_dir = path::Join(test_state_dir.Path(), "mender-orchestrator");
+	ASSERT_EQ(path::CreateDirectory(topology_dir), error::NoError);
+	string topology_file = path::Join(topology_dir, "topology.yaml");
+
+	setenv("MENDER_ORCHESTRATOR_TOPOLOGY_DIR", topology_dir.c_str(), 1);
+
+	{
+		ofstream f(topology_file);
+		f << "system_type: test_system_type\n";
+		ASSERT_TRUE(f.good());
+	}
+
+	auto ex_system_type = ctx.GetSystemType();
+	ASSERT_TRUE(ex_system_type) << ex_system_type.error().String();
+	EXPECT_EQ(*ex_system_type, "test_system_type");
+
+	unsetenv("MENDER_ORCHESTRATOR_TOPOLOGY_DIR");
+}
+#endif
+
+TEST_F(ContextTests, GetCompatibleTypeDevice) {
+	conf::MenderConfig cfg;
+	cfg.paths.SetDataStore(test_state_dir.Path());
+
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
+	ASSERT_EQ(err, error::NoError);
+
+	string device_type_file = path::Join(test_state_dir.Path(), "device_type");
+	{
+		ofstream f(device_type_file);
+		f << "device_type=regular_device_type\n";
+		ASSERT_TRUE(f.good());
+	}
+
+	// Test deployment polling (empty payload type)
+	auto ex_compatible_type = ctx.GetCompatibleType();
+	ASSERT_TRUE(ex_compatible_type) << ex_compatible_type.error().String();
+	EXPECT_EQ(*ex_compatible_type, "regular_device_type");
+
+	// Test regular artifact processing
+	ex_compatible_type = ctx.GetCompatibleType("some-regular-payload");
+	ASSERT_TRUE(ex_compatible_type) << ex_compatible_type.error().String();
+	EXPECT_EQ(*ex_compatible_type, "regular_device_type");
+
+	// Test manifest processing - should still use device_type for regular devices
+	ex_compatible_type = ctx.GetCompatibleType("mender-orchestrator-manifest");
+	ASSERT_TRUE(ex_compatible_type) << ex_compatible_type.error().String();
+	EXPECT_EQ(*ex_compatible_type, "regular_device_type");
+}
+
+#ifdef MENDER_USE_YAML_CPP
+TEST_F(ContextTests, GetCompatibleTypeSystem) {
+	conf::MenderConfig cfg;
+	cfg.paths.SetDataStore(test_state_dir.Path());
+	cfg.device_tier = "system";
+
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
+	ASSERT_EQ(err, error::NoError);
+
+	string topology_dir = path::Join(test_state_dir.Path(), "mender-orchestrator");
+	ASSERT_EQ(path::CreateDirectory(topology_dir), error::NoError);
+	string topology_file = path::Join(topology_dir, "topology.yaml");
+
+	setenv("MENDER_ORCHESTRATOR_TOPOLOGY_DIR", topology_dir.c_str(), 1);
+
+	{
+		ofstream f(topology_file);
+		f << "system_type: system_device_type\n";
+		ASSERT_TRUE(f.good());
+	}
+
+	string device_type_file = path::Join(test_state_dir.Path(), "device_type");
+	{
+		ofstream f(device_type_file);
+		f << "device_type=regular_device_type\n";
+		ASSERT_TRUE(f.good());
+	}
+
+	// Test deployment polling (empty payload type) - should use system_type
+	auto ex_compatible_type = ctx.GetCompatibleType();
+	ASSERT_TRUE(ex_compatible_type) << ex_compatible_type.error().String();
+	EXPECT_EQ(*ex_compatible_type, "system_device_type");
+
+	// Test manifest processing - should use system_type
+	ex_compatible_type = ctx.GetCompatibleType("mender-orchestrator-manifest");
+	ASSERT_TRUE(ex_compatible_type) << ex_compatible_type.error().String();
+	EXPECT_EQ(*ex_compatible_type, "system_device_type");
+
+	// Test regular artifact processing - should use device_type
+	ex_compatible_type = ctx.GetCompatibleType("some-regular-payload");
+	ASSERT_TRUE(ex_compatible_type) << ex_compatible_type.error().String();
+	EXPECT_EQ(*ex_compatible_type, "regular_device_type");
+
+	unsetenv("MENDER_ORCHESTRATOR_TOPOLOGY_DIR");
+}
+
+TEST_F(ContextTests, GetCompatibleTypeSystemMissingTopology) {
+	conf::MenderConfig cfg;
+	cfg.paths.SetDataStore(test_state_dir.Path());
+	cfg.device_tier = "system";
+
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
+	ASSERT_EQ(err, error::NoError);
+
+	string topology_dir = path::Join(test_state_dir.Path(), "mender-orchestrator");
+	setenv("MENDER_ORCHESTRATOR_TOPOLOGY_DIR", topology_dir.c_str(), 1);
+
+	// Missing topology file but device_tier is "system" - should fail with ParseError
+	auto ex_compatible_type = ctx.GetCompatibleType();
+	ASSERT_FALSE(ex_compatible_type);
+	EXPECT_EQ(ex_compatible_type.error().code, context::MakeError(context::ParseError, "").code);
+
+	unsetenv("MENDER_ORCHESTRATOR_TOPOLOGY_DIR");
+}
+#else
+TEST_F(ContextTests, GetCompatibleTypeSystemNoYaml) {
+	conf::MenderConfig cfg;
+	cfg.paths.SetDataStore(test_state_dir.Path());
+	cfg.device_tier = "system";
+
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
+	ASSERT_EQ(err, error::NoError);
+
+	// No YAML support but device_tier is "system" - should fail
+	auto ex_compatible_type = ctx.GetCompatibleType();
+	ASSERT_FALSE(ex_compatible_type);
+	EXPECT_EQ(ex_compatible_type.error().code, context::MakeError(context::ValueError, "").code);
+}
+#endif
