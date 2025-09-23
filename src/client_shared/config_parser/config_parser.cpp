@@ -104,6 +104,16 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		}
 	}
 
+	e_cfg_value = cfg_json.Get("DeviceTier");
+	if (e_cfg_value) {
+		const json::Json value_json = e_cfg_value.value();
+		const json::ExpectedString e_cfg_string = value_json.GetString();
+		if (e_cfg_string) {
+			this->device_tier = e_cfg_string.value();
+			applied = true;
+		}
+	}
+
 	e_cfg_value = cfg_json.Get("DaemonLogLevel");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();

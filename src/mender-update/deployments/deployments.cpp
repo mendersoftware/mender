@@ -78,11 +78,11 @@ static const string check_updates_v2_uri = "/api/devices/v2/deployments/device/d
 
 error::Error DeploymentClient::CheckNewDeployments(
 	context::MenderContext &ctx, api::Client &client, CheckUpdatesAPIResponseHandler api_handler) {
-	auto ex_dev_type = ctx.GetDeviceType();
-	if (!ex_dev_type) {
-		return ex_dev_type.error();
+	auto ex_compatible_type = ctx.GetCompatibleType();
+	if (!ex_compatible_type) {
+		return ex_compatible_type.error();
 	}
-	string device_type = ex_dev_type.value();
+	string compatible_type = ex_compatible_type.value();
 
 	auto ex_provides = ctx.LoadProvides();
 	if (!ex_provides) {
@@ -96,7 +96,7 @@ error::Error DeploymentClient::CheckNewDeployments(
 	stringstream ss;
 	ss << R"({"device_provides":{)";
 	ss << R"("device_type":")";
-	ss << json::EscapeString(device_type);
+	ss << json::EscapeString(compatible_type);
 
 	for (const auto &kv : provides) {
 		ss << "\",\"" + json::EscapeString(kv.first) + "\":\"";
@@ -120,7 +120,7 @@ error::Error DeploymentClient::CheckNewDeployments(
 	v2_req->SetBodyGenerator(payload_gen);
 
 	string v1_args = "artifact_name=" + http::URLEncode(provides["artifact_name"])
-					 + "&device_type=" + http::URLEncode(device_type);
+					 + "&device_type=" + http::URLEncode(compatible_type);
 	auto v1_req = make_shared<api::APIRequest>();
 	v1_req->SetPath(check_updates_v1_uri + "?" + v1_args);
 	v1_req->SetMethod(http::Method::GET);

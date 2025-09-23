@@ -29,6 +29,10 @@
 #include <common/log.hpp>
 #include <common/path.hpp>
 
+#ifdef MENDER_USE_YAML_CPP
+#include <common/yaml.hpp>
+#endif // MENDER_USE_YAML_CPP
+
 namespace mender {
 namespace update {
 namespace context {
@@ -44,7 +48,12 @@ namespace kv_db = mender::common::key_value_database;
 namespace log = mender::common::log;
 namespace path = mender::common::path;
 
+#ifdef MENDER_USE_YAML_CPP
+namespace yaml = mender::common::yaml;
+#endif // MENDER_USE_YAML_CPP
+
 const string MenderContext::broken_artifact_name_suffix {"_INCONSISTENT"};
+const string MenderContext::orchestrator_manifest_payload_type {"mender-orchestrator-manifest"};
 
 const string MenderContext::artifact_name_key {"artifact-name"};
 const string MenderContext::artifact_group_key {"artifact-group"};
@@ -191,6 +200,40 @@ ExpectedProvidesData MenderContext::LoadProvides(kv_db::Transaction &txn) {
 	return ret;
 }
 
+#ifdef MENDER_USE_YAML_CPP
+expected::ExpectedString MenderContext::GetSystemType() {
+	string topology_dir =
+		conf::GetEnv("MENDER_ORCHESTRATOR_TOPOLOGY_DIR", "/var/lib/mender-orchestrator/");
+	string topology_file_path = path::Join(topology_dir, "topology.yaml");
+
+	auto ex_topology = yaml::LoadFromFile(topology_file_path);
+	if (!ex_topology) {
+		return expected::unexpected(MakeError(
+			ParseError,
+			"Failed to load topology file '" + topology_file_path
+				+ "': " + ex_topology.error().message));
+	}
+
+	auto ex_system_type = ex_topology.value().Get("system_type");
+	if (!ex_system_type) {
+		return expected::unexpected(MakeError(
+			ParseError,
+			"Failed to find 'system_type' in topology file '" + topology_file_path
+				+ "': " + ex_system_type.error().message));
+	}
+
+	auto ex_system_type_str = ex_system_type.value().Get<string>();
+	if (!ex_system_type_str) {
+		return expected::unexpected(MakeError(
+			ParseError,
+			"Failed to parse 'system_type' as string in topology file '" + topology_file_path
+				+ "': " + ex_system_type_str.error().message));
+	}
+
+	return ex_system_type_str.value();
+}
+#endif // MENDER_USE_YAML_CPP
+
 expected::ExpectedString MenderContext::GetDeviceType() {
 	string device_type_fpath;
 	if (config_.device_type_file != "") {
@@ -233,6 +276,33 @@ expected::ExpectedString MenderContext::GetDeviceType() {
 	}
 
 	return expected::ExpectedString(ret);
+}
+
+// This function determines whether we return the system_type from the topology
+// or the device_type. The system_type should be used rather than the device_type in two places:
+//   1) When we poll for a deployment and the device_tier is set to `system`
+//   2) When matching the artifact context when installing a mender-orchestrator manifest
+expected::ExpectedString MenderContext::GetCompatibleType(const string &payload_type) {
+	if (config_.device_tier == "system") {
+#ifdef MENDER_USE_YAML_CPP
+		if (payload_type == "") {
+			// Deployment polling -> use system_type
+			return GetSystemType();
+		} else if (payload_type == orchestrator_manifest_payload_type) {
+			// Manifest installtion -> use system_type
+			return GetSystemType();
+		} else {
+			// Regular artifact processing (updated in standalone mode) -> use device_type
+			return GetDeviceType();
+		}
+#else
+		return expected::unexpected(MakeError(
+			ValueError, "DeviceTier is 'system', but MENDER_USE_YAML_CPP is not enabled"));
+#endif // MENDER_USE_YAML_CPP
+	}
+
+	// Regular device, always use device_type
+	return GetDeviceType();
 }
 
 bool CheckClearsMatch(const string &to_match, const string &clears_string) {
@@ -400,20 +470,24 @@ error::Error MenderContext::CommitArtifactData(
 }
 
 expected::ExpectedBool MenderContext::MatchesArtifactDepends(const artifact::HeaderView &hdr_view) {
-	auto ex_dev_type = GetDeviceType();
-	if (!ex_dev_type) {
-		return expected::unexpected(ex_dev_type.error());
+	auto ex_compatible_type = GetCompatibleType(hdr_view.type_info.type);
+	if (!ex_compatible_type) {
+		return expected::unexpected(ex_compatible_type.error());
 	}
+	auto &compatible_type = ex_compatible_type.value();
+
 	auto ex_provides = LoadProvides();
 	if (!ex_provides) {
 		return expected::unexpected(ex_provides.error());
 	}
 	auto &provides = ex_provides.value();
-	return ArtifactMatchesContext(provides, ex_dev_type.value(), hdr_view);
+	return ArtifactMatchesContext(provides, compatible_type, hdr_view);
 }
 
 expected::ExpectedBool ArtifactMatchesContext(
-	const ProvidesData &provides, const string &device_type, const artifact::HeaderView &hdr_view) {
+	const ProvidesData &provides,
+	const string &compatible_type,
+	const artifact::HeaderView &hdr_view) {
 	using common::MapContainsStringKey;
 	if (!MapContainsStringKey(provides, "artifact_name")) {
 		return expected::unexpected(
@@ -422,7 +496,7 @@ expected::ExpectedBool ArtifactMatchesContext(
 
 	auto hdr_depends = hdr_view.GetDepends();
 	AssertOrReturnUnexpected(hdr_depends["device_type"].size() > 0);
-	if (!common::VectorContainsString(hdr_depends["device_type"], device_type)) {
+	if (!common::VectorContainsString(hdr_depends["device_type"], compatible_type)) {
 		log::Error("Artifact device type doesn't match");
 		return false;
 	}

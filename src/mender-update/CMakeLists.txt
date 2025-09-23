@@ -7,6 +7,7 @@ target_link_libraries(mender_context PUBLIC
   common_json
   common_log
   common_path
+  common_yaml
 )
 
 add_library(mender_deployments STATIC deployments/deployments.cpp)

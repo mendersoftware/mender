@@ -14,7 +14,7 @@ option(MENDER_CRYPTO_OPENSSL "Use OpenSSL as the underlying cryptography provide
 option(MENDER_ARTIFACT_GZIP_COMPRESSION "Enable GZIP compression support when downloading and extracting Artifacts (Default: ON)" ON)
 option(MENDER_ARTIFACT_LZMA_COMPRESSION "Enable LZMA compression support when downloading and extracting Artifacts (Default: ON)" ON)
 option(MENDER_ARTIFACT_ZSTD_COMPRESSION "Enable Zstd compression support when downloading and extracting Artifacts (Default: ON)" ON)
-option(MENDER_USE_YAML_CPP "Use Yaml CPP as the Yaml library provider (Default: OFF)" OFF)
+option(MENDER_USE_YAML_CPP "Use Yaml CPP as the Yaml library provider (Default: ON)" ON)
 
 if (${PLATFORM} STREQUAL linux_x86)
   set(POSIX_DEFAULT ON)
