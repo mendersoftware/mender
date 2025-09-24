@@ -1635,7 +1635,7 @@ TEST(HttpTest, SerialRequestsWithSameObjectAfterCancel) {
 }
 
 TEST(HttpTest, DestroyClientBeforeRequestComplete) {
-	TestEventLoop loop;
+	TestEventLoop loop(chrono::seconds(30));
 
 	bool client_hit_header = false;
 	bool client_hit_body = false;
@@ -2189,7 +2189,7 @@ TEST(HttpsTest, NoCertificateError) {
 }
 
 TEST(HttpsTest, CorrectDefaultCertificateStoreVerification) {
-	TestEventLoop loop;
+	TestEventLoop loop(chrono::seconds(30));
 
 	bool client_hit_header {false};
 	bool client_hit_body {false};
@@ -2516,7 +2516,7 @@ TEST(HttpsTest, MtlsSuccess) {
 }
 
 TEST(HttpsTest, CertsAndKeysLoadFailures) {
-	TestEventLoop loop;
+	TestEventLoop loop(chrono::seconds(30));
 
 	auto handler = [](http::ExpectedIncomingResponsePtr exp_resp) {
 		ASSERT_TRUE(false) << "Should never get here";
