@@ -54,6 +54,7 @@ public:
 	AuthenticatingForwarder(events::EventLoop &loop, const conf::MenderConfig &config) :
 		servers_ {config.servers},
 		tenant_token_ {config.tenant_token},
+		device_tier_ {config.device_tier},
 		client_ {config.GetHttpClientConfig(), loop},
 		forwarder_ {http::ServerConfig {}, config.GetHttpClientConfig(), loop},
 		default_identity_script_path_ {config.paths.GetIdentityScript()},
@@ -91,6 +92,7 @@ private:
 
 	const vector<string> &servers_;
 	const string tenant_token_;
+	const string device_tier_;
 	http::Client client_;
 	http_forwarder::Server forwarder_;
 	string default_identity_script_path_;

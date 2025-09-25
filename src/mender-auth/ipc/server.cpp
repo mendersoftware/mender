@@ -59,7 +59,8 @@ error::Error AuthenticatingForwarder::Listen(
 				args,
 				identity_script_path == "" ? default_identity_script_path_ : identity_script_path,
 				[this](auth_client::APIResponse resp) { FetchJwtTokenHandler(resp); },
-				tenant_token_);
+				tenant_token_,
+				device_tier_);
 			if (err != error::NoError) {
 				log::Error("Failed to trigger token fetching: " + err.String());
 				return false;
