@@ -91,7 +91,8 @@ error::Error FetchJWTToken(
 	const crypto::Args &crypto_args,
 	const string &device_identity_script_path,
 	APIResponseHandler api_handler,
-	const string &tenant_token) {
+	const string &tenant_token,
+	const string &device_tier) {
 	key_value_parser::ExpectedKeyValuesMap expected_identity_data =
 		identity_parser::GetIdentityData(device_identity_script_path);
 	if (!expected_identity_data) {
@@ -109,6 +110,8 @@ error::Error FetchJWTToken(
 	if (tenant_token.size() > 0) {
 		request_body_map.insert({"tenant_token", tenant_token});
 	}
+
+	request_body_map.insert({"tier", device_tier});
 
 	auto expected_public_key = crypto::ExtractPublicKey(crypto_args);
 	if (!expected_public_key) {
