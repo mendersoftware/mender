@@ -8,6 +8,7 @@ target_link_libraries(mender_context PUBLIC
   common_log
   common_path
   common_yaml
+  common_device_tier
 )
 
 add_library(mender_deployments STATIC deployments/deployments.cpp)

@@ -70,6 +70,9 @@ target_include_directories(common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_include_directories(common PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/..)
 target_link_libraries(common PUBLIC common_cpp)
 
+add_library(common_device_tier STATIC device_tier.cpp)
+target_link_libraries(common_device_tier PUBLIC common)
+
 add_library(common_setup STATIC setup/platform/posix/setup.cpp)
 target_link_libraries(common_setup PUBLIC common)
 

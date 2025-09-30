@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 #include <client_shared/config_parser.hpp>
+#include <common/device_tier.hpp>
 #include <common/json.hpp>
 
 #include <gtest/gtest.h>
@@ -21,6 +22,7 @@
 #include <fstream>
 
 namespace config_parser = mender::client_shared::config_parser;
+namespace device_tier = mender::common::device_tier;
 namespace json = mender::common::json;
 
 using namespace std;
@@ -35,7 +37,7 @@ const string complete_config = R"({
   "UpdateLogPath": "UpdateLogPath_value",
   "TenantToken": "TenantToken_value",
   "DaemonLogLevel": "DaemonLogLevel_value",
-  "DeviceTier": "DeviceTier_value",
+  "DeviceTier": "standard",
 
   "SkipVerify": true,
   "DBus": { "Enabled": true },
@@ -98,7 +100,7 @@ TEST(ConfigParserDefaultsTests, ConfigParserDefaults) {
 	EXPECT_EQ(mc.update_log_path, "");
 	EXPECT_EQ(mc.tenant_token, "");
 	EXPECT_EQ(mc.daemon_log_level, "");
-	EXPECT_EQ(mc.device_tier, "");
+	EXPECT_EQ(mc.device_tier, device_tier::kStandard);
 
 	EXPECT_FALSE(mc.skip_verify);
 
@@ -138,7 +140,7 @@ TEST_F(ConfigParserTests, LoadComplete) {
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
-	EXPECT_EQ(mc.device_tier, "DeviceTier_value");
+	EXPECT_EQ(mc.device_tier, device_tier::kStandard);
 
 	EXPECT_TRUE(mc.skip_verify);
 
@@ -189,7 +191,7 @@ TEST_F(ConfigParserTests, LoadPartial) {
 	EXPECT_EQ(mc.update_log_path, "");
 	EXPECT_EQ(mc.tenant_token, "");
 	EXPECT_EQ(mc.daemon_log_level, "");
-	EXPECT_EQ(mc.device_tier, "");
+	EXPECT_EQ(mc.device_tier, device_tier::kStandard);
 
 	EXPECT_FALSE(mc.skip_verify);
 
@@ -251,7 +253,7 @@ TEST_F(ConfigParserTests, LoadOverrides) {
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
-	EXPECT_EQ(mc.device_tier, "DeviceTier_value");
+	EXPECT_EQ(mc.device_tier, device_tier::kStandard);
 
 	EXPECT_FALSE(mc.skip_verify);
 
@@ -304,7 +306,7 @@ TEST_F(ConfigParserTests, LoadNoOverrides) {
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
-	EXPECT_EQ(mc.device_tier, "DeviceTier_value");
+	EXPECT_EQ(mc.device_tier, device_tier::kStandard);
 
 	EXPECT_TRUE(mc.skip_verify);
 
@@ -357,7 +359,7 @@ TEST_F(ConfigParserTests, LoadInvalidOverrides) {
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
-	EXPECT_EQ(mc.device_tier, "DeviceTier_value");
+	EXPECT_EQ(mc.device_tier, device_tier::kStandard);
 
 	EXPECT_TRUE(mc.skip_verify);
 
@@ -417,7 +419,7 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
-	EXPECT_EQ(mc.device_tier, "DeviceTier_value");
+	EXPECT_EQ(mc.device_tier, device_tier::kStandard);
 
 	EXPECT_FALSE(mc.skip_verify);
 
@@ -479,7 +481,7 @@ TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
-	EXPECT_EQ(mc.device_tier, "DeviceTier_value");
+	EXPECT_EQ(mc.device_tier, device_tier::kStandard);
 
 	EXPECT_TRUE(mc.skip_verify);
 
@@ -523,7 +525,7 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 	EXPECT_EQ(mc.update_log_path, "");
 	EXPECT_EQ(mc.tenant_token, "");
 	EXPECT_EQ(mc.daemon_log_level, "");
-	EXPECT_EQ(mc.device_tier, "");
+	EXPECT_EQ(mc.device_tier, device_tier::kStandard);
 
 	EXPECT_FALSE(mc.skip_verify);
 
@@ -632,4 +634,76 @@ TEST_F(ConfigParserTests, CaseInsensitiveCollision) {
 
 	ASSERT_EQ(mc.servers.size(), 1);
 	EXPECT_EQ(mc.servers[0], "ServerURL_value_4");
+}
+
+TEST_F(ConfigParserTests, DeviceTierMicroConfiguration) {
+	ofstream os(test_config_fname);
+	os << R"({
+  "DeviceTier": "micro"
+})";
+	os.close();
+
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_TRUE(ret) << ret.error().String();
+	EXPECT_TRUE(ret.value());
+
+	EXPECT_EQ(mc.device_tier, device_tier::kMicro);
+}
+
+TEST_F(ConfigParserTests, DeviceTierStandardConfiguration) {
+	ofstream os(test_config_fname);
+	os << R"({
+  "DeviceTier": "standard"
+})";
+	os.close();
+
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_TRUE(ret) << ret.error().String();
+	EXPECT_TRUE(ret.value());
+
+	EXPECT_EQ(mc.device_tier, device_tier::kStandard);
+}
+
+TEST_F(ConfigParserTests, DeviceTierSystemConfiguration) {
+	ofstream os(test_config_fname);
+	os << R"({
+  "DeviceTier": "system"
+})";
+	os.close();
+
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_TRUE(ret) << ret.error().String();
+	EXPECT_TRUE(ret.value());
+
+	EXPECT_EQ(mc.device_tier, device_tier::kSystem);
+}
+
+TEST_F(ConfigParserTests, DeviceTierAbsentConfiguration) {
+	ofstream os(test_config_fname);
+	os << R"({})";
+	os.close();
+
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_TRUE(ret) << ret.error().String();
+	EXPECT_FALSE(ret.value());
+
+	EXPECT_EQ(mc.device_tier, device_tier::kStandard);
+}
+
+TEST_F(ConfigParserTests, DeviceTierInvalidConfiguration) {
+	ofstream os(test_config_fname);
+	os << R"({
+  "DeviceTier": "foobar"
+})";
+	os.close();
+
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_FALSE(ret);
+	EXPECT_EQ(ret.error().code, config_parser::MakeError(config_parser::ValidationError, "").code);
+	EXPECT_THAT(ret.error().String(), testing::HasSubstr("Invalid DeviceTier: foobar"));
 }

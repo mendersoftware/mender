@@ -25,6 +25,11 @@ target_link_libraries(json_test PUBLIC common_json main_test gmock)
 gtest_discover_tests(json_test NO_PRETTY_VALUES)
 add_dependencies(tests json_test)
 
+add_executable(device_tier_test EXCLUDE_FROM_ALL device_tier_test.cpp)
+target_link_libraries(device_tier_test PUBLIC common_device_tier main_test gmock)
+gtest_discover_tests(device_tier_test NO_PRETTY_VALUES)
+add_dependencies(tests device_tier_test)
+
 add_executable(yaml_test EXCLUDE_FROM_ALL yaml_test.cpp)
 target_link_libraries(yaml_test PUBLIC common_yaml main_test gmock)
 gtest_discover_tests(yaml_test ${MENDER_TEST_FLAGS} NO_PRETTY_VALUES)

@@ -31,6 +31,7 @@ using namespace std;
 namespace expected = mender::common::expected;
 namespace json = mender::common::json;
 namespace log = mender::common::log;
+namespace device_tier = mender::common::device_tier;
 
 const ConfigParserErrorCategoryClass ConfigParserErrorCategory;
 
@@ -109,7 +110,13 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		const json::Json value_json = e_cfg_value.value();
 		const json::ExpectedString e_cfg_string = value_json.GetString();
 		if (e_cfg_string) {
-			this->device_tier = e_cfg_string.value();
+			const string &tier = e_cfg_string.value();
+			if (!device_tier::IsValid(tier)) {
+				auto err = MakeError(
+					ConfigParserErrorCode::ValidationError, "Invalid DeviceTier: " + tier);
+				return expected::unexpected(err);
+			}
+			this->device_tier = tier;
 			applied = true;
 		}
 	}

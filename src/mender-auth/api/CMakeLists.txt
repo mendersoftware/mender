@@ -3,6 +3,7 @@ target_link_libraries(mender_auth_api_auth PUBLIC
   api_auth
   common_http
   client_shared_identity_parser
+  common_device_tier
 )
 
 if(MENDER_EMBED_MENDER_AUTH)
