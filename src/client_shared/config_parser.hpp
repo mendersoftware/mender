@@ -16,6 +16,7 @@
 #include <vector>
 #include <common/error.hpp>
 #include <common/expected.hpp>
+#include <common/device_tier.hpp>
 
 #ifndef MENDER_COMMON_CONFIG_PARSER_HPP
 #define MENDER_COMMON_CONFIG_PARSER_HPP
@@ -29,6 +30,7 @@ using namespace std;
 using mender::common::expected::ExpectedBool;
 
 namespace error = mender::common::error;
+namespace device_tier = mender::common::device_tier;
 
 /** HttpsClient holds the configuration for the client side mTLS
 	configuration */
@@ -164,7 +166,7 @@ public:
 	string tenant_token;
 
 	/** Device tier classification */
-	string device_tier;
+	string device_tier = device_tier::kStandard;
 
 	/** List of available servers, to which client can fall over */
 	vector<string> servers;

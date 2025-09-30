@@ -23,6 +23,7 @@
 #include <common/events.hpp>
 #include <common/error.hpp>
 #include <common/http.hpp>
+#include <common/device_tier.hpp>
 
 #include <api/auth.hpp>
 
@@ -39,6 +40,7 @@ namespace crypto = mender::common::crypto;
 namespace events = mender::common::events;
 namespace error = mender::common::error;
 namespace http = mender::common::http;
+namespace device_tier = mender::common::device_tier;
 
 namespace conf = mender::client_shared::conf;
 
@@ -68,7 +70,8 @@ error::Error FetchJWTToken(
 	const crypto::Args &args,
 	const string &device_identity_script_path,
 	APIResponseHandler api_handler,
-	const string &tenant_token = "");
+	const string &tenant_token = "",
+	const string &device_tier = device_tier::kStandard);
 
 #ifdef MENDER_EMBED_MENDER_AUTH
 class AuthenticatorHttp : public mender::api::auth::Authenticator {

@@ -23,15 +23,18 @@
 #include <common/error.hpp>
 #include <common/http.hpp>
 #include <common/io.hpp>
+#include <common/json.hpp>
 #include <common/log.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
+#include <common/device_tier.hpp>
 
 using namespace std;
 
 namespace error = mender::common::error;
 namespace http = mender::common::http;
 namespace io = mender::common::io;
+namespace json = mender::common::json;
 namespace mlog = mender::common::log;
 namespace path = mender::common::path;
 namespace mtesting = mender::common::testing;
@@ -39,6 +42,7 @@ namespace mtesting = mender::common::testing;
 namespace auth = mender::auth::api::auth;
 
 using TestEventLoop = mender::common::testing::TestEventLoop;
+namespace device_tier = mender::common::device_tier;
 
 const string TEST_PORT = "8088";
 const string TEST_PORT2 = "8089";
@@ -254,4 +258,203 @@ TEST_F(AuthTests, FetchJWTTokenFailTest) {
 	loop.Run();
 
 	ASSERT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+}
+
+TEST_F(AuthTests, FetchJWTTokenWithMicroTier) {
+	const string JWT_TOKEN = "FOOBARJWTTOKEN";
+	auto captured_body_bytes = make_shared<vector<uint8_t>>();
+
+	TestEventLoop loop;
+
+	const string server_url {"http://127.0.0.1:" + TEST_PORT};
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+	server.AsyncServeUrl(
+		server_url,
+		[captured_body_bytes](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto body_writer = make_shared<io::ByteWriter>(captured_body_bytes);
+			body_writer->SetUnlimited(true);
+			exp_req.value()->SetBodyWriter(body_writer);
+		},
+		[JWT_TOKEN](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetStatusCodeAndMessage(200, "OK");
+			resp->SetBodyReader(make_shared<io::StringReader>(JWT_TOKEN));
+			resp->SetHeader("Content-Length", to_string(JWT_TOKEN.size()));
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	string private_key_path = "./private_key.pem";
+	string server_certificate_path {};
+	http::ClientConfig client_config {server_certificate_path};
+	http::Client client {client_config, loop};
+
+	vector<string> servers {server_url};
+	auth::APIResponseHandler handle_jwt_token_callback = [&loop](auth::APIResponse resp) {
+		ASSERT_TRUE(resp);
+		loop.Stop();
+	};
+
+	auto err = auth::FetchJWTToken(
+		client,
+		servers,
+		{private_key_path},
+		test_device_identity_script,
+		handle_jwt_token_callback,
+		"",
+		device_tier::kMicro);
+
+	loop.Run();
+
+	ASSERT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+
+	string captured_request_body(captured_body_bytes->begin(), captured_body_bytes->end());
+	auto expected_json = json::Load(captured_request_body);
+	ASSERT_TRUE(expected_json) << "Failed to parse request body as JSON: "
+							   << expected_json.error().String();
+	auto request_json = expected_json.value();
+
+	auto tier_result = request_json.Get("tier");
+	ASSERT_TRUE(tier_result) << "tier field not found in request";
+	auto tier_string = tier_result.value().GetString();
+	ASSERT_TRUE(tier_string) << "tier field is not a string";
+	EXPECT_EQ(tier_string.value(), device_tier::kMicro);
+}
+
+TEST_F(AuthTests, FetchJWTTokenWithStandardTier) {
+	const string JWT_TOKEN = "FOOBARJWTTOKEN";
+	auto captured_body_bytes = make_shared<vector<uint8_t>>();
+
+	TestEventLoop loop;
+
+	const string server_url {"http://127.0.0.1:" + TEST_PORT};
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+	server.AsyncServeUrl(
+		server_url,
+		[captured_body_bytes](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto body_writer = make_shared<io::ByteWriter>(captured_body_bytes);
+			body_writer->SetUnlimited(true);
+			exp_req.value()->SetBodyWriter(body_writer);
+		},
+		[JWT_TOKEN](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetStatusCodeAndMessage(200, "OK");
+			resp->SetBodyReader(make_shared<io::StringReader>(JWT_TOKEN));
+			resp->SetHeader("Content-Length", to_string(JWT_TOKEN.size()));
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	string private_key_path = "./private_key.pem";
+	string server_certificate_path {};
+	http::ClientConfig client_config {server_certificate_path};
+	http::Client client {client_config, loop};
+
+	vector<string> servers {server_url};
+	auth::APIResponseHandler handle_jwt_token_callback = [&loop](auth::APIResponse resp) {
+		ASSERT_TRUE(resp);
+		loop.Stop();
+	};
+
+	auto err = auth::FetchJWTToken(
+		client,
+		servers,
+		{private_key_path},
+		test_device_identity_script,
+		handle_jwt_token_callback,
+		"",
+		device_tier::kStandard);
+
+	loop.Run();
+
+	ASSERT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+
+	string captured_request_body(captured_body_bytes->begin(), captured_body_bytes->end());
+	auto expected_json = json::Load(captured_request_body);
+	ASSERT_TRUE(expected_json) << "Failed to parse request body as JSON: "
+							   << expected_json.error().String();
+	auto request_json = expected_json.value();
+
+	auto tier_result = request_json.Get("tier");
+	ASSERT_TRUE(tier_result) << "tier field not found in request";
+	auto tier_string = tier_result.value().GetString();
+	ASSERT_TRUE(tier_string) << "tier field is not a string";
+	EXPECT_EQ(tier_string.value(), device_tier::kStandard);
+}
+
+TEST_F(AuthTests, FetchJWTTokenDefaultTier) {
+	const string JWT_TOKEN = "FOOBARJWTTOKEN";
+	auto captured_body_bytes = make_shared<vector<uint8_t>>();
+
+	TestEventLoop loop;
+
+	const string server_url {"http://127.0.0.1:" + TEST_PORT};
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+	server.AsyncServeUrl(
+		server_url,
+		[captured_body_bytes](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto body_writer = make_shared<io::ByteWriter>(captured_body_bytes);
+			body_writer->SetUnlimited(true);
+			exp_req.value()->SetBodyWriter(body_writer);
+		},
+		[JWT_TOKEN](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetStatusCodeAndMessage(200, "OK");
+			resp->SetBodyReader(make_shared<io::StringReader>(JWT_TOKEN));
+			resp->SetHeader("Content-Length", to_string(JWT_TOKEN.size()));
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	string private_key_path = "./private_key.pem";
+	string server_certificate_path {};
+	http::ClientConfig client_config {server_certificate_path};
+	http::Client client {client_config, loop};
+
+	vector<string> servers {server_url};
+	auth::APIResponseHandler handle_jwt_token_callback = [&loop](auth::APIResponse resp) {
+		ASSERT_TRUE(resp);
+		loop.Stop();
+	};
+
+	auto err = auth::FetchJWTToken(
+		client,
+		servers,
+		{private_key_path},
+		test_device_identity_script,
+		handle_jwt_token_callback);
+
+	loop.Run();
+
+	ASSERT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+
+	string captured_request_body(captured_body_bytes->begin(), captured_body_bytes->end());
+	auto expected_json = json::Load(captured_request_body);
+	ASSERT_TRUE(expected_json) << "Failed to parse request body as JSON: "
+							   << expected_json.error().String();
+	auto request_json = expected_json.value();
+
+	auto tier_result = request_json.Get("tier");
+	ASSERT_TRUE(tier_result) << "tier field not found in request";
+	auto tier_string = tier_result.value().GetString();
+	ASSERT_TRUE(tier_string) << "tier field is not a string";
+	EXPECT_EQ(tier_string.value(), device_tier::kStandard);
 }

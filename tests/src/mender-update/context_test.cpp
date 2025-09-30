@@ -20,6 +20,7 @@
 
 #include <artifact/artifact.hpp>
 #include <common/common.hpp>
+#include <common/device_tier.hpp>
 #include <client_shared/conf.hpp>
 #include <common/key_value_database_lmdb.hpp>
 #include <common/json.hpp>
@@ -30,6 +31,7 @@
 
 namespace common = mender::common;
 namespace conf = mender::client_shared::conf;
+namespace device_tier = mender::common::device_tier;
 namespace error = mender::common::error;
 namespace json = mender::common::json;
 namespace kv_db = mender::common::key_value_database;
@@ -895,7 +897,7 @@ TEST_F(ContextTests, GetCompatibleTypeDevice) {
 TEST_F(ContextTests, GetCompatibleTypeSystem) {
 	conf::MenderConfig cfg;
 	cfg.paths.SetDataStore(test_state_dir.Path());
-	cfg.device_tier = "system";
+	cfg.device_tier = device_tier::kSystem;
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -941,7 +943,7 @@ TEST_F(ContextTests, GetCompatibleTypeSystem) {
 TEST_F(ContextTests, GetCompatibleTypeSystemMissingTopology) {
 	conf::MenderConfig cfg;
 	cfg.paths.SetDataStore(test_state_dir.Path());
-	cfg.device_tier = "system";
+	cfg.device_tier = device_tier::kSystem;
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -961,7 +963,7 @@ TEST_F(ContextTests, GetCompatibleTypeSystemMissingTopology) {
 TEST_F(ContextTests, GetCompatibleTypeSystemNoYaml) {
 	conf::MenderConfig cfg;
 	cfg.paths.SetDataStore(test_state_dir.Path());
-	cfg.device_tier = "system";
+	cfg.device_tier = device_tier::kSystem;
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();

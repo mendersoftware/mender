@@ -21,6 +21,7 @@
 
 #include <artifact/artifact.hpp>
 #include <common/common.hpp>
+#include <common/device_tier.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/io.hpp>
@@ -47,6 +48,7 @@ namespace json = mender::common::json;
 namespace kv_db = mender::common::key_value_database;
 namespace log = mender::common::log;
 namespace path = mender::common::path;
+namespace device_tier = mender::common::device_tier;
 
 #ifdef MENDER_USE_YAML_CPP
 namespace yaml = mender::common::yaml;
@@ -283,7 +285,7 @@ expected::ExpectedString MenderContext::GetDeviceType() {
 //   1) When we poll for a deployment and the device_tier is set to `system`
 //   2) When matching the artifact context when installing a mender-orchestrator manifest
 expected::ExpectedString MenderContext::GetCompatibleType(const string &payload_type) {
-	if (config_.device_tier == "system") {
+	if (config_.device_tier == device_tier::kSystem) {
 #ifdef MENDER_USE_YAML_CPP
 		if (payload_type == "") {
 			// Deployment polling -> use system_type

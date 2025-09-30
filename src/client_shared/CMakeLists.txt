@@ -1,5 +1,5 @@
 add_library(client_shared_config_parser STATIC config_parser/config_parser.cpp)
-target_link_libraries(client_shared_config_parser PUBLIC common_json common_log)
+target_link_libraries(client_shared_config_parser PUBLIC common_json common_log common_device_tier)
 
 add_library(client_shared_identity_parser STATIC identity_parser/identity_parser.cpp)
 target_link_libraries(client_shared_identity_parser PUBLIC common_key_value_parser common_processes common_json)

@@ -111,7 +111,8 @@ error::Error DoAuthenticate(
 			timer.Cancel();
 			loop.Stop();
 		},
-		config.tenant_token);
+		config.tenant_token,
+		config.device_tier);
 	if (err != error::NoError) {
 		return err;
 	}
