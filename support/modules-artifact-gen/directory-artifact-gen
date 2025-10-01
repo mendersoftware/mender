@@ -170,7 +170,7 @@ echo "$dest_dir" > $dest_dir_file
 # Runs in a subshell to allow overriding some parameters passed
 # to mender-artifact
 passthrough_args_modified=" "
-echo -n $passthrough_args | xargs -n 2 printf "%s %s\n" | (while read -r flag arg; do
+echo $passthrough_args | xargs -n 2 printf "%s %s\n" | (while read -r flag arg; do
   if [ -n "$flag" ] && [ -n "$arg" ]; then
     case $flag in
       -T | --type)
