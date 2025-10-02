@@ -267,6 +267,27 @@ Changelog: <None|Title|Commit|All>
 Ticket: <None|Ticket Nr>
 ```
 
+### Use of AI/LLMs in contributions
+
+We allow the use of AI in source code and documentation contributions, subject
+to the following rules:
+
+- You must review, understand, and, if necessary, correct the source code
+  output when using an LLM. We don’t want submissions purely generated
+  and submitted by automated AI systems without any human ensuring that
+  it is correct and valid. And we don’t want to put this review burden
+  solely on our reviewers.
+- We have the same expectation of quality for source code whether AI was
+  used or not (including security, readability, maintainability,
+  correctness, commit history, etc.).
+- When AI is used as part of writing / editing some code, we consider
+  the person using the AI as a tool, fact-checking / editing its output
+  and ultimately submitting the code as a pull request to be the author.
+- When using AI, your use must be in compliance with applicable laws and
+  terms, such as the EU AI Act, as well as the terms of service and acceptable
+  use policy of your AI provider.
+- We may change these rules in the future as AI tools and regulation develop.
+
 ## Contributor Code of Conduct
 
 We have a [Code of Conduct](https://github.com/mendersoftware/mender/blob/master/code-of-conduct.md) that applies to all contributors and participants to the Mender project.
