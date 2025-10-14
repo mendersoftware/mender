@@ -13,6 +13,9 @@ variables:
     value: "27.3"
     description: "Version of docker to use in pipelines"
 
+  # mender-artifact version for tests
+  MENDER_ARTIFACT_VERSION: 4.1.0
+
 include:
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-github-status-updates.yml'
@@ -39,11 +42,11 @@ test:unit:
   stage: test
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:11
   before_script:
-    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat
+    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget
     # mender-artifact install
-    - curl https://downloads.mender.io/mender-artifact/master/linux/mender-artifact
-      -o /usr/local/bin/mender-artifact
-    - chmod +x /usr/local/bin/mender-artifact
+    - wget "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bdebian%2bbullseye_amd64.deb"
+      --output-document mender-artifact.deb
+    - dpkg --install mender-artifact.deb
   script:
     - cmake -D COVERAGE=ON .
     - make --jobs=$(nproc --all) --keep-going coverage
@@ -67,20 +70,15 @@ test:backward-compat:
 .test:static-template:
   stage: test
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
+  tags:
+    # QA-866: Ubuntu 24.04 image cannot properly run on sysbox-runc runners
+    - hetzner-podman
   before_script:
-    - apt update && apt install -yyq ccache clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat
+    - apt update && apt install -yyq ccache clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget
     # mender-artifact install
-    - apt-get install --assume-yes
-        apt-transport-https
-        ca-certificates
-        curl
-        gnupg-agent
-        software-properties-common
-    - curl -fsSL https://downloads.mender.io/repos/debian/gpg >> /etc/apt/trusted.gpg.d/mender.asc
-    - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/jammy/experimental main"
-      > /etc/apt/sources.list.d/mender.list
-    - apt-get update
-    - apt install -yyq mender-artifact
+    - wget "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bubuntu%2bjammy_amd64.deb"
+      --output-document mender-artifact.deb
+    - dpkg --install mender-artifact.deb
     - export CC=$(which clang)
     - export CXX=$(which clang++)
   script:
@@ -94,11 +92,19 @@ test:static:asan:
   variables:
     BUILD_TYPE: ASan
   extends: .test:static-template
+  tags:
+    # hetzner podman fails with result: segmentation fault
+    # falling back to gcp runners
+    - mender-qa-worker-generic-light
 
 test:static:threadsan:
   extends: .test:static-template
   variables:
     BUILD_TYPE: ThreadSan
+  tags:
+    # hetzner podman fails with result: segmentation fault
+    # falling back to gcp runners
+    - mender-qa-worker-generic-light
 
 test:static:undefinedsan:
   extends: .test:static-template
@@ -118,11 +124,14 @@ test:static:no-dbus:
 test:modules-artifact-gen:
   stage: test
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
+  tags:
+    # QA-866: Ubuntu 24.04 image cannot properly run on sysbox-runc runners
+    - hetzner-podman
   before_script:
     - apt update && apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
     # mender-artifact
     - curl -fsSL https://downloads.mender.io/repos/debian/gpg | tee /etc/apt/trusted.gpg.d/mender.asc
-    - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/jammy/experimental main" | tee /etc/apt/sources.list.d/mender.list
+    - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/workstation-tools ubuntu/jammy/stable main" | tee /etc/apt/sources.list.d/mender.list
     - apt update && apt install -yy mender-artifact
     # Test dependencies
     - pip install -r support/modules-artifact-gen/tests/requirements.txt

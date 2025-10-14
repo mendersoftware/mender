@@ -22,6 +22,20 @@
 #include <common/processes.hpp>
 #include <common/testing.hpp>
 
+#ifndef __has_feature
+// GCC does not have __has_feature
+#define __has_feature(feature) 0
+#endif
+
+// Suppress leaks from libdbus when running ASan
+#if ((__has_feature(address_sanitizer) || defined(__SANITIZE_ADDRESS__)))
+extern "C" {
+const char *__lsan_default_suppressions() {
+	return "leak:libdbus";
+}
+}
+#endif
+
 namespace mender {
 namespace common {
 namespace testing {

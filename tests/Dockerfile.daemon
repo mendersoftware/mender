@@ -1,6 +1,6 @@
 # Creates a container which acts as a bare bones non-VM based Mender
 # installation, for use in tests.
-FROM ubuntu:22.04 AS build
+FROM ubuntu:24.04 AS build
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install -y cmake make git build-essential jq curl pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev
@@ -17,29 +17,26 @@ RUN mkdir -p /mender-install/etc/mender/
 RUN jq ".ServerCertificate=\"/usr/share/doc/mender-auth/examples/demo.crt\" | .ServerURL=\"https://docker.mender.io/\"" \
     < examples/mender.conf.demo > /mender-install/etc/mender/mender.conf
 
-# Install mender-artifact from upstream
-RUN curl -fsSL https://downloads.mender.io/repos/debian/gpg > /etc/apt/trusted.gpg.d/mender.asc && \
-    echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/$(. /etc/lsb-release && echo $DISTRIB_CODENAME)/experimental main" > \
-        /etc/apt/sources.list.d/mender.list && \
-    apt-get update && apt-get -y install mender-artifact
+# Install mender-artifact taking the version from the CI manifest file
+RUN MENDER_ARTIFACT_VERSION=$(sed -n 's/.*MENDER_ARTIFACT_VERSION: \(.*\)/\1/p' .gitlab-ci.yml); \
+    if [ -z "$MENDER_ARTIFACT_VERSION" ]; then \
+        echo "Could not parse  MENDER_ARTIFACT_VERSION from .gitlab-ci.yml" 1>&2; \
+        exit 1; \
+    fi; \
+    curl "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1+ubuntu+noble_amd64.deb" \
+        --output /mender-artifact.deb && \
+    dpkg --install /mender-artifact.deb && \
+    rm /mender-artifact.deb
 RUN mender-artifact write bootstrap-artifact \
         --artifact-name original \
         --device-type docker-client \
         --provides "rootfs-image.version:original" \
         --output-path /bootstrap.mender
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 RUN mkdir -p /run/dbus
-RUN apt update && apt install -y openssh-server libboost-log1.74.0 liblmdb0 libarchive13 dbus iproute2
-
-# Set no password
-RUN sed -ie 's/^root:[^:]*:/root::/' /etc/shadow
-RUN sed -ie 's/^UsePAM/#UsePam/' /etc/ssh/sshd_config
-RUN echo 'PermitEmptyPasswords yes\n\
-PermitRootLogin yes\n\
-Port 22\n\
-Port 8822\n' >> /etc/ssh/sshd_config
+RUN apt update && apt install -y libboost-log1.83.0 liblmdb0 libarchive13 dbus iproute2
 
 COPY --from=build /mender-install/usr/bin/mender-update /usr/bin/mender-update
 COPY --from=build /mender-install/usr/bin/mender-auth /usr/bin/mender-auth
