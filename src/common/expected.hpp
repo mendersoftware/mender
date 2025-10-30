@@ -65,6 +65,7 @@ using ExpectedBool = Expected<bool>;
 using ExpectedLong = Expected<long>;
 using ExpectedLongLong = Expected<long long>;
 using ExpectedStringVector = Expected<vector<string>>;
+using ExpectedUintMax = Expected<uintmax_t>;
 
 template <typename T>
 using ExpectedVector = Expected<vector<T>>;

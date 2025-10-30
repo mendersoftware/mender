@@ -35,6 +35,17 @@ expected::ExpectedSize FileSize(const string &path) {
 	return size;
 }
 
+expected::ExpectedUintMax GetAvailableSpace(const string &path) {
+	try {
+		fs::space_info space_info = fs::space(path);
+		return space_info.available;
+	} catch (const fs::filesystem_error &e) {
+		return expected::unexpected(error::Error(
+			e.code().default_error_condition(),
+			"Failed to get disk space for path '" + path + "': " + e.what()));
+	}
+}
+
 } // namespace io
 } // namespace common
 } // namespace mender
