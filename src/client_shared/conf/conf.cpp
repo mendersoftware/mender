@@ -289,7 +289,9 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 	}
 
 	if (http_client_config_.no_proxy.find(',') != string::npos) {
-		log::Warning("Unsupported syntax for NO_PROXY environment variable. Use space-separated values instead of coma-separated.");
+		return expected::unexpected(MakeError(
+			ConfigErrorCode::InvalidOptionsError,
+			"Unsupported syntax for NO_PROXY environment variable. Use space-separated values instead of coma-separated."));
 	}
 
 	return opts_iter.GetPos();
