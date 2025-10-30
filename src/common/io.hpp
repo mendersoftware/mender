@@ -403,6 +403,8 @@ error::Error WriteStringIntoOfstream(ofstream &os, const string &data);
 
 expected::ExpectedSize FileSize(const string &path);
 
+expected::ExpectedUintMax GetAvailableSpace(const string &path);
+
 } // namespace io
 } // namespace common
 } // namespace mender
