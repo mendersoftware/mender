@@ -116,7 +116,7 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::ParseError,
 			"Failed to parse the type-info artifact_depends JSON: "
-				+ expected_artifact_provides.error().message));
+				+ expected_artifact_depends.error().message));
 	}
 	if (expected_artifact_depends) {
 		type_info.artifact_depends = expected_artifact_depends.value();
@@ -137,7 +137,7 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::ParseError,
 			"Failed to parse the type-info clears_artifact_depends JSON: "
-				+ expected_artifact_provides.error().message));
+				+ expected_clears_artifact_provides.error().message));
 	}
 	if (expected_clears_artifact_provides) {
 		type_info.clears_artifact_provides = expected_clears_artifact_provides.value();
