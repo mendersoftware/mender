@@ -83,10 +83,15 @@ error::Error PushInventoryData(
 	}
 	auto &inv_data = ex_inv_data.value();
 
+	// The Mender Client version attribute is owned by
+	// mender-client-version-inventory-script; mender-update adds the built-in
+	// version only when not present, marking the provider accordingly.
+	// See MEN-9016
 	if (inv_data.count("mender_client_version") != 0) {
-		inv_data["mender_client_version"].push_back(conf::kMenderVersion);
+		inv_data["mender_client_version_provider"] = {"external"};
 	} else {
 		inv_data["mender_client_version"] = {conf::kMenderVersion};
+		inv_data["mender_client_version_provider"] = {"internal"};
 	}
 
 	stringstream top_ss;

@@ -84,7 +84,7 @@ echo "key1=value1"
 echo "key2=value2"
 echo "key3=value3"
 echo "key1=value11"
-echo "mender_client_version=additional_version"
+echo "mender_client_version=external_version"
 exit 0
 )";
 	auto ret = PrepareTestScript("mender-inventory-script1", script);
@@ -99,8 +99,7 @@ exit 0
 	NoAuthHTTPClient client {client_config, loop};
 
 	const string expected_request_data =
-		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":["additional_version",")"
-		+ conf::kMenderVersion + R"("]}])";
+		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":"external_version"},{"name":"mender_client_version_provider","value":"external"}])";
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
@@ -171,7 +170,8 @@ exit 0
 	NoAuthHTTPClient client {client_config, loop};
 
 	const string expected_request_data =
-		R"([{"name":"mender_client_version","value":")" + conf::kMenderVersion + R"("}])";
+		R"([{"name":"mender_client_version","value":")" + conf::kMenderVersion
+		+ R"("},{"name":"mender_client_version_provider","value":"internal"}])";
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
@@ -248,7 +248,8 @@ exit 0
 
 	const string expected_request_data =
 		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":")"
-		+ conf::kMenderVersion + R"("}])";
+		+ conf::kMenderVersion
+		+ R"("},{"name":"mender_client_version_provider","value":"internal"}])";
 	const string response_data =
 		R"({"error": "Some container failed to open so nowhere to put the goods", "request-id": "some id here"})";
 
@@ -343,7 +344,8 @@ exit 0
 	bool handler_called = false;
 	size_t last_hash = std::hash<string> {}(
 		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":")"
-		+ conf::kMenderVersion + R"("}])");
+		+ conf::kMenderVersion
+		+ R"("},{"name":"mender_client_version_provider","value":"internal"}])");
 	size_t last_hash_orig = last_hash;
 	auto err = inv::PushInventoryData(
 		test_scripts_dir.Path(),
