@@ -78,7 +78,7 @@ protected:
 	}
 };
 
-TEST_F(InventoryAPITests, PushInventoryDataTest) {
+TEST_F(InventoryAPITests, PushInventoryDataTestVersionExternal) {
 	string script = R"(#!/bin/sh
 echo "key1=value1"
 echo "key2=value2"
@@ -100,6 +100,89 @@ exit 0
 
 	const string expected_request_data =
 		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":"external_version"},{"name":"mender_client_version_provider","value":"external"}])";
+
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		TEST_SERVER,
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto content_length = req->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			EXPECT_EQ(content_length.value(), to_string(expected_request_data.size()));
+			auto ex_len = common::StringToLongLong(content_length.value());
+			ASSERT_TRUE(ex_len);
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			received_body.resize(ex_len.value());
+			req->SetBodyWriter(body_writer);
+		},
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto req = exp_req.value();
+			EXPECT_EQ(req->GetPath(), "/api/devices/v1/inventory/device/attributes");
+			EXPECT_EQ(req->GetMethod(), http::Method::PUT);
+			EXPECT_EQ(common::StringFromByteVector(received_body), expected_request_data);
+
+			auto result = req->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Content-Length", "0");
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	bool handler_called = false;
+	size_t last_hash = 0;
+	auto err = inv::PushInventoryData(
+		test_scripts_dir.Path(),
+		loop,
+		client,
+		last_hash,
+		[&handler_called, &loop](error::Error err) {
+			handler_called = true;
+			ASSERT_EQ(err, error::NoError);
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(handler_called);
+	EXPECT_EQ(last_hash, std::hash<string> {}(expected_request_data));
+}
+
+TEST_F(InventoryAPITests, PushInventoryDataTestVersionMultiple) {
+	string script1 = R"(#!/bin/sh
+echo "key1=value1"
+echo "key2=value2"
+echo "key3=value3"
+echo "key1=value11"
+echo "mender_client_version=additional_version"
+exit 0
+)";
+	auto ret = PrepareTestScript("mender-inventory-script1", script1);
+	ASSERT_TRUE(ret);
+
+	string script2 = R"(#!/bin/sh
+echo "mender_client_version=1.2.3"
+exit 0
+)";
+	ret = PrepareTestScript("mender-inventory-script2", script2);
+	ASSERT_TRUE(ret);
+
+	mtesting::TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	http::ClientConfig client_config;
+	NoAuthHTTPClient client {client_config, loop};
+
+	const string expected_request_data =
+		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":["1.2.3","additional_version"]},{"name":"mender_client_version_provider","value":"external"}])";
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
