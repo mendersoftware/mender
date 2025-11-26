@@ -65,6 +65,7 @@ string BaseName(const string &path);
 string DirName(const string &path);
 
 expected::ExpectedString Canonical(const string &path);
+expected::ExpectedString WeaklyCanonical(const string &path); // Used for paths that may not exist
 
 bool IsAbsolute(const string &path);
 
@@ -88,6 +89,8 @@ error::Error DataSyncRecursively(const string &dir);
 
 error::Error Rename(const string &oldname, const string &newname);
 error::Error FileCopy(const string &what, const string &where);
+
+expected::ExpectedBool IsWithinOrEqual(const string &check_path, const string &target_dir);
 
 } // namespace path
 } // namespace common
