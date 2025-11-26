@@ -439,8 +439,16 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 		return;
 	}
 
-	ctx.deployment.update_module.reset(
-		new update_module::UpdateModule(ctx.mender_context, header.header.payload_type));
+	auto exp_update_module =
+		update_module::UpdateModule::Create(ctx.mender_context, header.header.payload_type);
+	if (!exp_update_module.has_value()) {
+		log::Error(
+			"Error creating an Update Module when parsing artifact: "
+			+ exp_update_module.error().String());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+	ctx.deployment.update_module = std::move(exp_update_module.value());
 
 	err = ctx.deployment.update_module->CleanAndPrepareFileTree(
 		ctx.deployment.update_module->GetUpdateModuleWorkDir(), header);

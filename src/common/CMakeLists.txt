@@ -89,6 +89,7 @@ target_link_libraries(common_io PUBLIC common)
 
 add_library(common_path STATIC)
 target_sources(common_path PRIVATE
+  path/path.cpp
   path/platform/c++17/path.cpp
   path/platform/posix/path.cpp
 )
