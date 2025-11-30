@@ -51,9 +51,28 @@ std::string StateToString(State state) {
 	return StateString[static_cast<int>(state)];
 }
 
-UpdateModule::UpdateModule(MenderContext &ctx, const string &payload_type) :
+expected::Expected<std::unique_ptr<UpdateModule>> UpdateModule::Create(
+	MenderContext &ctx, const string &payload_type) {
+	auto update_module_path = path::Join(ctx.GetConfig().paths.GetModulesPath(), payload_type);
+	auto exp_path_is_safe =
+		path::IsWithinOrEqual(update_module_path, ctx.GetConfig().paths.GetModulesPath());
+	if (!exp_path_is_safe.has_value()) {
+		return expected::unexpected(exp_path_is_safe.error().WithContext(
+			"Error checking if path is equal to or within directory"));
+	}
+	if (!exp_path_is_safe.value()) {
+		return expected::unexpected(context::MakeError(
+			context::NoSuchUpdateModuleError,
+			"Error creating Update Module: Provided Module path is outside Update Modules directory."));
+	}
+
+	return std::unique_ptr<UpdateModule>(new UpdateModule(ctx, payload_type, update_module_path));
+}
+
+UpdateModule::UpdateModule(
+	MenderContext &ctx, const string &payload_type, string update_module_path) :
 	ctx_ {ctx} {
-	update_module_path_ = path::Join(ctx.GetConfig().paths.GetModulesPath(), payload_type);
+	update_module_path_ = update_module_path;
 	update_module_workdir_ =
 		path::Join(ctx.GetConfig().paths.GetModulesWorkPath(), "payloads", "0000", "tree");
 }
