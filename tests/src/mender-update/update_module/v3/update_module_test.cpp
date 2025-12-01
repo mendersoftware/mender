@@ -199,8 +199,10 @@ public:
 			payload_meta_data =
 				make_unique<mender::artifact::PayloadHeaderView>(maybe_payload_meta_data.value());
 
-			update_module = make_unique<update_module::UpdateModule>(
-				*ctx, payload_meta_data->header.payload_type);
+			auto exp_update_module =
+				update_module::UpdateModule::Create(*ctx, payload_meta_data->header.payload_type);
+			ASSERT_TRUE(exp_update_module.has_value()) << exp_update_module.error();
+			update_module = std::move(exp_update_module.value());
 		}();
 	}
 
@@ -363,9 +365,13 @@ protected:
 };
 
 TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
-	update_module::UpdateModule up_mod(*ctx, update_payload_header->header.payload_type);
+	auto exp_update_module =
+		update_module::UpdateModule::Create(*ctx, update_payload_header->header.payload_type);
+	ASSERT_TRUE(exp_update_module.has_value());
+	auto up_mod = std::move(exp_update_module.value());
+
 	const string tree_path = test_tree_dir.Path();
-	auto err = up_mod.CleanAndPrepareFileTree(tree_path, *update_payload_header);
+	auto err = up_mod->CleanAndPrepareFileTree(tree_path, *update_payload_header);
 	ASSERT_EQ(err, error::NoError);
 
 	//
@@ -435,7 +441,7 @@ TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 
 	EXPECT_TRUE(FileContainsExactly(path::Join(tree_path, "header", "meta-data"), "null"));
 
-	err = up_mod.DeleteFileTree(tree_path);
+	err = up_mod->DeleteFileTree(tree_path);
 	ASSERT_EQ(err, error::NoError);
 }
 
@@ -1342,4 +1348,13 @@ TEST(AsyncFifoOpener, Cancel) {
 	loop.Run();
 
 	EXPECT_TRUE(hit_handler);
+}
+
+TEST(UpdateModuleCreateTest, IllegalPayloadType) {
+	auto illegal_payload_type = "../../test_payload";
+	conf::MenderConfig config;
+	auto ctx = make_unique<context::MenderContext>(config);
+
+	auto update_module = update_module::UpdateModule::Create(*ctx, illegal_payload_type);
+	EXPECT_FALSE(update_module.has_value());
 }

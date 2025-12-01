@@ -1,4 +1,4 @@
-// Copyright 2024 Northern.tech AS
+// Copyright 2025 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -12,71 +12,66 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-
-#include <fstream>
-#include <string>
-
 #include <gtest/gtest.h>
-
-#include <common/testing.hpp>
+#include <common/error.hpp>
 #include <common/path.hpp>
+#include <common/expected.hpp>
 
+namespace error = mender::common::error;
+namespace path = mender::common::path;
+namespace expected = mender::common::expected;
 using namespace std;
 
-namespace mtesting = mender::common::testing;
-namespace path = mender::common::path;
 
+#define EXPECT_TRUE_NO_ERROR(exp)                \
+	ASSERT_TRUE(exp.has_value()) << exp.error(); \
+	EXPECT_TRUE(exp.value());
 
-class TestFile : public testing::Test {
-protected:
-	mtesting::TemporaryDirectory tmpdir;
+#define EXPECT_FALSE_NO_ERROR(exp)               \
+	ASSERT_TRUE(exp.has_value()) << exp.error(); \
+	EXPECT_FALSE(exp.value());
 
-	void CreateTestFile(const string &test_fname, const string &content) {
-		string manifest = content;
-		ofstream os {tmpdir.Path() + "/" + test_fname};
-		os << manifest;
-		os.close();
-	}
-};
+TEST(Path, IsWithinOrEqual) {
+	// Test equal dirs, with "/" suffix and without
+	EXPECT_TRUE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir", "/path/to/dir"));
+	EXPECT_TRUE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir", "/path/to/dir/"));
 
-TEST_F(TestFile, TestAreFilesIdentical) {
-	string file_one = R"(
-        api_version: mender/v1
-        kind: update_manifest
-        version: system-core-v1
-        )";
+	EXPECT_TRUE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/", "/path/to/dir"));
+	EXPECT_TRUE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/", "/path/to/dir/"));
 
-	string file_one_identical = R"(
-        api_version: mender/v1
-        kind: update_manifest
-        version: system-core-v1
-        )";
+	// Test files inside dir and subdirs of dir
+	EXPECT_TRUE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/module_name", "/path/to/dir"));
+	EXPECT_TRUE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/module_name", "/path/to/dir/"));
 
-	string file_two = R"(
-        api_version: mender/v2
-        kind: update_manifest
-        version: system-core-v1
-        )";
+	EXPECT_TRUE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/subdir/module_name", "/path/to/dir"));
+	EXPECT_TRUE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/subdir/module_name", "/path/to/dir/"));
 
-	const string &file_one_path = tmpdir.Path() + "/file_one.yaml";
-	const string &file_one_identical_path = tmpdir.Path() + "/file_one_identical.yaml";
-	const string &file_two_path = tmpdir.Path() + "/file_two.yaml";
+	EXPECT_TRUE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/subdir/", "/path/to/dir"));
+	EXPECT_TRUE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/subdir/", "/path/to/dir/"));
 
-	CreateTestFile("file_one.yaml", file_one);
-	EXPECT_TRUE(path::FileExists(file_one_path));
+	EXPECT_TRUE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/../dir/module_name", "/path/to/dir"));
+	EXPECT_TRUE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/../dir/module_name", "/path/to/dir/"));
 
-	CreateTestFile("file_one_identical.yaml", file_one);
-	EXPECT_TRUE(path::FileExists(file_one_identical_path));
+	// Test files/dirs that are outside dir
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/../module_name", "/path/to/dir"));
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/../module_name", "/path/to/dir/"));
 
-	CreateTestFile("file_two.yaml", file_two);
-	EXPECT_TRUE(path::FileExists(file_two_path));
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/../../module_name", "/path/to/dir"));
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/../../module_name", "/path/to/dir/"));
 
-	auto different_files = path::AreFilesIdentical(file_one_path, file_two_path);
-	EXPECT_FALSE(different_files.value());
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/../", "/path/to/dir"));
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/../", "/path/to/dir/"));
 
-	auto same_file = path::AreFilesIdentical(file_one_path, file_one_path);
-	EXPECT_TRUE(same_file.value());
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/..", "/path/to/dir"));
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/..", "/path/to/dir/"));
 
-	auto identical_new_file = path::AreFilesIdentical(file_one_path, file_one_identical_path);
-	EXPECT_TRUE(identical_new_file.value());
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/../test/", "/path/to/dir"));
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/path/to/dir/../test/", "/path/to/dir/"));
+
+	// Test completely different paths
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/completely/different/path", "/path/to/dir"));
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/completely/different/path", "/path/to/dir/"));
+
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/completely/different/path/", "/path/to/dir"));
+	EXPECT_FALSE_NO_ERROR(path::IsWithinOrEqual("/completely/different/path/", "/path/to/dir/"));
 }

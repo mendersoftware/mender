@@ -1,4 +1,4 @@
-// Copyright 2024 Northern.tech AS
+// Copyright 2025 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -12,52 +12,50 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/io.hpp>
 #include <common/path.hpp>
 
-#include <functional>
-#include <iterator>
+#include <filesystem>
 #include <string>
+#include <unordered_set>
+
+#include <common/error.hpp>
 
 namespace mender {
 namespace common {
 namespace path {
 
 using namespace std;
-namespace io = mender::common::io;
 
-expected::ExpectedBool AreFilesIdentical(const string &file_one, const string &file_two) {
-	auto file_one_expected_stream = io::OpenIfstream(file_one);
-	if (!file_one_expected_stream) {
-		return expected::unexpected(file_one_expected_stream.error());
-	}
-	auto file_two_expected_stream = io::OpenIfstream(file_two);
-	if (!file_two_expected_stream) {
-		return expected::unexpected(file_two_expected_stream.error());
+expected::ExpectedBool IsWithinOrEqual(const string &check_path, const string &target_dir) {
+	auto exp_canonical_check_path = WeaklyCanonical(check_path);
+	if (!exp_canonical_check_path.has_value()) {
+		return expected::unexpected(exp_canonical_check_path.error().WithContext(
+			"Error creating canonical path, path to check: '" + check_path));
 	}
 
-	auto &file_one_stream = file_one_expected_stream.value();
-	auto &file_two_stream = file_two_expected_stream.value();
-
-	// Compare file sizes
-	file_one_stream.seekg(0, ios::end);
-	file_two_stream.seekg(0, ios::end);
-	if (file_one_stream.tellg() != file_two_stream.tellg()) {
-		return false;
+	auto exp_canonical_target_dir = WeaklyCanonical(target_dir);
+	if (!exp_canonical_target_dir.has_value()) {
+		return expected::unexpected(exp_canonical_target_dir.error().WithContext(
+			"Error creating canonical path, target directory: '" + target_dir));
 	}
-	file_one_stream.seekg(0, ios::beg);
-	file_two_stream.seekg(0, ios::beg);
 
-	string file_one_contents {
-		istreambuf_iterator<char>(file_one_stream), istreambuf_iterator<char>()};
-	string file_two_contents {
-		istreambuf_iterator<char>(file_two_stream), istreambuf_iterator<char>()};
+	auto canonical_check_path = exp_canonical_check_path.value();
+	auto canonical_target_dir = exp_canonical_target_dir.value();
 
-	size_t file_one_hash = std::hash<string> {}(file_one_contents);
-	size_t file_two_hash = std::hash<string> {}(file_two_contents);
+	// Terminate both with "/", otherwise we could mistakenly say that
+	// 1. /test/testabc in contained within /test/test
+	// 2. /test/test in not equal to /test/test/
+	if (canonical_check_path.back() != '/') {
+		canonical_check_path += '/';
+	}
+	if (canonical_target_dir.back() != '/') {
+		canonical_target_dir += '/';
+	}
 
-
-	return file_one_hash == file_two_hash;
+	if (canonical_check_path.rfind(canonical_target_dir, 0) == 0) {
+		return true;
+	}
+	return false;
 }
 
 } // namespace path

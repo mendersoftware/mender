@@ -61,6 +61,16 @@ expected::ExpectedString Canonical(const string &path) {
 	return canonical.string();
 }
 
+expected::ExpectedString WeaklyCanonical(const string &path) {
+	error_code ec;
+	auto canonical = fs::weakly_canonical(path, ec);
+	if (ec) {
+		return expected::unexpected(
+			error::Error(ec.default_error_condition(), "Could not get weakly canonical path"));
+	}
+	return canonical.string();
+}
+
 bool IsAbsolute(const string &path) {
 	return fs::path(path).is_absolute();
 }

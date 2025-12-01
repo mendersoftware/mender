@@ -83,7 +83,8 @@ struct SystemRebootRunner {
 
 class UpdateModule {
 public:
-	UpdateModule(MenderContext &ctx, const string &payload_type);
+	static expected::Expected<std::unique_ptr<UpdateModule>> Create(
+		MenderContext &ctx, const string &payload_type);
 
 	string GetUpdateModulePath() {
 		return update_module_path_;
@@ -154,6 +155,7 @@ public:
 	void SetSystemRebootRunner(unique_ptr<SystemRebootRunner> &&system_reboot_runner);
 
 private:
+	UpdateModule(MenderContext &ctx, const string &payload_type, string update_module_path);
 	error::Error AsyncCallStateCapture(
 		events::EventLoop &loop, State state, function<void(expected::ExpectedString)> handler);
 	expected::ExpectedString CallStateCapture(State state);

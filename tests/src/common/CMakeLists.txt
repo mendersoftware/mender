@@ -141,11 +141,7 @@ endif()
 add_subdirectory(http_resumer)
 
 add_executable(path_test EXCLUDE_FROM_ALL path_test.cpp)
-target_link_libraries(path_test PUBLIC
-  common_testing
-  common_path
-  main_test
-  gmock
-)
+target_compile_options(path_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+target_link_libraries(path_test PUBLIC common_path main_test)
 gtest_discover_tests(path_test ${MENDER_TEST_FLAGS} NO_PRETTY_VALUES)
 add_dependencies(tests path_test)

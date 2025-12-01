@@ -521,8 +521,12 @@ error::Error PrepareContext(Context &ctx) {
 }
 
 error::Error PrepareContextFromStateData(Context &ctx, const StateData &data) {
-	ctx.update_module.reset(
-		new update_module::UpdateModule(ctx.main_context, data.payload_types[0]));
+	auto exp_update_module =
+		update_module::UpdateModule::Create(ctx.main_context, data.payload_types[0]);
+	if (!exp_update_module.has_value()) {
+		return exp_update_module.error();
+	}
+	ctx.update_module = std::move(exp_update_module.value());
 
 	if (data.payload_types[0] == "rootfs-image") {
 		// Special case for rootfs-image upgrades. See comments inside the function.

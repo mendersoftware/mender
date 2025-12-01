@@ -463,8 +463,15 @@ void StateMachine::LoadStateFromDb() {
 		return;
 	}
 	assert(payload_types.size() == 1);
-	ctx_.deployment.update_module.reset(
-		new update_module::UpdateModule(ctx_.mender_context, payload_types[0]));
+	auto exp_update_module =
+		update_module::UpdateModule::Create(ctx_.mender_context, payload_types[0]);
+	if (!exp_update_module.has_value()) {
+		log::Error(
+			"Error while creating an Update Module from database: "
+			+ exp_update_module.error().String());
+		return;
+	}
+	ctx_.deployment.update_module = std::move(exp_update_module.value());
 }
 
 error::Error StateMachine::Run() {

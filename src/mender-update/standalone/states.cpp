@@ -261,8 +261,17 @@ void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 		return;
 	}
 
-	ctx.update_module.reset(
-		new update_module::UpdateModule(main_context, header.header.payload_type));
+	auto exp_update_module =
+		update_module::UpdateModule::Create(main_context, header.header.payload_type);
+	if (!exp_update_module.has_value()) {
+		UpdateResult(
+			ctx.result_and_error,
+			{Result::DownloadFailed | Result::Failed | Result::NoRollbackNecessary,
+			 exp_update_module.error()});
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+	ctx.update_module = std::move(exp_update_module.value());
 
 	err = ctx.update_module->CleanAndPrepareFileTree(
 		ctx.update_module->GetUpdateModuleWorkDir(), header);
