@@ -107,7 +107,6 @@ error::Error MakeError(MenderContextErrorCode code, const string &msg) {
 }
 
 error::Error MenderContext::Initialize() {
-#ifdef MENDER_USE_LMDB
 	auto err = mender_store_.Open(path::Join(config_.paths.GetDataStore(), "mender-store"));
 	if (error::NoError != err) {
 		return err;
@@ -125,9 +124,6 @@ error::Error MenderContext::Initialize() {
 	}
 
 	return error::NoError;
-#else
-	return error::NoError;
-#endif
 }
 
 kv_db::KeyValueDatabase &MenderContext::GetMenderStoreDB() {

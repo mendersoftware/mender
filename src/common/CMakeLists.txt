@@ -129,6 +129,11 @@ if(MENDER_USE_LMDB)
     common
     common_log
   )
+else()
+  target_link_libraries(common_key_value_database PUBLIC common_cpp)
+  target_include_directories(common_key_value_database PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+  # TODO: make the blob implementation select-able (when we have multiple)
+  target_sources(common_key_value_database PRIVATE key_value_database/platform/blobdb/blobdb.cpp key_value_database/platform/blobdb/file_blob.cpp)
 endif()
 
 add_library(common_events STATIC

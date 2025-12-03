@@ -28,7 +28,7 @@
 #ifdef MENDER_USE_LMDB
 #include <common/key_value_database_lmdb.hpp>
 #else
-#error MenderContext requires LMDB
+#include <common/key_value_database_blobdb.hpp>
 #endif // MENDER_USE_LMDB
 
 namespace mender {
@@ -158,6 +158,8 @@ public:
 private:
 #ifdef MENDER_USE_LMDB
 	kv_db::KeyValueDatabaseLmdb mender_store_;
+#else
+	kv_db::KeyValueDatabaseBlobdb mender_store_;
 #endif // MENDER_USE_LMDB
 	conf::MenderConfig &config_;
 };

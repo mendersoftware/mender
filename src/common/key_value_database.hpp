@@ -50,6 +50,9 @@ enum ErrorCode {
 
 	// LMDB can apparently return this, but it should not happen.
 	AlreadyExistsError,
+
+	// When a read transaction is attempted to be used for writing.
+	TransactionError,
 };
 using Error = mender::common::error::Error;
 

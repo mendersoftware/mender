@@ -19,6 +19,8 @@
 
 #ifdef MENDER_USE_LMDB
 #include <common/key_value_database_lmdb.hpp>
+#else
+#include <common/key_value_database_blobdb.hpp>
 #endif
 
 #include <cstdio>
@@ -58,6 +60,14 @@ static vector<KeyValueDatabaseSetup> GenerateDatabaseSetups() {
 	auto err = lmdb_db->Open(elem.tmpdir->Path() + "mender-store");
 	assert(err == error::NoError);
 	elem.db = lmdb_db;
+	ret.push_back(elem);
+#else
+	elem.name = "BlobDB";
+	elem.tmpdir = std::make_shared<mender::common::testing::TemporaryDirectory>();
+	auto blob_db = std::make_shared<kvdb::KeyValueDatabaseBlobdb>();
+	auto err = blob_db->Open(elem.tmpdir->Path() + "/mender-store");
+	assert(err == error::NoError);
+	elem.db = blob_db;
 	ret.push_back(elem);
 #endif
 
