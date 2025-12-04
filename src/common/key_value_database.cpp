@@ -48,6 +48,33 @@ Error MakeError(ErrorCode code, const string &msg) {
 	return Error(error_condition(code, KeyValueDatabaseErrorCategory), msg);
 }
 
+expected::ExpectedBytes KeyValueDatabase::Read(const string &key) {
+	vector<uint8_t> ret;
+	auto err = ReadTransaction([&key, &ret](Transaction &txn) -> error::Error {
+		auto result = txn.Read(key);
+		if (result) {
+			ret = std::move(result.value());
+			return error::NoError;
+		} else {
+			return result.error();
+		}
+	});
+	if (mender::common::error::NoError != err) {
+		return expected::unexpected(err);
+	} else {
+		return ret;
+	}
+}
+
+error::Error KeyValueDatabase::Write(const string &key, const vector<uint8_t> &value) {
+	return WriteTransaction(
+		[&key, &value](Transaction &txn) -> error::Error { return txn.Write(key, value); });
+}
+
+error::Error KeyValueDatabase::Remove(const string &key) {
+	return WriteTransaction([&key](Transaction &txn) -> error::Error { return txn.Remove(key); });
+}
+
 Error ReadString(Transaction &txn, const string &key, string &value_str, bool missing_ok) {
 	auto ex_bytes = txn.Read(key);
 	if (!ex_bytes) {

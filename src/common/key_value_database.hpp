@@ -70,6 +70,10 @@ class KeyValueDatabase : virtual public Transaction {
 public:
 	virtual Error WriteTransaction(function<Error(Transaction &)> txnFunc) = 0;
 	virtual Error ReadTransaction(function<Error(Transaction &)> txnFunc) = 0;
+
+	expected::ExpectedBytes Read(const string &key) override;
+	error::Error Write(const string &key, const vector<uint8_t> &value) override;
+	error::Error Remove(const string &key) override;
 };
 
 Error MakeError(ErrorCode code, const string &msg);

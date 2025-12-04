@@ -52,9 +52,6 @@ public:
 	error::Error Open(const string &path);
 	void Close();
 
-	expected::ExpectedBytes Read(const string &key) override;
-	error::Error Write(const string &key, const vector<uint8_t> &value) override;
-	error::Error Remove(const string &key) override;
 	error::Error WriteTransaction(function<error::Error(Transaction &)> txnFunc) override;
 	error::Error ReadTransaction(function<error::Error(Transaction &)> txnFunc) override;
 
