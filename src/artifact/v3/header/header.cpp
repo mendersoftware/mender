@@ -104,6 +104,17 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 		log::Trace("Parsing state script...");
 		const string artifact_script_path =
 			path::Join(conf.artifact_scripts_filesystem_path, tok.name);
+		auto exp_path_is_safe =
+			path::IsWithinOrEqual(artifact_script_path, conf.artifact_scripts_filesystem_path);
+		if (!exp_path_is_safe.has_value()) {
+			return expected::unexpected(exp_path_is_safe.error().WithContext(
+				"Error checking if path is equal to or within directory"));
+		}
+		if (!exp_path_is_safe.value()) {
+			return expected::unexpected(parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Error parsing state script: Provided script path is outside state script directory."));
+		}
 		errno = 0;
 		ofstream myfile(artifact_script_path);
 		log::Trace("state script name: " + tok.name);
