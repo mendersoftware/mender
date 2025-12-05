@@ -654,3 +654,35 @@ TEST_F(HeaderTestEnv, TestHeaderMetaDataIs53BitFloatingPointIsRounded) {
 		EXPECT_THAT(expected_val.value(), testing::DoubleEq(-9007199254740991));
 	}
 }
+
+TEST_F(HeaderTestEnv, TestHeaderModuleImageIllegalStateScriptPath) {
+	mendertesting::TemporaryDirectory tmpdir {};
+	CreateTestArtifact(
+		tmpdir,
+		"module-image",
+		{{"--type dummy-update-module"},
+		 {R"(--script ${DIRNAME}/ArtifactInstall_Enter_01_test-dummy)"}});
+
+	int unpack_result =
+		std::system(("tar -xf " + tmpdir.Path() + "/header.tar -C " + tmpdir.Path()).c_str());
+	ASSERT_EQ(unpack_result, 0) << "Header unpacking failed.";
+
+	// Test illegal path with "ArtifactInstall_Enter_01_test-dummy../"
+	// No need to test other variations of illegal paths, as we have it tested in path library tests
+	std::string transform_cmd =
+		std::string("cd " + tmpdir.Path() + " && tar -czf header_illegal.tar")
+		+ " --transform='s|scripts/ArtifactInstall_Enter_01_test-dummy|scripts/ArtifactInstall_Enter_01_test-dummy../../../../etc/cron.daily/exploit|' "
+		+ "header-info scripts/ArtifactInstall_Enter_01_test-dummy headers/0000/type-info";
+
+	int repack_result = std::system(transform_cmd.c_str());
+	ASSERT_EQ(repack_result, 0) << "Repacking modified header failed. Command: " << transform_cmd;
+
+	std::fstream fs {tmpdir.Path() + "/header_illegal.tar"};
+
+	mender::common::io::StreamReader sr {fs};
+
+	ExpectedHeader expected_header =
+		header::Parse(sr, mender::artifact::config::ParserConfig {tmpdir.Path()});
+
+	EXPECT_FALSE(expected_header) << expected_header.error().message;
+}
