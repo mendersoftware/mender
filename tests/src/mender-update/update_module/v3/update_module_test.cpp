@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <string>
 #include <sstream>
+#include <filesystem>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -180,6 +181,72 @@ public:
 			ASSERT_TRUE(maybe_artifact) << maybe_artifact.error();
 			auto artifact_file = maybe_artifact.value();
 
+			is = make_unique<ifstream>(artifact_file);
+			ASSERT_TRUE(is->good());
+			artifact_reader = make_unique<io::StreamReader>(*is);
+
+			ctx = make_unique<context::MenderContext>(config);
+
+			auto maybe_parsed = mender::artifact::parser::Parse(*artifact_reader);
+			ASSERT_TRUE(maybe_parsed) << maybe_parsed.error();
+			artifact = make_unique<mender::artifact::Artifact>(maybe_parsed.value());
+
+			auto maybe_payload = artifact->Next();
+			ASSERT_TRUE(maybe_payload) << maybe_payload.error();
+			payload = make_unique<mender::artifact::Payload>(maybe_payload.value());
+
+			auto maybe_payload_meta_data = mender::artifact::View(*artifact, 0);
+			ASSERT_TRUE(maybe_payload_meta_data) << maybe_payload_meta_data.error();
+			payload_meta_data =
+				make_unique<mender::artifact::PayloadHeaderView>(maybe_payload_meta_data.value());
+
+			auto exp_update_module =
+				update_module::UpdateModule::Create(*ctx, payload_meta_data->header.payload_type);
+			ASSERT_TRUE(exp_update_module.has_value()) << exp_update_module.error();
+			update_module = std::move(exp_update_module.value());
+		}();
+	}
+
+	unique_ptr<ifstream> is;
+	unique_ptr<io::StreamReader> artifact_reader;
+	conf::MenderConfig config;
+	unique_ptr<context::MenderContext> ctx;
+	unique_ptr<mender::artifact::Artifact> artifact;
+	unique_ptr<mender::artifact::Payload> payload;
+	unique_ptr<mender::artifact::PayloadHeaderView> payload_meta_data;
+	unique_ptr<update_module::UpdateModule> update_module;
+};
+
+class UpdateModuleTestWithArtifactContainingIllegalPayloadFile {
+public:
+	UpdateModuleTestWithArtifactContainingIllegalPayloadFile(
+		UpdateModuleTests &tests, size_t mb = 1, size_t number_of_files = 1) {
+		// ASSERT doesn't work well inside constructors because of some peculiar return
+		// semantics, so wrap it in a lambda.
+		[&]() {
+			auto maybe_artifact = tests.PrepareArtifact(mb, number_of_files);
+			ASSERT_TRUE(maybe_artifact) << maybe_artifact.error();
+			auto artifact_file = maybe_artifact.value();
+
+			// Modify the only payload's file to point to an illegal path
+			std::filesystem::current_path(tests.temp_dir_.Path());
+			int result = std::system(("tar -xf " + artifact_file).c_str());
+			ASSERT_EQ(result, 0) << "Setup failed: Could not extract default artifact.";
+
+			result = std::system("tar -xf data/0000.tar.gz");
+			ASSERT_EQ(result, 0) << "Setup failed: Could not extract default artifact's payload.";
+
+			result =
+				std::system("tar -zcf data/0000.tar.gz --transform='s|rootfs|../rootfs|' rootfs");
+			ASSERT_EQ(result, 0)
+				<< "Setup failed: Could not recompress modified artifact's payload.";
+
+			result = std::system(
+				("tar -cf " + artifact_file + " version manifest header.tar.gz data/0000.tar.gz")
+					.c_str());
+			ASSERT_EQ(result, 0) << "Setup failed: Could not recompress modified artifact.";
+
+			// From here on out - usual setup, exactly as in UpdateModuleTestWithDefaultArtifact
 			is = make_unique<ifstream>(artifact_file);
 			ASSERT_TRUE(is->good());
 			artifact_reader = make_unique<io::StreamReader>(*is);
@@ -1278,6 +1345,33 @@ TEST_F(UpdateModuleTests, SystemReboot) {
 	auto err = update_module.AsyncSystemReboot(loop, [](error::Error err) {});
 	EXPECT_NE(err, error::NoError);
 	EXPECT_THAT(err.String(), testing::HasSubstr("Unable to call system reboot command"));
+}
+
+TEST_F(UpdateModuleTests, IllegalPayloadFilePath) {
+	UpdateModuleTestWithArtifactContainingIllegalPayloadFile art(*this);
+
+	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
+	ASSERT_TRUE(maybe_script) << maybe_script.error();
+
+	// Simply return from Update Module, causing mender to download the payload
+	// to the usual work tree
+	auto script_path = maybe_script.value();
+	{
+		ofstream um_script(script_path);
+		um_script << R"delim(#!/bin/bash
+exit 0
+)delim";
+	}
+
+	auto err = art.update_module->Download(*art.payload);
+
+	EXPECT_NE(err, error::NoError) << err.String();
+	EXPECT_EQ(err.code, make_error_condition(errc::invalid_argument)) << err.String();
+
+	// Make sure the offending file is not downloaded to its intended directory
+	// nor to the illegal directory.
+	EXPECT_FALSE(std::filesystem::exists(temp_dir_.Path() + "/work/files/rootfs"));
+	EXPECT_FALSE(std::filesystem::exists(temp_dir_.Path() + "/work/files/../rootfs"));
 }
 
 TEST(AsyncFifoOpener, Open) {
