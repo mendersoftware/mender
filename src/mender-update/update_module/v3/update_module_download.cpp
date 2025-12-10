@@ -114,6 +114,21 @@ void UpdateModule::StreamNextOpenHandler(io::ExpectedAsyncWriterPtr writer) {
 
 	auto stream_path =
 		path::Join(update_module_workdir_, string("streams"), download_->current_payload_name_);
+	auto exp_path_is_safe =
+		path::IsWithinOrEqual(stream_path, path::Join(update_module_workdir_, string("streams")));
+	if (!exp_path_is_safe.has_value()) {
+		DownloadErrorHandler(exp_path_is_safe.error().WithContext(
+			"Error checking if path is equal to or within directory"));
+		return;
+	}
+	if (!exp_path_is_safe.value()) {
+		DownloadErrorHandler(error::Error(
+			make_error_condition(errc::invalid_argument),
+			"Error downloading payload: Provided payload file (" + download_->current_payload_name_
+				+ ") would point outside work directory when extracted."));
+		return;
+	}
+
 	auto err = PrepareAndOpenStreamPipe(
 		stream_path, [this](io::ExpectedAsyncWriterPtr writer) { StreamOpenHandler(writer); });
 	if (err != error::NoError) {
@@ -304,6 +319,20 @@ void UpdateModule::StartDownloadToFile() {
 	}
 
 	stream_path = path::Join(stream_path, download_->current_payload_name_);
+	auto exp_path_is_safe =
+		path::IsWithinOrEqual(stream_path, path::Join(update_module_workdir_, string("files")));
+	if (!exp_path_is_safe.has_value()) {
+		DownloadErrorHandler(exp_path_is_safe.error().WithContext(
+			"Error checking if path is equal to or within directory"));
+		return;
+	}
+	if (!exp_path_is_safe.value()) {
+		DownloadErrorHandler(error::Error(
+			make_error_condition(errc::invalid_argument),
+			"Error downloading payload: Provided payload file (" + download_->current_payload_name_
+				+ ") would point outside work directory when extracted."));
+		return;
+	}
 
 	auto current_stream_writer =
 		make_shared<events::io::AsyncFileDescriptorWriter>(download_->event_loop_);
