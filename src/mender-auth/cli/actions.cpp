@@ -135,6 +135,8 @@ ExpectedActionPtr DaemonAction::Create(
 }
 
 error::Error DaemonAction::Execute(context::MenderContext &main_context) {
+	log::Info("Running mender-auth " + conf::kMenderVersion);
+
 	auto &config = main_context.GetConfig();
 	if (none_of(config.servers.cbegin(), config.servers.cend(), [](const string &it) {
 			return it != "";

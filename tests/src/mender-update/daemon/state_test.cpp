@@ -3947,7 +3947,7 @@ TEST_F(StateTestWithArtifact, DeploymentLogging) {
 	}
 
 	auto deployment_log = path::Join(tmpdir.Path(), "deployments.0000." DEPLOYMENT_ID ".log");
-	EXPECT_TRUE(mtesting::FileContains(deployment_log, "Running Mender client"));
+	EXPECT_TRUE(mtesting::FileContains(deployment_log, "Running mender-update"));
 	EXPECT_TRUE(
 		mtesting::FileContains(deployment_log, "Deployment with ID " DEPLOYMENT_ID " started"));
 	ASSERT_EQ(deployment_client->log_files.size(), 1);
@@ -3966,20 +3966,20 @@ TEST_F(StateTestWithArtifact, DeploymentLogging) {
 	}
 
 	deployment_log = path::Join(tmpdir.Path(), "deployments.0000." + new_id + ".log");
-	EXPECT_TRUE(mtesting::FileContains(deployment_log, "Running Mender client"));
+	EXPECT_TRUE(mtesting::FileContains(deployment_log, "Running mender-update"));
 	EXPECT_TRUE(
 		mtesting::FileContains(deployment_log, "Deployment with ID " + new_id + " started"));
 	ASSERT_EQ(deployment_client->log_files.size(), 1);
 	EXPECT_EQ(deployment_client->log_files[0], deployment_log);
 
 	auto moved_deployment_log = path::Join(tmpdir.Path(), "deployments.0001." DEPLOYMENT_ID ".log");
-	EXPECT_TRUE(mtesting::FileContains(moved_deployment_log, "Running Mender client"));
+	EXPECT_TRUE(mtesting::FileContains(moved_deployment_log, "Running mender-update"));
 	EXPECT_TRUE(mtesting::FileContains(
 		moved_deployment_log, "Deployment with ID " DEPLOYMENT_ID " started"));
 
 	auto no_such_deployment_log =
 		path::Join(tmpdir.Path(), "deployments.0002." DEPLOYMENT_ID ".log");
-	EXPECT_FALSE(mtesting::FileContains(no_such_deployment_log, "Running Mender client"));
+	EXPECT_FALSE(mtesting::FileContains(no_such_deployment_log, "Running mender-update"));
 }
 
 TEST(SignalHandlingTests, SigquitHandlingTest) {

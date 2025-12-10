@@ -484,7 +484,7 @@ error::Error StateMachine::Run() {
 		return err;
 	}
 
-	log::Info("Running Mender client " + conf::kMenderVersion);
+	log::Info("Running mender-update " + conf::kMenderVersion);
 
 	event_loop_.Run();
 	return exit_state_.exit_error;

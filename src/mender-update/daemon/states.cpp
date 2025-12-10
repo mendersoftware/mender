@@ -272,7 +272,9 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 
 			ctx.BeginDeploymentLogging();
 
-			log::Info("Running Mender client " + conf::kMenderVersion);
+			// This is a duplicate message to one logged when mender-update
+			// starts, but this one goes into the deployment log.
+			log::Info("Running mender-update " + conf::kMenderVersion);
 			log::Info(
 				"Deployment with ID " + ctx.deployment.state_data->update_info.id + " started.");
 
