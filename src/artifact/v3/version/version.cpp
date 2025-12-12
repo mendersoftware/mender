@@ -68,6 +68,9 @@ error::Error MakeError(ErrorCode code, const string &msg) {
 ExpectedVersion Parse(io::Reader &reader) {
 	Version v {};
 
+	// Create an sha::Reader without an expected checksum. That's because we parse version
+	// before we parse manifest so we do not yet know what is the expected checksum.
+	// We use sha::Reader to be able to calculate the checksum and check it later manually.
 	sha::Reader sha_reader {reader};
 
 	auto expected_json = json::Load(sha_reader);
