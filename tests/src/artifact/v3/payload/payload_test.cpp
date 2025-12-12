@@ -16,11 +16,13 @@
 
 #include <string>
 #include <fstream>
+#include <filesystem>
 
 #include <gtest/gtest.h>
 
 #include <artifact/tar/tar.hpp>
 #include <artifact/v3/manifest/manifest.hpp>
+#include <artifact/error.hpp>
 
 #include <common/processes.hpp>
 #include <common/testing.hpp>
@@ -160,4 +162,73 @@ TEST_F(PayloadTestEnv, TestPayloadMultipleFiles) {
 	expected_payload = p.Next();
 	EXPECT_FALSE(expected_payload);
 	EXPECT_EQ(expected_payload.error().message, "Reached the end of the archive");
+}
+
+TEST(PayloadTest, FileNotInManifest_FirstFile) {
+	mendertesting::TemporaryDirectory tmpdir;
+	std::string cmd = std::string("cd " + tmpdir.Path() + " && echo 'legal' > legalfile && ")
+					  + "echo 'illegal' > illegalfile && tar -czf illegal_payload.tar.gz "
+					  + "illegalfile legalfile";
+
+	int cmd_result = std::system(cmd.c_str());
+	ASSERT_EQ(cmd_result, 0) << "Packing modified header failed. Command: " << cmd;
+
+	std::fstream fs {tmpdir.Path() + "/illegal_payload.tar.gz"};
+
+	mender::common::io::StreamReader sr {fs};
+
+	manifest::Manifest manifest {
+		{{"data/0000/legalfile",
+		  "916d553eebacc023d3c4269f14d74f7d2b5c8957b4698753f7b2240ad17f8402"}}};
+
+	auto payload = payload::Payload(sr, manifest);
+
+	// Test the illegal file at the beginning of the archive
+	auto expected_payload = payload.Next();
+	ASSERT_FALSE(expected_payload);
+	EXPECT_EQ(
+		expected_payload.error().code,
+		std::error_condition(
+			mender::artifact::parser_error::Code::ParseError,
+			mender::artifact::parser_error::ErrorCategory))
+		<< expected_payload.error().String();
+}
+
+TEST(PayloadTest, FileNotInManifest_LastFile) {
+	mendertesting::TemporaryDirectory tmpdir;
+	std::string cmd = std::string("cd " + tmpdir.Path() + " && echo 'legal' > legalfile && ")
+					  + "echo 'illegal' > illegalfile && tar -czf illegal_payload.tar.gz "
+					  + "legalfile illegalfile";
+
+	int cmd_result = std::system(cmd.c_str());
+	ASSERT_EQ(cmd_result, 0) << "Packing modified header failed. Command: " << cmd;
+
+	std::fstream fs {tmpdir.Path() + "/illegal_payload.tar.gz"};
+
+	mender::common::io::StreamReader sr {fs};
+
+	manifest::Manifest manifest {
+		{{"data/0000/legalfile",
+		  "916d553eebacc023d3c4269f14d74f7d2b5c8957b4698753f7b2240ad17f8402"}}};
+
+	auto payload = payload::Payload(sr, manifest);
+
+	// Get the first, legal, file
+	auto expected_payload = payload.Next();
+	ASSERT_TRUE(expected_payload);
+
+	auto discard_writer = io::Discard {};
+	auto err = io::Copy(discard_writer, expected_payload.value());
+	EXPECT_EQ(error::NoError, err);
+
+	// Try to get the illegal file
+	expected_payload = payload.Next();
+	ASSERT_FALSE(expected_payload);
+
+	EXPECT_EQ(
+		expected_payload.error().code,
+		std::error_condition(
+			mender::artifact::parser_error::Code::ParseError,
+			mender::artifact::parser_error::ErrorCategory))
+		<< expected_payload.error().String();
 }
