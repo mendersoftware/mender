@@ -617,7 +617,7 @@ static expected::ExpectedBytes TryASN1EncodeMenderCustomBinaryECFormat(
 		BinaryDecoderFn) {
 	// Verify that the marshalled keys match our expectation
 	const size_t assumed_signature_size {2 * ecdsa256keySize};
-	if (signature.size() > assumed_signature_size) {
+	if (signature.size() != assumed_signature_size) {
 		return expected::unexpected(MakeError(
 			SetupError,
 			"Unexpected size of the signature for ECDSA. Expected 2*" + to_string(ecdsa256keySize)
