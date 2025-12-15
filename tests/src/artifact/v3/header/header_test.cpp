@@ -686,3 +686,43 @@ TEST_F(HeaderTestEnv, TestHeaderModuleImageIllegalStateScriptPath) {
 
 	EXPECT_FALSE(expected_header) << expected_header.error().message;
 }
+
+TEST_F(HeaderTestEnv, TestHeaderModuleImageMissingPayloadInHeaderInfo) {
+	mendertesting::TemporaryDirectory tmpdir {};
+	CreateTestArtifact(
+		tmpdir,
+		"module-image",
+		{{"--type dummy-update-module"},
+		 {R"(--script ${DIRNAME}/ArtifactInstall_Enter_01_test-dummy)"}});
+
+
+	int result = std::system(
+		("cd " + tmpdir.Path() + " && tar -xf " + tmpdir.Path() + "/header.tar -C " + tmpdir.Path())
+			.c_str());
+	ASSERT_EQ(result, 0) << "Header unpacking failed.";
+
+	std::string cmd(
+		"cd " + tmpdir.Path()
+		+ " && echo '{\"payloads\":[],\"artifact_provides\":{\"artifact_name\":\"test\"},\"artifact_depends\":{\"device_type\":[\"test\"]}}' > header-info");
+	// Remove the payload from header-info, i.e. make it "payloads":[]
+	result = std::system(cmd.c_str());
+	ASSERT_EQ(result, 0) << "Removing payload from header-info failed.";
+
+	cmd = std::string("cd " + tmpdir.Path() + " && tar -czf header_illegal.tar")
+		  + " header-info headers/0000/type-info";
+
+	int repack_result = std::system(cmd.c_str());
+	ASSERT_EQ(repack_result, 0) << "Repacking modified header failed. Command: " << cmd;
+
+	std::fstream fs {tmpdir.Path() + "/header_illegal.tar"};
+
+	mender::common::io::StreamReader sr {fs};
+
+	ExpectedHeader expected_header =
+		header::Parse(sr, mender::artifact::config::ParserConfig {tmpdir.Path()});
+
+	ASSERT_FALSE(expected_header) << expected_header.error().message;
+	EXPECT_THAT(
+		expected_header.error().message,
+		testing::HasSubstr("Unsupported number of payloads defined in header"));
+}

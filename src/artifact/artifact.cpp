@@ -37,6 +37,12 @@ ExpectedPayloadHeaderView View(parser::Artifact &artifact, size_t index) {
 		return expected::unexpected(
 			parser_error::MakeError(parser_error::Code::ParseError, "Payload index out of range"));
 	}
+
+	if (index >= artifact.header.subHeaders.size()) {
+		return expected::unexpected(
+			parser_error::MakeError(parser_error::Code::ParseError, "Header missing type-info"));
+	}
+
 	mender::common::json::Json meta_data;
 	if (artifact.header.subHeaders.at(index).metadata) {
 		meta_data = artifact.header.subHeaders.at(index).metadata.value();
