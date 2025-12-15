@@ -121,11 +121,6 @@ public:
 		return client_;
 	};
 
-	// Set wait interval for resuming the download. For use in tests.
-	void SetSmallestWaitInterval(chrono::milliseconds interval) {
-		retry_.backoff.SetSmallestInterval(interval);
-	};
-
 private:
 	// Generate a Range request from the original user request, requesting for the missing data
 	// See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Range
@@ -157,7 +152,7 @@ private:
 	http::OutgoingRequestPtr user_request_;
 
 	struct {
-		http::ExponentialBackoff backoff;
+		int retry;
 		events::Timer wait_timer;
 	} retry_;
 

@@ -364,9 +364,7 @@ DownloadResumerClient::DownloadResumerClient(
 	client_(config, event_loop, "http_resumer:client"),
 	logger_ {"http_resumer:client"},
 	cancelled_ {make_shared<bool>(true)},
-	retry_ {
-		.backoff = http::ExponentialBackoff(chrono::minutes(1), 10),
-		.wait_timer = events::Timer(event_loop)} {
+	retry_ {.retry = 0, .wait_timer = events::Timer(event_loop)} {
 }
 
 DownloadResumerClient::~DownloadResumerClient() {
@@ -393,7 +391,7 @@ error::Error DownloadResumerClient::AsyncCall(
 	}
 
 	*cancelled_ = false;
-	retry_.backoff.Reset();
+	retry_.retry = 0;
 	resumer_state_->active_state = DownloadResumerActiveStatus::Inactive;
 	resumer_state_->user_handlers_state = DownloadResumerUserHandlersStatus::None;
 	return client_.AsyncCall(req, resumer_header_handler, resumer_body_handler);
@@ -426,17 +424,14 @@ error::Error DownloadResumerClient::ScheduleNextResumeRequest() {
 	// In any case, make sure the previous HTTP request is cancelled.
 	client_.Cancel();
 
-	auto exp_interval = retry_.backoff.NextInterval();
-	if (!exp_interval) {
-		return http::MakeError(
-			http::DownloadResumerError,
-			"Giving up on resuming the download: " + exp_interval.error().String());
+	if (++retry_.retry >= 10000) {
+		return http::MakeError(http::DownloadResumerError, "Giving up on resuming the download");
 	}
 
-	auto interval = exp_interval.value();
+	const auto interval = chrono::seconds(30);
 	logger_.Info(
-		"Resuming download after "
-		+ to_string(chrono::duration_cast<chrono::seconds>(interval).count()) + " seconds");
+		"Resuming download after " + to_string(interval.count()) + " seconds (retry "
+		+ to_string(retry_.retry) + "/10000)");
 
 	HeaderHandlerFunctor resumer_next_header_handler {shared_from_this()};
 	BodyHandlerFunctor resumer_next_body_handler {shared_from_this()};
