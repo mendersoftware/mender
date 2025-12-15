@@ -83,10 +83,12 @@ protected:
 		# Verify the signature of the Artifact generated
 		mender-artifact validate ${DIRNAME}/test-artifact-signed-ec.mender -k ${DIRNAME}/public.ec.key
 
-		# Artifacts with compromised manifest
-		mkdir ${DIRNAME}/untar || exit 1
+		# Modified artifacts
 		mender-artifact --compression none write rootfs-image --no-progress -t test-device -n test-artifact \
 			-f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-integrity-base.mender || exit 1
+
+		# Artifacts with compromised manifest
+		mkdir ${DIRNAME}/untar || exit 1
 		tar -xf  ${DIRNAME}/test-artifact-integrity-base.mender -C  ${DIRNAME}/untar/ || exit 1
 		cp ${DIRNAME}/untar/manifest ${DIRNAME}/untar/manifest.bkp
 		# Line 2 is the header.tar
@@ -96,6 +98,82 @@ protected:
 		cp ${DIRNAME}/untar/manifest.bkp ${DIRNAME}/untar/manifest
 		sed --in-place --regexp-extended '3s/[0-9a-f.*]{8}/deadbeef/' ${DIRNAME}/untar/manifest || exit 1
 		tar -cf ${DIRNAME}/test-artifact-integrity-version.mender -C ${DIRNAME}/untar version manifest header.tar data/0000.tar || exit 1
+
+		# Artifact with missing type-info in the header
+		UNTAR_DIR="missing-type-info"
+		mkdir ${DIRNAME}/${UNTAR_DIR} || exit 1
+		tar -xf  ${DIRNAME}/test-artifact-integrity-base.mender -C  ${DIRNAME}/${UNTAR_DIR}/ || exit 1
+		cd ${DIRNAME}/${UNTAR_DIR}
+		tar -xf header.tar
+		rm headers/0000/type-info
+		tar -cf header.tar header-info
+		# Line 2 is the header.tar. Replace with new checksum
+		sha=$(sha256sum header.tar)
+		sed --in-place --regexp-extended "2c\\${sha}" manifest || exit 1
+		tar -cf ${DIRNAME}/test-artifact-${UNTAR_DIR}.mender version manifest header.tar data/0000.tar || exit 1
+		cd ${DIRNAME}
+
+		# Artifact with extra type-info files in the header
+		UNTAR_DIR="extra-type-info"
+		mkdir ${DIRNAME}/${UNTAR_DIR} || exit 1
+		tar -xf  ${DIRNAME}/test-artifact-integrity-base.mender -C  ${DIRNAME}/${UNTAR_DIR}/ || exit 1
+		cd ${DIRNAME}/${UNTAR_DIR}
+		tar -xf header.tar
+		mkdir headers/0001
+		cp headers/0000/type-info headers/0001/type-info
+		tar -cf header.tar header-info headers/0000/type-info headers/0001/type-info
+		# Line 2 is the header.tar. Replace with new checksum
+		sha=$(sha256sum header.tar)
+		sed --in-place --regexp-extended "2c\\${sha}" manifest || exit 1
+		tar -cf ${DIRNAME}/test-artifact-${UNTAR_DIR}.mender version manifest header.tar data/0000.tar || exit 1
+		cd ${DIRNAME}
+
+		# Artifact with missing payload type in header-info
+		UNTAR_DIR="missing-payload-in-header-info"
+		mkdir ${DIRNAME}/${UNTAR_DIR} || exit 1
+		tar -xf  ${DIRNAME}/test-artifact-integrity-base.mender -C  ${DIRNAME}/${UNTAR_DIR}/ || exit 1
+		cd ${DIRNAME}/${UNTAR_DIR}
+		tar -xf header.tar
+		echo '{"payloads":[],"artifact_provides":{"artifact_name":"test-artifact"},"artifact_depends":{"device_type":["test-device"]}}' > header-info
+		tar -cf header.tar header-info headers/0000/type-info
+		# Line 2 is the header.tar. Replace with new checksum
+		sha=$(sha256sum header.tar)
+		sed --in-place --regexp-extended "2c\\${sha}" manifest || exit 1
+		tar -cf ${DIRNAME}/test-artifact-${UNTAR_DIR}.mender version manifest header.tar data/0000.tar || exit 1
+		cd ${DIRNAME}
+
+		# Modified bootstrap artifacts
+		mender-artifact --compression none write bootstrap-artifact -t test-device -n test-artifact \
+		-o ${DIRNAME}/test-artifact-bootstrap-base.mender || exit 1
+		
+		# Bootstrap artifact with missing type-info in the header
+		UNTAR_DIR="missing-type-info-bootstrap"
+		mkdir ${DIRNAME}/${UNTAR_DIR} || exit 1
+		tar -xf  ${DIRNAME}/test-artifact-integrity-base.mender -C  ${DIRNAME}/${UNTAR_DIR}/ || exit 1
+		cd ${DIRNAME}/${UNTAR_DIR}
+		tar -xf header.tar
+		rm headers/0000/type-info
+		tar -cf header.tar header-info
+		# Line 2 is the header.tar. Replace with new checksum
+		sha=$(sha256sum header.tar)
+		sed --in-place --regexp-extended "2c\\${sha}" manifest || exit 1
+		tar -cf ${DIRNAME}/test-artifact-${UNTAR_DIR}.mender version manifest header.tar data/0000.tar || exit 1
+		cd ${DIRNAME}
+
+		# Bootstrap artifact with extra type-info files in the header
+		UNTAR_DIR="extra-type-info-bootstrap"
+		mkdir ${DIRNAME}/${UNTAR_DIR} || exit 1
+		tar -xf  ${DIRNAME}/test-artifact-integrity-base.mender -C  ${DIRNAME}/${UNTAR_DIR}/ || exit 1
+		cd ${DIRNAME}/${UNTAR_DIR}
+		tar -xf header.tar
+		mkdir headers/0001
+		cp headers/0000/type-info headers/0001/type-info
+		tar -cf header.tar header-info headers/0000/type-info headers/0001/type-info
+		# Line 2 is the header.tar. Replace with new checksum
+		sha=$(sha256sum header.tar)
+		sed --in-place --regexp-extended "2c\\${sha}" manifest || exit 1
+		tar -cf ${DIRNAME}/test-artifact-${UNTAR_DIR}.mender version manifest header.tar data/0000.tar || exit 1
+		cd ${DIRNAME}
 
 		exit 0
 		)";
@@ -382,4 +460,77 @@ TEST_F(ParserTestEnv, TestParseCompromisedManifestVersion) {
 	EXPECT_THAT(
 		expected_artifact.error().message,
 		testing::HasSubstr("The checksum of version file does not match the expected checksum"));
+}
+
+TEST_F(ParserTestEnv, TestParseMissingTypeInfo) {
+	std::fstream fs {path::Join(tmpdir->Path(), "test-artifact-missing-type-info.mender")};
+
+	mender::common::io::StreamReader sr {fs};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr);
+
+	ASSERT_FALSE(expected_artifact);
+
+	EXPECT_THAT(
+		expected_artifact.error().message,
+		testing::HasSubstr("Header's type-info files number not equal to payloads number"));
+}
+
+TEST_F(ParserTestEnv, TestParseExtraTypeInfo) {
+	std::fstream fs {path::Join(tmpdir->Path(), "test-artifact-extra-type-info.mender")};
+
+	mender::common::io::StreamReader sr {fs};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr);
+
+	ASSERT_FALSE(expected_artifact);
+
+	EXPECT_THAT(
+		expected_artifact.error().message,
+		testing::HasSubstr("Multiple header entries found. Currently only one is supported"));
+}
+
+TEST_F(ParserTestEnv, TestParseMissingPayloadInHeaderInfo) {
+	std::fstream fs {
+		path::Join(tmpdir->Path(), "test-artifact-missing-payload-in-header-info.mender")};
+
+	mender::common::io::StreamReader sr {fs};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr);
+
+	ASSERT_FALSE(expected_artifact);
+
+	EXPECT_THAT(
+		expected_artifact.error().message,
+		testing::HasSubstr(
+			"Failed to parse the header: Unsupported number of payloads defined in header"));
+}
+
+TEST_F(ParserTestEnv, TestParseMissingTypeInfoBootstrap) {
+	std::fstream fs {
+		path::Join(tmpdir->Path(), "test-artifact-missing-type-info-bootstrap.mender")};
+
+	mender::common::io::StreamReader sr {fs};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr);
+
+	ASSERT_FALSE(expected_artifact);
+
+	EXPECT_THAT(
+		expected_artifact.error().message,
+		testing::HasSubstr("Header's type-info files number not equal to payloads number"));
+}
+
+TEST_F(ParserTestEnv, TestParseExtraTypeInfoBootstrap) {
+	std::fstream fs {path::Join(tmpdir->Path(), "test-artifact-extra-type-info-bootstrap.mender")};
+
+	mender::common::io::StreamReader sr {fs};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr);
+
+	ASSERT_FALSE(expected_artifact);
+
+	EXPECT_THAT(
+		expected_artifact.error().message,
+		testing::HasSubstr("Multiple header entries found. Currently only one is supported"));
 }
