@@ -190,6 +190,14 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 				"Multiple header entries found. Currently only one is supported"));
 		}
 
+		// Special check for malformed artifact that does not list the payload in the header.
+		if (header.info.payloads.size() == 0) {
+			return expected::unexpected(parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Unsupported number of payloads defined in header: "
+					+ to_string(header.info.payloads.size())));
+		}
+
 		SubHeader sub_header {};
 		if (tok.type != token::Type::ArtifactHeaderTypeInfo) {
 			return expected::unexpected(parser_error::MakeError(
@@ -244,6 +252,12 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 		header.subHeaders.push_back(sub_header);
 
 		current_index++;
+	}
+
+	if (header.info.payloads.size() != header.subHeaders.size()) {
+		return expected::unexpected(parser_error::MakeError(
+			parser_error::Code::ParseError,
+			"Header's type-info files number not equal to payloads number"));
 	}
 
 	if (tok.type == token::Type::Unrecognized) {
