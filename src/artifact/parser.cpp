@@ -48,6 +48,12 @@ namespace payload = mender::artifact::v3::payload;
 
 ExpectedArtifact VerifyEmptyPayloadArtifact(
 	Artifact &artifact, lexer::Lexer<token::Token, token::Type> &lexer) {
+	if (artifact.header.subHeaders.size() != 1) {
+		return expected::unexpected(parser_error::MakeError(
+			parser_error::Code::ParseError,
+			"No type-info found in the header. One must be present."));
+	}
+
 	// No meta-data allowed
 	if (artifact.header.subHeaders.at(0).metadata) {
 		return expected::unexpected(parser_error::MakeError(
