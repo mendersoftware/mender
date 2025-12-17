@@ -198,3 +198,121 @@ class TestModulesArtifactGen:
 
         finally:
             shutil.rmtree(file_tree)
+
+    def test_single_file_update_module_gen_arg_handling(self, single_file_artifact_gen_path):
+        file_tree = tempfile.mkdtemp()
+        try:
+            update_file1 = os.path.join(file_tree, "my-file1")
+            with open(update_file1, "w") as fd:
+                fd.write("my-content")
+            os.chmod(update_file1, 0o600)
+            update_file2 = os.path.join(file_tree, "my-file2")
+            with open(update_file2, "w") as fd:
+                fd.write("my-content")
+            os.chmod(update_file2, 0o600)
+
+            artifact_file = os.path.join(file_tree, "my-artifact.mender")
+
+            cmd_args = [single_file_artifact_gen_path,
+                        "-n", "artifact-name",
+                        # multiple device types
+                        "-t", "device-type1",
+                        "-t", "device-type2",
+                        # device type trying to override output path
+                        "-t", "device-type3 -o my_output.mender",
+                        "-d", "/dest/dir",
+                        # software name trying to inject another file
+                        "--software-name", "update-file -f %s" % update_file2,
+                        update_file1,
+                        "--",
+                        # --output passed as a extra argument after --
+                        "--output-path", artifact_file,
+                        ]
+
+            # Execute the command
+            logger.info("Executing: %s ", cmd_args)
+            subprocess.check_call(cmd_args)
+
+            # Read back with mender-artifact
+            cmd = "mender-artifact read %s" % artifact_file
+            logger.info("Executing: %s ", cmd)
+            output = subprocess.check_output(cmd, shell=True).decode().strip()
+            assert "Name: artifact-name" in output, output
+            assert "Type: single-file" in output, output
+            assert "name: dest_dir" in output, output
+            assert "name: filename" in output, output
+            assert "name: permissions" in output, output
+            assert "name: my-file1" in output, output
+
+            # all device types, incl. the one with output override attempt
+            assert "Compatible devices: [device-type1, device-type2, device-type3 -o my_output.mender]" in output, output
+
+            # weird software-name from the file injection attempt
+            assert (
+                """Provides:
+      rootfs-image.update-file -f %s.version: artifact-name""" % update_file2
+      in output
+            ), output
+
+            # file injection didn't work
+            assert "name: my-file2" not in output, output
+        finally:
+            shutil.rmtree(file_tree)
+
+    def test_single_file_update_module_gen_all_args_hacked(self, single_file_artifact_gen_path):
+        file_tree = tempfile.mkdtemp()
+        try:
+            update_file1 = os.path.join(file_tree, "my-file1")
+            with open(update_file1, "w") as fd:
+                fd.write("my-content")
+            os.chmod(update_file1, 0o600)
+            update_file2 = os.path.join(file_tree, "my-file2")
+            with open(update_file2, "w") as fd:
+                fd.write("my-content")
+            os.chmod(update_file2, 0o600)
+
+            artifact_file = os.path.join(file_tree, "my-artifact.mender")
+
+            cmd_args = [single_file_artifact_gen_path,
+                        "-n", "artifact-name -f update-file3",
+                        # multiple device types
+                        "-t", "device-type1",
+                        "-t", "device-type2",
+                        "-t", "device-type3 -o my_output.mender",
+                        "-d", "/dest/dir -f update-file3",
+                        "--software-name", "update-file -f %s" % update_file2,
+                        update_file1,
+                        "--",
+                        "--output-path", artifact_file + " -f update-file3",
+                        ]
+
+            # Execute the command
+            logger.info("Executing: %s ", cmd_args)
+            subprocess.check_call(cmd_args)
+
+            # Read back with mender-artifact
+            cmd = ["mender-artifact", "read", artifact_file + " -f update-file3"]
+            logger.info("Executing: %s ", cmd)
+            output = subprocess.check_output(cmd).decode().strip()
+            assert "Name: artifact-name -f update-file3" in output, output
+            assert "Type: single-file" in output, output
+            assert "name: dest_dir" in output, output
+            assert "name: filename" in output, output
+            assert "name: permissions" in output, output
+            assert "name: my-file1" in output, output
+
+            # all device types, incl. the one with output override attempt
+            assert "Compatible devices: [device-type1, device-type2, device-type3 -o my_output.mender]" in output, output
+
+            # weird software-name from the file injection attempt
+            assert (
+                """Provides:
+      rootfs-image.update-file -f %s.version: artifact-name""" % update_file2
+      in output
+            ), output
+
+            # file injection didn't work
+            assert "name: my-file2" not in output, output
+            assert "name: update-file3" not in output, output
+        finally:
+            shutil.rmtree(file_tree)

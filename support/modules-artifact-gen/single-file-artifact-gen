@@ -44,12 +44,12 @@ if ! check_dependency mender-artifact; then
   exit 1
 fi
 
-device_types=""
 artifact_name=""
 dest_dir=""
 output_path="single-file-artifact.mender"
 file=""
-passthrough_args=""
+declare -a device_types
+declare -a passthrough_args
 
 while [ -n "$1" ]; do
   case "$1" in
@@ -57,7 +57,7 @@ while [ -n "$1" ]; do
       if [ -z "$2" ]; then
         show_help_and_exit_error
       fi
-      device_types="$device_types $1 $2"
+      device_types+=("$1" "$2")
       shift 2
       ;;
     --artifact-name | -n)
@@ -78,7 +78,7 @@ while [ -n "$1" ]; do
       if [ -z "$2" ]; then
         show_help_and_exit_error
       fi
-      passthrough_args="$passthrough_args $1 $2"
+      passthrough_args+=("$1" "$2")
       shift 2
       ;;
     --output-path | -o)
@@ -94,7 +94,7 @@ while [ -n "$1" ]; do
       ;;
     --)
       shift
-      passthrough_args="$passthrough_args $@"
+      passthrough_args+=("$@")
       break
       ;;
     -*)
@@ -110,6 +110,28 @@ while [ -n "$1" ]; do
       shift
       ;;
   esac
+done
+
+# Check the the passthrough_args and potentially modify them
+# to avoid conflicts or to let them override the args already
+# provided
+for ((i = 0; i < ${#passthrough_args[@]}; i++)); do
+    case ${passthrough_args[i]} in
+      -T | --type)
+        echo "Error: Conflicting flag '${passthrough_args[i]}'. Already specified by the script."
+        exit 1
+        ;;
+      -o | --output-path)
+        output_path=${passthrough_args[$((i + 1))]}
+        unset passthrough_args[i]
+        unset passthrough_args[$((i + 1))]
+        ;;
+      -n | --name)
+        artifact_name=${passthrough_args[$((i + 1))]}
+        unset passthrough_args[i]
+        unset passthrough_args[$((i + 1))]
+        ;;
+    esac
 done
 
 if [ -z "${artifact_name}" ]; then
@@ -178,47 +200,19 @@ else
   stat -c %a "${file}" > $permissions_file
 fi
 
-# Check the the passthrough_args and potentially modify them
-# to avoid conflicts or to let them override the already args
-# provided to mender-artifact
-# Runs in a subshell to allow overriding some parameters passed
-# to mender-artifact
-passthrough_args_modified=" "
-echo $passthrough_args | xargs -n 2 printf "%s %s\n" | (while read -r flag arg; do
-  if [ -n "$flag" ]; then
-    case $flag in
-      -T | --type)
-        echo "Error: Conflicting flag '$flag'. Already specified by the script."
-        exit 1
-        ;;
-      -o | --output-path)
-        output_path=$arg
-        ;;
-      -n | --name)
-        artifact_name=$arg
-        ;;
-      *)
-        passthrough_args_modified="$passthrough_args_modified $flag $arg"
-        ;;
-    esac
-  fi
-done
-
 mender-artifact write module-image \
   -T single-file \
-  $device_types \
+  "${device_types[@]}" \
   -o "$output_path" \
   -n "$artifact_name" \
   -f "$dest_dir_file" \
   -f "$filename_file" \
   -f "$permissions_file" \
   -f "$file" \
-  $passthrough_args_modified
-
+  "${passthrough_args[@]}"
 
 echo "Artifact $output_path generated successfully:"
-mender-artifact read $output_path
-# End of subshell
-)
+mender-artifact read "$output_path"
+
 rm -rf $tmpdir
 exit 0
