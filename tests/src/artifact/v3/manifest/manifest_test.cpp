@@ -154,12 +154,17 @@ TEST(ParserTest, TestParseManifestFormatErrorNewlineSeparators) {
 		"Line (aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f data/0000.tar 9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50 header.tar) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([^[:blank:]]+)$");
 }
 
-TEST(ParserTest, TestParseManifestFormatStripCompressionSuffixes) {
-	/* Two characters missing from the shasum */
+
+TEST(ParserTest, TestParseManifestFormatStripHeaderCompressionSuffixes) {
 	std::string manifest_data =
-		R"(aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  data/0000.tar.xz
-aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  manifest.zst
+		R"(aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  data/0000/header.tar.xz
+38af7c0bb65d4a0249683e9534e5292f236f59b9d523d9e1ca43cabae5acf716  data/0000/header.tar.zst
+bb0b80f5c2bc051db240c5fa356fcc249a596e6380b27fb53753ff26ae505c9b  data/0000/header.tar.xx
+aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  manifest
 9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50  header.tar.gz
+5fc410da6093c52dae7db42e68ef36e639c380a96e2783fc7c56eb0c95dcc8e2  header.tar.xx
+81c7420e3ace324f67a1ae15e15edc4909e4dd448a2c503e09bf5dd24d2dcc54  header-augment.tar.gz
+2c71b37b51581078d41cc7749885eaa5b01ef78a2f62355015c582dc085adca2  header-augment.tar.xx
 96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b  version
 )";
 
@@ -174,8 +179,15 @@ aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  manifest.zst
 	auto manifest_unwrapped = manifest.value();
 
 	ASSERT_EQ(
-		manifest_unwrapped.Get("data/0000.tar"),
+		manifest_unwrapped.Get("data/0000/header.tar.xz"),
 		"aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f");
+	ASSERT_EQ(
+		manifest_unwrapped.Get("data/0000/header.tar.xx"),
+		"bb0b80f5c2bc051db240c5fa356fcc249a596e6380b27fb53753ff26ae505c9b");
+	ASSERT_EQ(
+		manifest_unwrapped.Get("data/0000/header.tar.zst"),
+		"38af7c0bb65d4a0249683e9534e5292f236f59b9d523d9e1ca43cabae5acf716");
+	ASSERT_EQ(manifest_unwrapped.Get("data/0000/header.tar"), "");
 
 	ASSERT_EQ(
 		manifest_unwrapped.Get("manifest"),
@@ -184,6 +196,15 @@ aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  manifest.zst
 	ASSERT_EQ(
 		manifest_unwrapped.Get("header.tar"),
 		"9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50");
+	ASSERT_EQ(manifest_unwrapped.Get("header.tar.gz"), "");
+
+	ASSERT_EQ(
+		manifest_unwrapped.Get("header-augment.tar"),
+		"81c7420e3ace324f67a1ae15e15edc4909e4dd448a2c503e09bf5dd24d2dcc54");
+	ASSERT_EQ(manifest_unwrapped.Get("header-augment.tar.gz"), "");
+	ASSERT_EQ(
+		manifest_unwrapped.Get("header-augment.tar.xx"),
+		"2c71b37b51581078d41cc7749885eaa5b01ef78a2f62355015c582dc085adca2");
 }
 
 TEST(ParserTest, TestParseManifestShortFilenames) {
