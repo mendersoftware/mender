@@ -98,6 +98,8 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 			"Got unexpected token : '" + tok.TypeToString() + "' expected 'version'"));
 	}
 
+	// Note that we're not verifying the version file's checksum here because we do not know
+	// the expected checksum at this point yet.
 	auto expected_version = version::Parse(*tok.value);
 
 	if (!expected_version) {
@@ -163,6 +165,7 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 		}
 	}
 
+	// Manually check the version file's checksum as it is available to us now.
 	log::Trace("Check version integrity");
 	if (manifest.Get("version") != version.shasum.String()) {
 		return expected::unexpected(sha::MakeError(
