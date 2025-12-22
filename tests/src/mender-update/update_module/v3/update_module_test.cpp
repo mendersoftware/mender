@@ -1452,3 +1452,304 @@ TEST(UpdateModuleCreateTest, IllegalPayloadType) {
 	auto update_module = update_module::UpdateModule::Create(*ctx, illegal_payload_type);
 	EXPECT_FALSE(update_module.has_value());
 }
+
+
+struct AliasingAndMaliciousArtifactTestParams {
+	std::string artifact_create_function;
+	std::string name;
+	std::string compression1;
+	std::string compression2;
+};
+
+class UpdateModuleAliasingAndMaliciousArtifactsTests :
+	public UpdateModuleTests,
+	public ::testing::WithParamInterface<AliasingAndMaliciousArtifactTestParams> {
+protected:
+	static void SetUpTestSuite() {
+		mender::common::log::SetLevel(mender::common::log::LogLevel::Warning);
+
+		string script = R"(#! /bin/sh
+	set -e
+
+    DIRNAME=)" + tmpdir.Path()
+						+ R"(
+		# Artifact with payload file with .gz/.xz/.zst suffix replaced by a malicious one
+		create_artifact_file_replaced() {
+			NAME=$1
+			COMPRESSION=$2
+			case "$COMPRESSION" in
+				gzip)
+					COMPRESSION_EXTENSION="gz"
+					COMPRESSION_FLAG="--gzip"
+					;;
+				xz)
+					COMPRESSION_EXTENSION="xz"
+					COMPRESSION_FLAG="--xz"
+					;;
+				zst)
+					COMPRESSION_EXTENSION="zst"
+					COMPRESSION_FLAG="--zstd"
+					;;
+			esac
+
+			mkdir ${DIRNAME}/${NAME}
+			cd ${DIRNAME}
+			echo "/root/" > dest_dir
+			echo "test.tar.${COMPRESSION_EXTENSION}" > filename
+			echo "777" > permissions
+			echo "legal file content" > legal_file
+			echo "malicious file content" > malicious_file
+			tar -cf test.tar.${COMPRESSION_EXTENSION} ${COMPRESSION_FLAG} legal_file
+			mender-artifact write module-image --device-type test-device -T single-file -o test-artifact-${NAME}.mender -n ${NAME} \
+			-f dest_dir -f filename -f permissions -f test.tar.${COMPRESSION_EXTENSION}
+			tar -xf  ${DIRNAME}/test-artifact-${NAME}.mender -C  ${DIRNAME}/${NAME}/
+			cd ${DIRNAME}/${NAME}/data
+			tar -cf test.tar.${COMPRESSION_EXTENSION} ${COMPRESSION_FLAG} ../../malicious_file
+			tar -czf 0000.tar.gz test.tar.${COMPRESSION_EXTENSION}
+			cd ../
+			tar -cf test-artifact-${NAME}.mender version manifest header.tar.gz data/0000.tar.gz
+			mv test-artifact-${NAME}.mender ${DIRNAME}
+			cd ${DIRNAME}
+		}
+
+		# Artifact with two files in payload but different extensions, e.g. test.tar + test.tar.gz
+		create_artifact_two_files_different_extensions() {
+			NAME=$1
+			COMPRESSION1=$2
+			COMPRESSION2=$3
+			case "$COMPRESSION1" in
+				gzip)
+					COMPRESSION1_EXTENSION=".gz"
+					COMPRESSION1_FLAG="--gzip"
+					;;
+				xz)
+					COMPRESSION1_EXTENSION=".xz"
+					COMPRESSION1_FLAG="--xz"
+					;;
+				zst)
+					COMPRESSION1_EXTENSION=".zst"
+					COMPRESSION1_FLAG="--zstd"
+					;;
+				none)
+					COMPRESSION1_EXTENSION=""
+					COMPRESSION1_FLAG=""
+			esac
+
+			case "$COMPRESSION2" in
+				gzip)
+					COMPRESSION2_EXTENSION=".gz"
+					COMPRESSION2_FLAG="--gzip"
+					;;
+				xz)
+					COMPRESSION2_EXTENSION=".xz"
+					COMPRESSION2_FLAG="--xz"
+					;;
+				zst)
+					COMPRESSION2_EXTENSION=".zst"
+					COMPRESSION2_FLAG="--zstd"
+					;;
+				none)
+					COMPRESSION2_EXTENSION=""
+					COMPRESSION2_FLAG=""
+			esac
+
+			mkdir ${DIRNAME}/${NAME}
+			cd ${DIRNAME}
+			echo "/root/" > dest_dir
+			echo "test.tar${COMPRESSION1_EXTENSION}" > filename
+			echo "777" > permissions
+			echo "legal file content" > legal_file
+			echo "malicious file content" > malicious_file
+			tar -cf test.tar${COMPRESSION1_EXTENSION} ${COMPRESSION1_FLAG} legal_file
+			tar -cf test.tar${COMPRESSION2_EXTENSION} ${COMPRESSION2_FLAG} legal_file
+			mender-artifact write module-image --device-type qemux86-64 -T single-file -o test-artifact-${NAME}.mender -n ${NAME} \
+			-f dest_dir -f filename -f permissions -f test.tar${COMPRESSION1_EXTENSION} -f test.tar${COMPRESSION2_EXTENSION}
+			cd ${DIRNAME}
+		}
+
+		"$@"
+		exit 0
+		)";
+
+		const string script_fname = tmpdir.Path() + "/test-script-malicious-artifacts.sh";
+
+		ofstream os(script_fname.c_str(), ios::out);
+		os << script;
+		os.close();
+
+		int ret = chmod(script_fname.c_str(), S_IRUSR | S_IWUSR | S_IXUSR);
+		ASSERT_EQ(ret, 0);
+
+
+		processes::Process proc({script_fname});
+		auto ex_line_data = proc.GenerateLineData();
+		ASSERT_TRUE(ex_line_data);
+		EXPECT_EQ(proc.GetExitStatus(), 0) << "error message: " + ex_line_data.error().message;
+	}
+
+public:
+	UpdateModuleAliasingAndMaliciousArtifactsTests() {
+		// ASSERT doesn't work well inside constructors because of some peculiar return
+		// semantics, so wrap it in a lambda.
+		[&]() {
+			auto param = GetParam();
+			createArtifact(
+				param.artifact_create_function, param.name, param.compression1, param.compression2);
+			auto artifact_file =
+				path::Join(tmpdir.Path(), "test-artifact-" + param.name + ".mender");
+
+			// From here on out - usual setup, exactly as in UpdateModuleTestWithDefaultArtifact
+			is = make_unique<ifstream>(artifact_file);
+			ASSERT_TRUE(is->good());
+			artifact_reader = make_unique<io::StreamReader>(*is);
+
+			ctx = make_unique<context::MenderContext>(config);
+
+			auto maybe_parsed = mender::artifact::parser::Parse(*artifact_reader);
+			ASSERT_TRUE(maybe_parsed) << maybe_parsed.error();
+			artifact = make_unique<mender::artifact::Artifact>(maybe_parsed.value());
+
+			auto maybe_payload = artifact->Next();
+			ASSERT_TRUE(maybe_payload) << maybe_payload.error();
+			payload = make_unique<mender::artifact::Payload>(maybe_payload.value());
+
+			auto maybe_payload_meta_data = mender::artifact::View(*artifact, 0);
+			ASSERT_TRUE(maybe_payload_meta_data) << maybe_payload_meta_data.error();
+			payload_meta_data =
+				make_unique<mender::artifact::PayloadHeaderView>(maybe_payload_meta_data.value());
+
+			auto exp_update_module =
+				update_module::UpdateModule::Create(*ctx, payload_meta_data->header.payload_type);
+			ASSERT_TRUE(exp_update_module.has_value()) << exp_update_module.error();
+			update_module = move(exp_update_module.value());
+		}();
+	}
+
+	static string GetTestName(
+		const ::testing::TestParamInfo<AliasingAndMaliciousArtifactTestParams> &info) {
+		string name = info.param.name;
+		replace(name.begin(), name.end(), ' ', '_');
+		return name;
+	}
+
+	void createArtifact(
+		string artifact_type, string name, string compression1, string compression2) {
+		auto cmd = string(
+			tmpdir.Path() + "/test-script-malicious-artifacts.sh " + artifact_type + " " + name
+			+ " " + compression1 + " " + compression2);
+		ASSERT_EQ(system(cmd.c_str()), 0);
+	}
+
+	static TemporaryDirectory tmpdir;
+	unique_ptr<ifstream> is;
+	unique_ptr<io::StreamReader> artifact_reader;
+	conf::MenderConfig config;
+	unique_ptr<context::MenderContext> ctx;
+	unique_ptr<mender::artifact::Artifact> artifact;
+	unique_ptr<mender::artifact::Payload> payload;
+	unique_ptr<mender::artifact::PayloadHeaderView> payload_meta_data;
+	unique_ptr<update_module::UpdateModule> update_module;
+	vector<string> files;
+};
+
+TemporaryDirectory UpdateModuleAliasingAndMaliciousArtifactsTests::tmpdir;
+
+// Just an empty class to differntiate between separate test suites
+class UpdateModuleMaliciousArtifactsTests :
+	public UpdateModuleAliasingAndMaliciousArtifactsTests {};
+
+INSTANTIATE_TEST_SUITE_P(
+	,
+	UpdateModuleMaliciousArtifactsTests,
+	::testing::Values(
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_file_replaced", "gzFileReplaced", "gzip"},
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_file_replaced", "xzFileReplaced", "xz"},
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_file_replaced", "zstFileReplaced", "zst"}),
+	UpdateModuleAliasingAndMaliciousArtifactsTests::GetTestName);
+
+
+TEST_P(UpdateModuleMaliciousArtifactsTests, FileWithCompressionReplaced) {
+	// Prepare basic update module script that simply returns with success,
+	// causing mender to download the payload to the usual work tree
+	auto maybe_script = PrepareUpdateModuleScript(*update_module);
+	ASSERT_TRUE(maybe_script) << maybe_script.error();
+	auto script_path = maybe_script.value();
+	{
+		ofstream um_script(script_path);
+		um_script << R"delim(#!/bin/bash
+exit 0
+)delim";
+	}
+
+	auto err = update_module->Download(*payload);
+
+	// Ensure the files were not parsed and not downloaded.
+	ASSERT_NE(err, error::NoError) << err.String();
+	EXPECT_THAT(
+		err.message,
+		testing::HasSubstr(
+			"The checksum of the read byte-stream does not match the expected checksum"));
+
+	for (auto file : files) {
+		EXPECT_FALSE(filesystem::exists(temp_dir_.Path() + "/work/files/" + file));
+	}
+}
+
+// Just an empty class to differntiate between separate test suites
+class UpdateModuleAliasingArtifactsTests : public UpdateModuleAliasingAndMaliciousArtifactsTests {};
+
+INSTANTIATE_TEST_SUITE_P(
+	,
+	UpdateModuleAliasingArtifactsTests,
+	::testing::Values(
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_two_files_different_extensions", "compressionGzNone", "gzip", "none"},
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_two_files_different_extensions", "compressionNoneGz", "none", "gzip"},
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_two_files_different_extensions", "compressionXzNone", "xz", "none"},
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_two_files_different_extensions", "compressionNoneXz", "none", "xz"},
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_two_files_different_extensions", "compressionZstNone", "zst", "none"},
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_two_files_different_extensions", "compressionNoneZst", "none", "zst"},
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_two_files_different_extensions", "compressionGzZst", "gzip", "zst"},
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_two_files_different_extensions", "compressionGzXz", "gzip", "xz"},
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_two_files_different_extensions", "compressionXzGz", "xz", "gzip"},
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_two_files_different_extensions", "compressionXzZst", "xz", "zst"},
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_two_files_different_extensions", "compressionZstGz", "zst", "gzip"},
+		AliasingAndMaliciousArtifactTestParams {
+			"create_artifact_two_files_different_extensions", "compressionZstXz", "zst", "xz"}),
+	UpdateModuleAliasingAndMaliciousArtifactsTests::GetTestName);
+
+
+TEST_P(UpdateModuleAliasingArtifactsTests, TwoFilesSameNameDifferentCompression) {
+	// Prepare basic update module script that simply returns with success,
+	// causing mender to download the payload to the usual work tree
+	auto maybe_script = PrepareUpdateModuleScript(*update_module);
+	ASSERT_TRUE(maybe_script) << maybe_script.error();
+	auto script_path = maybe_script.value();
+	{
+		ofstream um_script(script_path);
+		um_script << R"delim(#!/bin/bash
+exit 0
+)delim";
+	}
+
+	auto err = update_module->Download(*payload);
+
+	// Ensure the files were parsed correclty and then downloaded.
+	ASSERT_EQ(err, error::NoError) << err.String();
+	for (auto file : files) {
+		EXPECT_TRUE(filesystem::exists(temp_dir_.Path() + "/work/files/" + file));
+	}
+}

@@ -42,7 +42,7 @@ test:unit:
   stage: test
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:11
   before_script:
-    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget
+    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget zstd
     # mender-artifact install
     - wget "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bdebian%2bbullseye_amd64.deb"
       --output-document mender-artifact.deb
@@ -74,7 +74,7 @@ test:backward-compat:
     # QA-866: Ubuntu 24.04 image cannot properly run on sysbox-runc runners
     - hetzner-podman
   before_script:
-    - apt update && apt install -yyq ccache clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget
+    - apt update && apt install -yyq ccache clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget zstd
     # mender-artifact install
     - wget "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bubuntu%2bjammy_amd64.deb"
       --output-document mender-artifact.deb
