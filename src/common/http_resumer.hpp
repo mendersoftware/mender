@@ -121,10 +121,13 @@ public:
 		return client_;
 	};
 
-	// Set wait interval for resuming the download. For use in tests.
+	// Set wait intervals for resuming the download. For use in tests.
 	void SetSmallestWaitInterval(chrono::milliseconds interval) {
 		retry_.backoff.SetSmallestInterval(interval);
 	};
+	void SetMaxWaitInterval(chrono::milliseconds interval) {
+		retry_.backoff.SetMaxInterval(interval);
+	}
 
 private:
 	// Generate a Range request from the original user request, requesting for the missing data

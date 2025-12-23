@@ -38,6 +38,7 @@
 #include <common/expected.hpp>
 #include <common/io.hpp>
 #include <common/log.hpp>
+#include <client_shared/config_parser.hpp>
 
 namespace mender {
 namespace common {
@@ -394,6 +395,22 @@ private:
 template <typename StreamType>
 class BodyAsyncReader;
 
+struct RetryDownloadCount {
+	int value;
+
+	RetryDownloadCount() :
+		value(mender::client_shared::config_parser::MenderConfigFromFile::
+				  retry_download_count_default) {
+	}
+	RetryDownloadCount(int v) :
+		value(v) {
+	}
+
+	operator int() const {
+		return value;
+	}
+};
+
 // Master object that connections are made from. Configure TLS options on this object before making
 // connections.
 struct ClientConfig {
@@ -410,6 +427,10 @@ struct ClientConfig {
 	string https_proxy;
 	string no_proxy;
 	string ssl_engine;
+
+	// Similar to skip_verify, provide default value, while keeping ClientConfig
+	// a POD type, allowing named initalizer lists in C++11
+	RetryDownloadCount retry_download_count;
 };
 
 enum class TransactionStatus {
