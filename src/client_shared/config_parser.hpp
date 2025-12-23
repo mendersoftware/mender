@@ -174,6 +174,12 @@ public:
 	/** Log level which takes effect right before daemon startup */
 	string daemon_log_level;
 
+	/** Number of times an interrupted download continuation should be attempted */
+	static constexpr int retry_download_count_default = 10;
+	int retry_download_count = retry_download_count_default;
+	int retry_download_count_min = 1;
+	int retry_download_count_max = 10000;
+
 	/**
 	 * Loads values from the given file and overrides the current values of the
 	 * respective above fields with them.
