@@ -372,6 +372,23 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		}
 	}
 
+	e_cfg_value = cfg_json.Get("RetryDownloadCount");
+	if (e_cfg_value) {
+		const json::Json value_json = e_cfg_value.value();
+		const auto e_cfg_int = value_json.Get<int>();
+		if (e_cfg_int) {
+			if (e_cfg_int.value() < kRetry_download_count_min
+				|| e_cfg_int.value() > kRetry_download_count_max) {
+				auto err = MakeError(
+					ConfigParserErrorCode::ValidationError,
+					"RetryDownloadCount outside of allowed values.");
+				return expected::unexpected(err);
+			}
+			this->retry_download_count = e_cfg_int.value();
+			applied = true;
+		}
+	}
+
 	return applied;
 }
 

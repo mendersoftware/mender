@@ -56,6 +56,23 @@ struct def_bool {
 	}
 };
 
+template <typename T, T default_value>
+struct def_value {
+	T value;
+
+	def_value() :
+		value(default_value) {
+	}
+
+	def_value(T init_value) :
+		value(init_value) {
+	}
+
+	operator T() const {
+		return value;
+	}
+};
+
 using StringPair = std::pair<string, string>;
 using ExpectedStringPair = expected::expected<StringPair, error::Error>;
 
