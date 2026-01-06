@@ -5,11 +5,12 @@ After=systemd-resolved.service network-online.target mender-data-dir.service dat
 Conflicts=mender.service
 
 [Service]
-Type=idle
+Type=dbus
 User=root
 Group=root
 ExecStart=/usr/bin/mender-auth daemon
 Restart=always
+BusName=io.mender.AuthenticationManager
 
 [Install]
 WantedBy=multi-user.target
