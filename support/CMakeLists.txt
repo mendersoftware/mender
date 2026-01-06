@@ -7,6 +7,9 @@ option(MENDER_DATA_DIR_SYSTEMD_UNIT "Install the mender-data-dir.service file" O
 set(DBUS_POLICY_FILES
   dbus/io.mender.AuthenticationManager.conf
 )
+set(DBUS_SERVICE_FILES
+  dbus/io.mender.AuthenticationManager.service
+)
 set(DOCS_EXAMPLES demo.crt)
 set(IDENTITYSCRIPTS mender-device-identity)
 set(INVENTORYSCRIPTS
@@ -89,6 +92,17 @@ add_custom_target(install-dbus-policy-files
 )
 add_custom_target(uninstall-dbus-policy-files
   COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_component dbus-policy-files -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+install(FILES ${DBUS_SERVICE_FILES}
+  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/dbus-1/system-services
+  COMPONENT dbus-service-files
+)
+add_custom_target(install-dbus-service-files
+  COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component dbus-service-files
+)
+add_custom_target(uninstall-dbus-service-files
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_component dbus-service-files -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
