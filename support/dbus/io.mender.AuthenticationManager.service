@@ -1,0 +1,8 @@
+[D-BUS Service]
+Name=io.mender.AuthenticationManager
+
+# We don't want DBus to start mender-auth directly, we want to start the
+# respective systemd service (while Exec is required).
+Exec=/bin/false
+SystemdService=mender-authd.service
+User=root
