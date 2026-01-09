@@ -365,7 +365,7 @@ DownloadResumerClient::DownloadResumerClient(
 	logger_ {"http_resumer:client"},
 	cancelled_ {make_shared<bool>(true)},
 	retry_ {
-		.backoff = http::ExponentialBackoff(chrono::minutes(1), 10),
+		.backoff = http::ExponentialBackoff(chrono::minutes(1), config.retry_download_count),
 		.wait_timer = events::Timer(event_loop)} {
 }
 

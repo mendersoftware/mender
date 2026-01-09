@@ -45,11 +45,11 @@ namespace mender {
 namespace common {
 namespace http {
 
-class BackupServer : public Server {
+class TestServer : public Server {
 public:
-	BackupServer(const ServerConfig &server, events::EventLoop &event_loop) :
+	TestServer(const ServerConfig &server, events::EventLoop &event_loop) :
 		Server(server, event_loop) {};
-	~BackupServer() = default;
+	~TestServer() = default;
 
 	void Setup(const string &url, RequestHandler header_handler, RequestHandler body_handler) {
 		url_ = url;
@@ -145,6 +145,8 @@ struct DownloadResumerTestCase {
 	bool garbled_bytes;
 	chrono::milliseconds server_down_after;
 	chrono::milliseconds server_up_again_after;
+	uint32_t server_failures;
+	uint32_t retry_download_count;
 
 	bool success;
 };
@@ -226,6 +228,34 @@ vector<DownloadResumerTestCase> GenerateDownloadResumerTestCases() {
 			.custom_content_range =
 				"bytes 1000-20o0/" + to_string(RangeBodyOfXes::TARGET_BODY_SIZE),
 			.success = false},
+		DownloadResumerTestCase {
+			.case_name = "ServerDownAndUp20TimesSufficientRetries",
+			.server_down_after = chrono::milliseconds(150),
+			.server_up_again_after = chrono::milliseconds(10),
+			.server_failures = 20,
+			.retry_download_count = 25, // allow a bit more because of shorter delays at the start
+			.success = true},
+		DownloadResumerTestCase {
+			.case_name = "ServerDownAndUp20TimesInsufficientRetries",
+			.server_down_after = chrono::milliseconds(150),
+			.server_up_again_after = chrono::milliseconds(10),
+			.server_failures = 20,
+			.retry_download_count = 18,
+			.success = false},
+		DownloadResumerTestCase {
+			.case_name = "ServerDownAndUp3TimesSufficientRetries",
+			.server_down_after = chrono::milliseconds(150),
+			.server_up_again_after = chrono::milliseconds(10),
+			.server_failures = 5,
+			.retry_download_count = 7, // allow a bit more because of shorter delays at the start
+			.success = true},
+		DownloadResumerTestCase {
+			.case_name = "ServerDownAndUp3TimesInsufficientRetries",
+			.server_down_after = chrono::milliseconds(150),
+			.server_up_again_after = chrono::milliseconds(10),
+			.server_failures = 5,
+			.retry_download_count = 4,
+			.success = false},
 	};
 }
 
@@ -247,21 +277,21 @@ TEST_P(DownloadResumerTest, Cases) {
 
 	// Servers
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
-	http::BackupServer backup_server(server_config, loop);
+	http::TestServer server1(server_config, loop);
+	http::TestServer server2(server_config, loop);
 
 	auto &test_case = GetParam();
 	int server_num_requests = 0;
-	bool server_down_done = false;
 
 	events::Timer timer(loop);
 
-	backup_server.Setup(
+	server2.Setup(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 		},
-		[&server_num_requests](http::ExpectedIncomingRequestPtr exp_req) {
+		[&server2, &server1, &timer, &server_num_requests, &test_case](
+			http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
 
@@ -293,6 +323,9 @@ TEST_P(DownloadResumerTest, Cases) {
 
 			// Only give some, not all, then terminate connection.
 			auto to_copy = size / 5;
+			if (test_case.server_failures > 0) {
+				to_copy = size / test_case.server_failures;
+			}
 			if (to_copy > size - pos) {
 				to_copy = size - pos;
 			}
@@ -302,14 +335,27 @@ TEST_P(DownloadResumerTest, Cases) {
 			resp->SetBodyReader(partial_body);
 
 			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+
+			if (test_case.server_failures > 0 && test_case.server_down_after > chrono::seconds(0)) {
+				auto again_after = test_case.server_up_again_after;
+				timer.AsyncWait(
+					test_case.server_down_after,
+					[&server1, &server2, &timer, again_after](error::Error err) {
+						server2.Cancel();
+						if (again_after > chrono::seconds(0)) {
+							timer.AsyncWait(
+								again_after, [&server1](error::Error err) { server1.Start(); });
+						}
+					});
+			}
 		});
 
-	server.AsyncServeUrl(
+	server1.Setup(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 		},
-		[&backup_server, &server, &timer, &server_num_requests, &test_case, &server_down_done](
+		[&server2, &server1, &timer, &server_num_requests, &test_case](
 			http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
@@ -377,6 +423,9 @@ TEST_P(DownloadResumerTest, Cases) {
 
 			// Only give some, not all, then terminate connection.
 			auto to_copy = size / 5;
+			if (test_case.server_failures > 0) {
+				to_copy = size / test_case.server_failures;
+			}
 			if (to_copy > size - pos) {
 				to_copy = size - pos;
 			}
@@ -387,21 +436,20 @@ TEST_P(DownloadResumerTest, Cases) {
 
 			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 
-			if (test_case.server_down_after > chrono::seconds(0) && !server_down_done) {
-				server_down_done = true;
+			if (test_case.server_down_after > chrono::seconds(0)) {
 				auto again_after = test_case.server_up_again_after;
 				timer.AsyncWait(
 					test_case.server_down_after,
-					[&server, &backup_server, &timer, again_after](error::Error err) {
-						server.Cancel();
+					[&server1, &server2, &timer, again_after](error::Error err) {
+						server1.Cancel();
 						if (again_after > chrono::seconds(0)) {
-							timer.AsyncWait(again_after, [&backup_server](error::Error err) {
-								backup_server.Start();
-							});
+							timer.AsyncWait(
+								again_after, [&server2](error::Error err) { server2.Start(); });
 						}
 					});
 			}
 		});
+	server1.Start();
 
 	// Request
 	auto req = make_shared<http::OutgoingRequest>();
@@ -410,9 +458,14 @@ TEST_P(DownloadResumerTest, Cases) {
 
 	// Client
 	http::ClientConfig client_config;
+	if (test_case.retry_download_count > 0) {
+		client_config.retry_download_count = test_case.retry_download_count;
+	}
+
 	shared_ptr<http_resumer::DownloadResumerClient> client =
 		make_shared<http_resumer::DownloadResumerClient>(client_config, loop);
 	client->SetSmallestWaitInterval(chrono::milliseconds(100));
+	client->SetMaxWaitInterval(chrono::milliseconds(300));
 
 	vector<uint8_t> received_body;
 	int user_num_callbacks = 0;

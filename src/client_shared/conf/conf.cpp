@@ -266,6 +266,7 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 	http_client_config_.client_cert_key_path = https_client.key;
 	http_client_config_.ssl_engine = https_client.ssl_engine;
 	http_client_config_.skip_verify = skip_verify;
+	http_client_config_.retry_download_count = retry_download_count;
 
 	auto proxy = http::GetHttpProxyStringFromEnvironment();
 	if (proxy) {
