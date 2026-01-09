@@ -1366,7 +1366,12 @@ exit 0
 	auto err = art.update_module->Download(*art.payload);
 
 	EXPECT_NE(err, error::NoError) << err.String();
-	EXPECT_EQ(err.code, make_error_condition(errc::invalid_argument)) << err.String();
+	EXPECT_EQ(
+		err.code,
+		std::error_condition(
+			mender::artifact::parser_error::Code::ParseError,
+			mender::artifact::parser_error::ErrorCategory))
+		<< err.String();
 
 	// Make sure the offending file is not downloaded to its intended directory
 	// nor to the illegal directory.
@@ -1452,7 +1457,6 @@ TEST(UpdateModuleCreateTest, IllegalPayloadType) {
 	auto update_module = update_module::UpdateModule::Create(*ctx, illegal_payload_type);
 	EXPECT_FALSE(update_module.has_value());
 }
-
 
 struct AliasingAndMaliciousArtifactTestParams {
 	std::string artifact_create_function;
@@ -1751,5 +1755,214 @@ exit 0
 	ASSERT_EQ(err, error::NoError) << err.String();
 	for (auto file : files) {
 		EXPECT_TRUE(filesystem::exists(temp_dir_.Path() + "/work/files/" + file));
+	}
+}
+
+
+struct FileNotInManifestTestParams {
+	vector<bool> files;
+	std::string name;
+};
+
+class UpdateModuleFileNotInManifestTests :
+	public UpdateModuleTests,
+	public ::testing::WithParamInterface<FileNotInManifestTestParams> {
+public:
+	class UpdateModuleTestWithArtifactContainingPayloadFileNotInManifest {
+	public:
+		UpdateModuleTestWithArtifactContainingPayloadFileNotInManifest(
+			UpdateModuleFileNotInManifestTests &tests,
+			size_t kb,
+			size_t number_of_files,
+			std::vector<bool> file_in_manifest) {
+			// ASSERT doesn't work well inside constructors because of some peculiar return
+			// semantics, so wrap it in a lambda.
+			[&]() {
+				auto maybe_artifact = tests.PrepareNumberedPayloadArtifact(kb, number_of_files);
+				ASSERT_TRUE(maybe_artifact) << maybe_artifact.error();
+				auto artifact_file = maybe_artifact.value();
+
+				// Remove files from manifest defined by file_in_manifest vector
+				std::filesystem::current_path(tests.temp_dir_.Path());
+				int result = std::system(("tar -xf " + artifact_file).c_str());
+				ASSERT_EQ(result, 0) << "Setup failed: Could not extract default artifact.";
+
+				for (std::vector<bool>::size_type i = 0; i < file_in_manifest.size(); i++) {
+					if (!file_in_manifest[i]) {
+						result = std::system(
+							("grep -v 'rootfs" + std::to_string(i)
+							 + "' manifest > filtered_manifest && mv filtered_manifest manifest")
+								.c_str());
+						ASSERT_EQ(result, 0)
+							<< "Setup failed: Could not remove file from manifest.";
+					}
+				}
+
+				result = std::system(("tar -cf " + artifact_file
+									  + " version manifest header.tar.gz data/0000.tar.gz")
+										 .c_str());
+				ASSERT_EQ(result, 0) << "Setup failed: Could not recompress modified artifact.";
+
+				// From here on out - usual setup, exactly as in UpdateModuleTestWithDefaultArtifact
+				is = make_unique<ifstream>(artifact_file);
+				ASSERT_TRUE(is->good());
+				artifact_reader = make_unique<io::StreamReader>(*is);
+
+				ctx = make_unique<context::MenderContext>(config);
+
+				auto maybe_parsed = mender::artifact::parser::Parse(*artifact_reader);
+				ASSERT_TRUE(maybe_parsed) << maybe_parsed.error();
+				artifact = make_unique<mender::artifact::Artifact>(maybe_parsed.value());
+
+				auto maybe_payload = artifact->Next();
+				ASSERT_TRUE(maybe_payload) << maybe_payload.error();
+				payload = make_unique<mender::artifact::Payload>(maybe_payload.value());
+
+				auto maybe_payload_meta_data = mender::artifact::View(*artifact, 0);
+				ASSERT_TRUE(maybe_payload_meta_data) << maybe_payload_meta_data.error();
+				payload_meta_data = make_unique<mender::artifact::PayloadHeaderView>(
+					maybe_payload_meta_data.value());
+
+				auto exp_update_module = update_module::UpdateModule::Create(
+					*ctx, payload_meta_data->header.payload_type);
+				ASSERT_TRUE(exp_update_module.has_value()) << exp_update_module.error();
+				update_module = std::move(exp_update_module.value());
+			}();
+		}
+
+		unique_ptr<ifstream> is;
+		unique_ptr<io::StreamReader> artifact_reader;
+		conf::MenderConfig config;
+		unique_ptr<context::MenderContext> ctx;
+		unique_ptr<mender::artifact::Artifact> artifact;
+		unique_ptr<mender::artifact::Payload> payload;
+		unique_ptr<mender::artifact::PayloadHeaderView> payload_meta_data;
+		unique_ptr<update_module::UpdateModule> update_module;
+	};
+
+	expected::ExpectedString PrepareNumberedPayloadArtifact(
+		size_t kb = 1, size_t number_of_files = 1) {
+		auto rootfs = path::Join(temp_dir_.Path(), "rootfs");
+		{
+			processes::Process proc(
+				{"dd", "if=/dev/urandom", "of=" + rootfs + "0", "bs=1K", "count=" + to_string(kb)});
+			auto err = proc.Run();
+			if (err != error::NoError) {
+				return expected::unexpected(err);
+			}
+		}
+
+		auto file = path::Join(temp_dir_.Path(), "artifact.mender");
+		vector<string> args {
+			"mender-artifact",
+			"write",
+			"module-image",
+			"-T",
+			"rootfs-image-v2",
+			"-o",
+			file,
+			"-n",
+			"test",
+			"-t",
+			"test",
+			"-f",
+			rootfs + "0"};
+		for (size_t index = 1; index < number_of_files; index++) {
+			auto extra_rootfs = rootfs + to_string(index);
+			processes::Process proc({"cp", rootfs + "0", extra_rootfs});
+			auto err = proc.Run();
+			if (err != error::NoError) {
+				return expected::unexpected(err);
+			}
+
+			args.push_back("-f");
+			args.push_back(extra_rootfs);
+		}
+		{
+			processes::Process proc(args);
+			auto err = proc.Run();
+			if (err != error::NoError) {
+				return expected::unexpected(err);
+			}
+		}
+
+		{
+			processes::Process proc({"mender-artifact", "read", file});
+			auto err = proc.Run();
+			if (err != error::NoError) {
+				return expected::unexpected(err);
+			}
+		}
+		return file;
+	}
+
+
+	static std::string GetTestName(
+		const ::testing::TestParamInfo<FileNotInManifestTestParams> &info) {
+		std::string name = info.param.name;
+		std::replace(name.begin(), name.end(), ' ', '_');
+		return name;
+	}
+};
+
+INSTANTIATE_TEST_SUITE_P(
+	Files,
+	UpdateModuleFileNotInManifestTests,
+	::testing::Values(
+		FileNotInManifestTestParams {std::vector<bool>({false, true}), "FirstFile"},
+		FileNotInManifestTestParams {std::vector<bool>({true, false}), "LastFile"},
+		FileNotInManifestTestParams {std::vector<bool>({true, false, true}), "MiddleFile"}),
+	UpdateModuleFileNotInManifestTests::GetTestName);
+
+TEST_P(UpdateModuleFileNotInManifestTests, Test) {
+	auto param = GetParam();
+	auto num_of_files = param.files.size();
+	UpdateModuleTestWithArtifactContainingPayloadFileNotInManifest art(
+		*this, 1, num_of_files, param.files);
+
+	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
+	ASSERT_TRUE(maybe_script) << maybe_script.error();
+
+	// Simply return from Update Module, causing mender to download the payload
+	// to the usual work tree
+	auto script_path = maybe_script.value();
+	{
+		ofstream um_script(script_path);
+		um_script << R"delim(#!/bin/bash
+exit 0
+)delim";
+	}
+
+	auto err = art.update_module->Download(*art.payload);
+
+	ASSERT_NE(err, error::NoError) << err.String();
+	EXPECT_EQ(
+		err.code,
+		std::error_condition(
+			mender::artifact::parser_error::Code::ParseError,
+			mender::artifact::parser_error::ErrorCategory))
+		<< err.String();
+
+	bool fileNotInManifestEncountered = false;
+	for (std::size_t i = 0; i < num_of_files; i++) {
+		// If we already encountered a file that was not in the manifest, the rest of the files
+		// in the manifest should not be parsed (and thus copied to work dir) at all.
+		if (fileNotInManifestEncountered) {
+			EXPECT_FALSE(std::filesystem::exists(
+				temp_dir_.Path() + "/work/files/rootfs" + std::to_string(i)));
+			continue;
+		}
+
+		switch (param.files[i]) {
+		case true:
+			EXPECT_TRUE(std::filesystem::exists(
+				temp_dir_.Path() + "/work/files/rootfs" + std::to_string(i)));
+			break;
+		case false:
+			EXPECT_FALSE(std::filesystem::exists(
+				temp_dir_.Path() + "/work/files/rootfs" + std::to_string(i)));
+			fileNotInManifestEncountered = true;
+			break;
+		}
 	}
 }
