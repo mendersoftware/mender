@@ -48,13 +48,20 @@ static const size_t max_allowed_filename_length {100};
 static const string manifest_line_regex_string {
 	"^([0-9a-z]{" + to_string(expected_shasum_length) + "})[[:space:]]{"
 	+ to_string(expected_whitespace) + "}([^[:blank:]]+)$"};
+static const string header_regex_string {R"(header(-augment)?\.tar(\.(gz|xz|zst))?)"};
 
 static const vector<string> supported_compression_suffixes {".gz", ".xz", ".zst"};
 
 namespace {
 
-string MaybeStripSuffix(string s, vector<string> suffixes) {
+string StripHeaderCompressionSuffix(string s, vector<string> suffixes) {
 	auto s_ {s};
+
+	std::regex pattern {header_regex_string};
+	if (!std::regex_match(s_, pattern)) {
+		return s_;
+	}
+
 	for (const auto &suffix : suffixes) {
 		if (s.size() > suffix.size()) {
 			if (s.substr(s.size() - suffix.size()) == suffix) {
@@ -93,7 +100,7 @@ ExpectedManifestLine Tokenize(const string &line) {
 
 	return ManifestLine {
 		.shasum = base_match[1],
-		.entry_name = MaybeStripSuffix(base_match[2], supported_compression_suffixes)};
+		.entry_name = StripHeaderCompressionSuffix(base_match[2], supported_compression_suffixes)};
 }
 } // namespace
 
