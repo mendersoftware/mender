@@ -1,15 +1,17 @@
 [Unit]
 Description=Mender authentication service
 Wants=network-online.target
+Requires=dbus.service
 After=systemd-resolved.service network-online.target mender-data-dir.service data.mount
 Conflicts=mender.service
 
 [Service]
-Type=idle
+Type=dbus
 User=root
 Group=root
 ExecStart=/usr/bin/mender-auth daemon
 Restart=always
+BusName=io.mender.AuthenticationManager
 
 [Install]
 WantedBy=multi-user.target

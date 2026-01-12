@@ -1,6 +1,11 @@
 [Unit]
 Description=Mender OTA update service
+
+# These have to be weak dependencies, otherwise mender-update would not have a
+# chance to rollback an update breaking mender-authd (by breaking DBus, for
+# example) or networking.
 Wants=mender-authd.service network-online.target
+
 After=systemd-resolved.service network-online.target mender-data-dir.service data.mount
 Conflicts=mender.service
 
