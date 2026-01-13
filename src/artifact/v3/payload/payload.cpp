@@ -48,7 +48,15 @@ ExpectedPayloadReader Payload::Next() {
 			parser_error::Code::ParseError, expected_tar_entry.error().message));
 	}
 	auto tar_entry {expected_tar_entry.value()};
-	return Reader {std::move(tar_entry), manifest_.Get("data/0000/" + tar_entry.Name())};
+	string tar_name = tar_entry.Name();
+	auto checksum = manifest_.Get("data/0000/" + tar_name);
+
+	if (checksum == "") {
+		return expected::unexpected(parser_error::MakeError(
+			parser_error::Code::ParseError,
+			"Payload contains file that is not listed in the manifest."));
+	}
+	return Reader {std::move(tar_entry), checksum};
 }
 
 } // namespace payload
