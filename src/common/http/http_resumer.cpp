@@ -364,9 +364,10 @@ DownloadResumerClient::DownloadResumerClient(
 	client_(config, event_loop, "http_resumer:client"),
 	logger_ {"http_resumer:client"},
 	cancelled_ {make_shared<bool>(true)},
-	retry_ {
-		.backoff = http::ExponentialBackoff(chrono::minutes(1), 10),
-		.wait_timer = events::Timer(event_loop)} {
+	retry_ {// By setting max interval to 1 minute, combined with default min interval of 1 minute,
+			// we effectively do not have exponential backoff and use fixed 1-minute intervals.
+			.backoff = http::ExponentialBackoff(chrono::minutes(1), config.retry_download_count),
+			.wait_timer = events::Timer(event_loop)} {
 }
 
 DownloadResumerClient::~DownloadResumerClient() {
@@ -436,7 +437,9 @@ error::Error DownloadResumerClient::ScheduleNextResumeRequest() {
 	auto interval = exp_interval.value();
 	logger_.Info(
 		"Resuming download after "
-		+ to_string(chrono::duration_cast<chrono::seconds>(interval).count()) + " seconds");
+		+ to_string(chrono::duration_cast<chrono::seconds>(interval).count()) + " seconds. Retry "
+		+ to_string(retry_.backoff.CurrentIteration()) + "/"
+		+ to_string(retry_.backoff.TryCount()));
 
 	HeaderHandlerFunctor resumer_next_header_handler {shared_from_this()};
 	BodyHandlerFunctor resumer_next_body_handler {shared_from_this()};

@@ -80,6 +80,8 @@ const string complete_config = R"({
     "IdleConnTimeoutSeconds": 11
   },
 
+  "RetryDownloadCount" : 15,
+
   "extra": ["this", "should", "be", "ignored"]
 })";
 
@@ -123,6 +125,7 @@ TEST(ConfigParserDefaultsTests, ConfigParserDefaults) {
 
 	EXPECT_EQ(mc.security.auth_private_key, "");
 	EXPECT_EQ(mc.security.ssl_engine, "");
+	EXPECT_EQ(mc.retry_download_count, 10);
 }
 
 TEST_F(ConfigParserTests, LoadComplete) {
@@ -168,6 +171,8 @@ TEST_F(ConfigParserTests, LoadComplete) {
 
 	EXPECT_EQ(mc.security.auth_private_key, "AuthPrivateKey_value");
 	EXPECT_EQ(mc.security.ssl_engine, "SecuritySSLEngine_value");
+
+	EXPECT_EQ(mc.retry_download_count, 15);
 }
 
 TEST_F(ConfigParserTests, LoadPartial) {
@@ -216,6 +221,8 @@ TEST_F(ConfigParserTests, LoadPartial) {
 
 	EXPECT_EQ(mc.security.auth_private_key, "");
 	EXPECT_EQ(mc.security.ssl_engine, "");
+
+	EXPECT_EQ(mc.retry_download_count, 10);
 }
 
 TEST_F(ConfigParserTests, LoadOverrides) {
@@ -240,7 +247,8 @@ TEST_F(ConfigParserTests, LoadOverrides) {
   "Connectivity": {
     "DisableKeepAlive": false,
     "IdleConnTimeoutSeconds": 15
-  }
+  },
+  "RetryDownloadCount" : 20
 })";
 	os.close();
 
@@ -281,6 +289,8 @@ TEST_F(ConfigParserTests, LoadOverrides) {
 
 	EXPECT_EQ(mc.security.auth_private_key, "AuthPrivateKey_value");
 	EXPECT_EQ(mc.security.ssl_engine, "SecuritySSLEngine_value");
+
+	EXPECT_EQ(mc.retry_download_count, 20);
 }
 
 TEST_F(ConfigParserTests, LoadNoOverrides) {
@@ -334,6 +344,8 @@ TEST_F(ConfigParserTests, LoadNoOverrides) {
 
 	EXPECT_EQ(mc.security.auth_private_key, "AuthPrivateKey_value");
 	EXPECT_EQ(mc.security.ssl_engine, "SecuritySSLEngine_value");
+
+	EXPECT_EQ(mc.retry_download_count, 15);
 }
 
 TEST_F(ConfigParserTests, LoadInvalidOverrides) {
@@ -387,6 +399,8 @@ TEST_F(ConfigParserTests, LoadInvalidOverrides) {
 
 	EXPECT_EQ(mc.security.auth_private_key, "AuthPrivateKey_value");
 	EXPECT_EQ(mc.security.ssl_engine, "SecuritySSLEngine_value");
+
+	EXPECT_EQ(mc.retry_download_count, 15);
 }
 
 TEST_F(ConfigParserTests, LoadOverridesExtra) {
@@ -406,6 +420,7 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
   "BootUtilitiesSetActivePart": "BootUtilitiesSetActivePart_value2",
   "DeviceTypeFile": "DeviceTypeFile_value2",
   "SkipVerify": false,
+  "RetryDownloadCount" : 25,
   "NewExtraField": ["nobody", "cares"]
 })";
 	os.close();
@@ -447,6 +462,8 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
 
 	EXPECT_EQ(mc.security.auth_private_key, "AuthPrivateKey_value");
 	EXPECT_EQ(mc.security.ssl_engine, "SecuritySSLEngine_value");
+
+	EXPECT_EQ(mc.retry_download_count, 25);
 }
 
 TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
@@ -507,6 +524,8 @@ TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
 
 	EXPECT_EQ(mc.security.auth_private_key, "AuthPrivateKey_value");
 	EXPECT_EQ(mc.security.ssl_engine, "SecuritySSLEngine_value");
+
+	EXPECT_EQ(mc.retry_download_count, 15);
 }
 
 TEST_F(ConfigParserTests, LoadAndReset) {
@@ -548,6 +567,8 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 
 	EXPECT_EQ(mc.security.auth_private_key, "");
 	EXPECT_EQ(mc.security.ssl_engine, "");
+
+	EXPECT_EQ(mc.retry_download_count, 10);
 }
 
 TEST_F(ConfigParserTests, ArtifactVerifyKeyNameCollision) {
