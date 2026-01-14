@@ -77,6 +77,9 @@ void AuthenticatingForwarder::FetchJwtTokenHandler(auth_client::APIResponse &res
 
 	forwarder_.Cancel();
 
+	string old_token = cached_jwt_token_;
+	string old_url = cached_server_url_;
+
 	if (resp) {
 		// ":0" port number means pick random port in user range.
 		auto err = forwarder_.AsyncForward("http://127.0.0.1:0", resp.value().server_url);
@@ -95,12 +98,16 @@ void AuthenticatingForwarder::FetchJwtTokenHandler(auth_client::APIResponse &res
 		ClearCache();
 		log::Error("Failed to fetch new token: " + resp.error().String());
 	}
-	// Emit signal either with valid token and server url or with empty strings
-	dbus_server_.EmitSignal<dbus::StringPair>(
-		"/io/mender/AuthenticationManager",
-		"io.mender.Authentication1",
-		"JwtTokenStateChange",
-		dbus::StringPair {cached_jwt_token_, cached_server_url_});
+	// Emit signal either with valid new token and server url or with empty strings
+	if (cached_jwt_token_ != old_token || cached_server_url_ != old_url) {
+		dbus_server_.EmitSignal<dbus::StringPair>(
+			"/io/mender/AuthenticationManager",
+			"io.mender.Authentication1",
+			"JwtTokenStateChange",
+			dbus::StringPair {cached_jwt_token_, cached_server_url_});
+	} else {
+		log::Debug("Token state unchanged: not emitting signal.");
+	}
 }
 
 } // namespace ipc
