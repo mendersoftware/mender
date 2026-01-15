@@ -150,7 +150,7 @@ public:
 	JsonLogMessagesReader(shared_ptr<io::FileReader> raw_data_reader, int64_t data_size) :
 		reader_ {raw_data_reader},
 		raw_data_size_ {data_size},
-		rem_raw_data_size_ {data_size} {};
+		rem_raw_data_size_ {0} {};
 
 	expected::ExpectedSize Read(
 		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
@@ -158,22 +158,34 @@ public:
 	error::Error Rewind() {
 		header_rem_ = header_.size();
 		closing_rem_ = closing_.size();
-		rem_raw_data_size_ = raw_data_size_;
+		processed_data_pos_ = 0;
+		rem_raw_data_size_ = 0;
+		if (data_preprocessed_) {
+			rem_raw_data_size_ = processed_data_size_;
+			// No need to rewind
+			return error::NoError;
+		}
 		return reader_->Rewind();
 	}
 
-	static int64_t TotalDataSize(int64_t raw_data_size) {
-		return raw_data_size + header_.size() + closing_.size();
-	}
+	int64_t TotalDataSize();
 
 private:
+	error::Error PreprocessLogData();
+
 	shared_ptr<io::FileReader> reader_;
-	int64_t raw_data_size_;
+	const int64_t raw_data_size_;
 	int64_t rem_raw_data_size_;
 	static const vector<uint8_t> header_;
 	static const vector<uint8_t> closing_;
 	io::Vsize header_rem_ = header_.size();
 	io::Vsize closing_rem_ = closing_.size();
+
+	// Preprocessing of data to sanitize corrupted lines
+	vector<uint8_t> processed_data_;
+	int64_t processed_data_pos_ = 0;
+	int64_t processed_data_size_ = 0;
+	bool data_preprocessed_ = false;
 };
 
 class DeploymentLog {

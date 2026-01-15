@@ -927,13 +927,13 @@ TEST_F(DeploymentsTests, JsonLogMessageReaderTest) {
 	string expected_data =
 		R"({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})";
 
-	// the reader takes size of the data without a trailing newline
-	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
-	EXPECT_EQ(deps::JsonLogMessagesReader::TotalDataSize(messages.size() - 1), expected_total_size);
-
 	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
 	deps::JsonLogMessagesReader logs_reader {
 		file_reader, static_cast<int64_t>(messages.size() - 1)};
+
+	// the reader takes size of the data without a trailing newline
+	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_total_size);
 
 	stringstream ss;
 	vector<uint8_t> buf(1024);
@@ -967,13 +967,13 @@ TEST_F(DeploymentsTests, JsonLogMessageReaderSmallBufferTest) {
 	string expected_data =
 		R"({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})";
 
-	// the reader takes size of the data without a trailing newline
-	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
-	EXPECT_EQ(deps::JsonLogMessagesReader::TotalDataSize(messages.size() - 1), expected_total_size);
-
 	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
 	deps::JsonLogMessagesReader logs_reader {
 		file_reader, static_cast<int64_t>(messages.size() - 1)};
+
+	// the reader takes size of the data without a trailing newline
+	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_total_size);
 
 	stringstream ss;
 	vector<uint8_t> buf(16);
@@ -1007,13 +1007,13 @@ TEST_F(DeploymentsTests, JsonLogMessageReaderSmallEvenBufferTest) {
 	string expected_data =
 		R"({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})";
 
-	// the reader takes size of the data without a trailing newline
-	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
-	EXPECT_EQ(deps::JsonLogMessagesReader::TotalDataSize(messages.size() - 1), expected_total_size);
-
 	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
 	deps::JsonLogMessagesReader logs_reader {
 		file_reader, static_cast<int64_t>(messages.size() - 1)};
+
+	// the reader takes size of the data without a trailing newline
+	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_total_size);
 
 	stringstream ss;
 	vector<uint8_t> buf(7);
@@ -1047,13 +1047,13 @@ TEST_F(DeploymentsTests, JsonLogMessageReaderRewindTest) {
 	string expected_data =
 		R"({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})";
 
-	// the reader takes size of the data without a trailing newline
-	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
-	EXPECT_EQ(deps::JsonLogMessagesReader::TotalDataSize(messages.size() - 1), expected_total_size);
-
 	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
 	deps::JsonLogMessagesReader logs_reader {
 		file_reader, static_cast<int64_t>(messages.size() - 1)};
+
+	// the reader takes size of the data without a trailing newline
+	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_total_size);
 
 	stringstream ss;
 	vector<uint8_t> buf(1024);
@@ -1071,6 +1071,11 @@ TEST_F(DeploymentsTests, JsonLogMessageReaderRewindTest) {
 
 	stringstream ss2;
 	logs_reader.Rewind();
+
+	// the reader takes size of the data without a trailing newline
+	expected_total_size = header.size() + messages.size() - 1 + closing.size();
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_total_size);
+
 	do {
 		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
 		ASSERT_TRUE(ex_n_read);

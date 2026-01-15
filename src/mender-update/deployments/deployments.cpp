@@ -360,8 +360,80 @@ const vector<uint8_t> JsonLogMessagesReader::header_ = {
 	'{', '"', 'm', 'e', 's', 's', 'a', 'g', 'e', 's', '"', ':', '['};
 const vector<uint8_t> JsonLogMessagesReader::closing_ = {']', '}'};
 
+error::Error JsonLogMessagesReader::PreprocessLogData() {
+	// Read the entire log file and validate/correct each JSON line
+	vector<uint8_t> buffer(raw_data_size_);
+	auto ex_read = reader_->Read(buffer.begin(), buffer.end());
+	if (!ex_read) {
+		return ex_read.error();
+	}
+
+	size_t bytes_read = ex_read.value();
+	if (bytes_read != static_cast<size_t>(raw_data_size_)) {
+		return MakeError(InvalidDataError, "Failed to read expected amount of data from log file");
+	}
+
+	string last_valid_timestamp = "1970-01-01T00:00:00.000000000Z";
+	size_t line_start = 0;
+	for (size_t i = 0; i <= bytes_read; i++) {
+		// Process line at newline or end of data
+		if (i == bytes_read || buffer[i] == '\n') {
+			if (i >= line_start) {
+				// Extract line (without newline)
+				string line(buffer.begin() + line_start, buffer.begin() + i);
+
+				string processed_line;
+				auto ex_json = json::Load(line);
+				if (ex_json) {
+					// Valid JSON - extract timestamp if available and keep the line as-is
+					auto json_obj = ex_json.value();
+					auto ex_timestamp = json_obj.Get("timestamp");
+					if (ex_timestamp && ex_timestamp.value().IsString()) {
+						auto ex_ts_str = ex_timestamp.value().GetString();
+						if (ex_ts_str) {
+							last_valid_timestamp = ex_ts_str.value();
+						}
+					}
+					processed_line = line;
+				} else {
+					// Invalid JSON - replace with corrupted log entry
+					processed_line = "{\"timestamp\":\"" + last_valid_timestamp
+									 + "\",\"level\":\"error\",\"message\":\"(corrupted log)\"}";
+					log::Warning(
+						"Corrupted line found in the deployments log, replacing with: "
+						+ processed_line);
+				}
+
+				processed_data_.insert(
+					processed_data_.end(), processed_line.begin(), processed_line.end());
+				processed_data_.push_back('\n');
+			}
+
+			line_start = i + 1;
+		}
+	}
+
+	// Update the data size to reflect processed data (without trailing newline)
+	if (!processed_data_.empty() && processed_data_.back() == '\n') {
+		processed_data_.pop_back();
+	}
+	processed_data_size_ = processed_data_.size();
+	rem_raw_data_size_ = processed_data_size_;
+
+	return error::NoError;
+}
+
 ExpectedSize JsonLogMessagesReader::Read(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
+	// Preprocess data on first call
+	if (!data_preprocessed_) {
+		auto err = PreprocessLogData();
+		if (err != error::NoError) {
+			return expected::unexpected(err);
+		}
+		data_preprocessed_ = true;
+	}
+
 	if (header_rem_ > 0) {
 		io::Vsize target_size = end - start;
 		auto copy_end = copy_n(
@@ -370,24 +442,21 @@ ExpectedSize JsonLogMessagesReader::Read(
 		header_rem_ -= n_copied;
 		return static_cast<size_t>(n_copied);
 	} else if (rem_raw_data_size_ > 0) {
-		if (end - start > rem_raw_data_size_) {
-			end = start + static_cast<size_t>(rem_raw_data_size_);
-		}
-		auto ex_sz = reader_->Read(start, end);
-		if (!ex_sz) {
-			return ex_sz;
-		}
-		auto n_read = ex_sz.value();
-		rem_raw_data_size_ -= n_read;
+		// Read from preprocessed data instead of reader_
+		size_t bytes_to_read =
+			min(static_cast<size_t>(rem_raw_data_size_), static_cast<size_t>(end - start));
+		size_t bytes_available = processed_data_.size() - processed_data_pos_;
+		size_t n_read = min(bytes_to_read, bytes_available);
 
-		// We control how much we read from the file so we should never read
-		// 0 bytes (meaning EOF reached). If we do, it means the file is
-		// smaller than what we were told.
-		assert(n_read > 0);
 		if (n_read == 0) {
 			return expected::unexpected(
 				MakeError(InvalidDataError, "Unexpected EOF when reading logs file"));
 		}
+
+		// Copy from processed_data_
+		copy_n(processed_data_.begin() + processed_data_pos_, n_read, start);
+		processed_data_pos_ += n_read;
+		rem_raw_data_size_ -= n_read;
 
 		// Replace all newlines with commas
 		const auto read_end = start + n_read;
@@ -413,6 +482,19 @@ ExpectedSize JsonLogMessagesReader::Read(
 
 static const string logs_uri_suffix = "/log";
 
+int64_t JsonLogMessagesReader::TotalDataSize() {
+	// Preprocess data on first call
+	if (!data_preprocessed_) {
+		auto err = PreprocessLogData();
+		if (err != error::NoError) {
+			// what to do here?
+			return -1;
+		}
+		data_preprocessed_ = true;
+	}
+	return processed_data_size_ + header_.size() + closing_.size();
+}
+
 error::Error DeploymentClient::PushLogs(
 	const string &deployment_id,
 	const string &log_file_path,
@@ -432,7 +514,7 @@ error::Error DeploymentClient::PushLogs(
 	req->SetPath(http::JoinUrl(deployments_uri_prefix, deployment_id, logs_uri_suffix));
 	req->SetMethod(http::Method::PUT);
 	req->SetHeader("Content-Type", "application/json");
-	req->SetHeader("Content-Length", to_string(JsonLogMessagesReader::TotalDataSize(data_size)));
+	req->SetHeader("Content-Length", to_string(logs_reader->TotalDataSize()));
 	req->SetHeader("Accept", "application/json");
 	req->SetBodyGenerator([logs_reader]() {
 		logs_reader->Rewind();
