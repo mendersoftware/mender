@@ -1088,6 +1088,264 @@ TEST_F(DeploymentsTests, JsonLogMessageReaderRewindTest) {
 	EXPECT_EQ(ss2.str(), expected_data);
 }
 
+TEST_F(DeploymentsTests, JsonLogMessageReaderMalformedJsonTest) {
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
+{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	// Corrupted line should be replaced with timestamp from previous valid line (2016-03-11...)
+	string expected_data =
+		R"delim({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp":"2016-03-11T13:03:17.063493443Z","level":"error","message":"(corrupted log)"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})delim";
+
+	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
+	deps::JsonLogMessagesReader logs_reader {
+		file_reader, static_cast<int64_t>(messages.size() - 1)};
+
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_data.length());
+
+	stringstream ss;
+	vector<uint8_t> buf(1024);
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str(), expected_data);
+}
+
+TEST_F(DeploymentsTests, JsonLogMessageReaderBinaryDataTest) {
+	// Create file with binary data directly
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path, std::ios::binary};
+	os << R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"})"
+	   << "\n";
+	os.write("\x00\x01\xFF\xFE corrupted binary data here", 32);
+	os << "\n";
+	os << R"({"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "After corruption"})"
+	   << "\n";
+	os.close();
+
+	// Binary line replaced with timestamp from previous valid line
+	string expected_data =
+		R"delim({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp":"2016-03-11T13:03:17.063493443Z","level":"error","message":"(corrupted log)"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "After corruption"}]})delim";
+
+	// Calculate size: 3 newlines + content
+	struct stat st;
+	stat(test_log_file_path.c_str(), &st);
+	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
+	deps::JsonLogMessagesReader logs_reader {file_reader, static_cast<int64_t>(st.st_size - 1)};
+
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_data.length());
+
+	stringstream ss;
+	vector<uint8_t> buf(1024);
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str(), expected_data);
+}
+
+TEST_F(DeploymentsTests, JsonLogMessageReaderIncompleteLineTest) {
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
+{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"}
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Incom)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	// Incomplete line replaced with timestamp from previous valid line (2020-03-11...)
+	string expected_data =
+		R"delim({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"},{"timestamp":"2020-03-11T13:03:17.063493443Z","level":"error","message":"(corrupted log)"}]})delim";
+
+	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
+	deps::JsonLogMessagesReader logs_reader {file_reader, static_cast<int64_t>(messages.size())};
+
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_data.length());
+
+	stringstream ss;
+	vector<uint8_t> buf(1024);
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str(), expected_data);
+}
+
+TEST_F(DeploymentsTests, JsonLogMessageReaderEmptyLinesTest) {
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
+                    
+  {"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "After blank"}
+
+	{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "After whitespace"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	// Empty/whitespace lines replaced with timestamp from previous valid line
+	// However the whitespace before a valid line should be kept as-is
+	string expected_data =
+		R"delim({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp":"2016-03-11T13:03:17.063493443Z","level":"error","message":"(corrupted log)"},  {"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "After blank"},{"timestamp":"2020-03-11T13:03:17.063493443Z","level":"error","message":"(corrupted log)"},	{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "After whitespace"}]})delim";
+
+	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
+	deps::JsonLogMessagesReader logs_reader {
+		file_reader, static_cast<int64_t>(messages.size() - 1)};
+
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_data.length());
+
+	stringstream ss;
+	vector<uint8_t> buf(1024);
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str(), expected_data);
+}
+
+TEST_F(DeploymentsTests, JsonLogMessageReaderRecoveryTest) {
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
+this is not json at all
+{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "After corruption"}
+{corrupt}
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "After more corruption"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	// Each corrupted line replaced with timestamp from previous valid line
+	string expected_data =
+		R"delim({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp":"2016-03-11T13:03:17.063493443Z","level":"error","message":"(corrupted log)"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "After corruption"},{"timestamp":"2020-03-11T13:03:17.063493443Z","level":"error","message":"(corrupted log)"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "After more corruption"}]})delim";
+
+	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
+	deps::JsonLogMessagesReader logs_reader {
+		file_reader, static_cast<int64_t>(messages.size() - 1)};
+
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_data.length());
+
+	stringstream ss;
+	vector<uint8_t> buf(1024);
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str(), expected_data);
+}
+
+TEST_F(DeploymentsTests, JsonLogMessageReaderFirstLineCorruptTest) {
+	const string messages =
+		R"(this is not json
+{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "After corruption"}
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Valid"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	// First line corrupted - use a default timestamp (e.g., epoch or current)
+	// Let's assume it uses epoch: "1970-01-01T00:00:00.000000000Z"
+	string expected_data =
+		R"delim({"messages":[{"timestamp":"1970-01-01T00:00:00.000000000Z","level":"error","message":"(corrupted log)"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "After corruption"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Valid"}]})delim";
+
+	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
+	deps::JsonLogMessagesReader logs_reader {
+		file_reader, static_cast<int64_t>(messages.size() - 1)};
+
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_data.length());
+
+	stringstream ss;
+	vector<uint8_t> buf(1024);
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str(), expected_data);
+}
+
+TEST_F(DeploymentsTests, JsonLogMessageReaderSmallBufferCorruptTest) {
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
+not valid json
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Valid"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	string expected_data =
+		R"delim({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp":"2016-03-11T13:03:17.063493443Z","level":"error","message":"(corrupted log)"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Valid"}]})delim";
+
+	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
+	deps::JsonLogMessagesReader logs_reader {
+		file_reader, static_cast<int64_t>(messages.size() - 1)};
+
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_data.length());
+
+	stringstream ss;
+	vector<uint8_t> buf(16); // Small buffer
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		EXPECT_LE(n_read, buf.size());
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str(), expected_data);
+}
+
 TEST_F(DeploymentsTests, PushLogsTest) {
 	TestEventLoop loop;
 
