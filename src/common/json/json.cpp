@@ -81,24 +81,51 @@ expected::expected<bool, error::Error> Json::Get<bool>() const {
 	return GetBool();
 }
 
-inline void StringReplaceAll(string &str, const string &what, const string &with) {
-	for (string::size_type pos {}; str.npos != (pos = str.find(what.data(), pos, what.length()));
-		 pos += with.length()) {
-		str.replace(pos, what.length(), with);
-	}
-}
-
 string EscapeString(const string &str) {
-	string ret {str};
+	// Reserve space to reduce reallocations. Assume +10% size after escaping
+	string ret;
+	ret.reserve(str.length() + str.length() / 10);
 
-	// see https://www.json.org/json-en.html
-	StringReplaceAll(ret, "\\", "\\\\");
-	StringReplaceAll(ret, "\"", "\\\"");
-	StringReplaceAll(ret, "\n", "\\n");
-	StringReplaceAll(ret, "\t", "\\t");
-	StringReplaceAll(ret, "\r", "\\r");
-	StringReplaceAll(ret, "\f", "\\f");
-	StringReplaceAll(ret, "\b", "\\b");
+	// Escape all control characters (U+0000 through U+001F)
+	// see https://www.json.org/json-en.html and https://datatracker.ietf.org/doc/html/rfc8259
+	for (size_t i = 0; i < str.length(); i++) {
+		unsigned char c = static_cast<unsigned char>(str[i]);
+
+		switch (c) {
+		case '\\':
+			ret += "\\\\";
+			break;
+		case '\"':
+			ret += "\\\"";
+			break;
+		case '\n':
+			ret += "\\n";
+			break;
+		case '\t':
+			ret += "\\t";
+			break;
+		case '\r':
+			ret += "\\r";
+			break;
+		case '\f':
+			ret += "\\f";
+			break;
+		case '\b':
+			ret += "\\b";
+			break;
+		default:
+			// Control characters (0x00-0x1F) and DEL (0x7F) must be escaped
+			// using \uXXXX format per RFC 8259
+			if (c < 0x20 || c == 0x7F) {
+				char buf[7];
+				snprintf(buf, sizeof(buf), "\\u%04x", c);
+				ret += buf;
+			} else {
+				ret += static_cast<char>(c);
+			}
+			break;
+		}
+	}
 
 	return ret;
 }

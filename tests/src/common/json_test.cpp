@@ -362,6 +362,78 @@ TEST(JsonUtilTests, EscapeString) {
 	EXPECT_EQ(json::EscapeString(str), R"(A \"really\" bad\n\t combination)");
 }
 
+TEST(JsonUtilTests, EscapeStringControlCharacters) {
+	string str = "\033[31mRed text\033[0m";
+	EXPECT_EQ(json::EscapeString(str), "\\u001b[31mRed text\\u001b[0m");
+
+	str = "before\033after";
+	EXPECT_EQ(json::EscapeString(str), "before\\u001bafter");
+
+	str = "text\177more";
+	EXPECT_EQ(json::EscapeString(str), "text\\u007fmore");
+
+	str = string("test\0more", 9);
+	EXPECT_EQ(json::EscapeString(str), "test\\u0000more");
+
+	str = "start\001end";
+	EXPECT_EQ(json::EscapeString(str), "start\\u0001end");
+
+	str = "start\002end";
+	EXPECT_EQ(json::EscapeString(str), "start\\u0002end");
+
+	str = "bell\007sound";
+	EXPECT_EQ(json::EscapeString(str), "bell\\u0007sound");
+
+	str = "vertical\013tab";
+	EXPECT_EQ(json::EscapeString(str), "vertical\\u000btab");
+
+	str = "shift\016out";
+	EXPECT_EQ(json::EscapeString(str), "shift\\u000eout");
+
+	str = "shift\017in";
+	EXPECT_EQ(json::EscapeString(str), "shift\\u000fin");
+
+	str = "unit\037separator";
+	EXPECT_EQ(json::EscapeString(str), "unit\\u001fseparator");
+
+	str = string("line1\nline2\033[31m\ttab\rcarriage\000null", 34);
+	EXPECT_EQ(json::EscapeString(str), "line1\\nline2\\u001b[31m\\ttab\\rcarriage\\u0000null");
+
+	str = string("\000\001\002\033\177", 5);
+	EXPECT_EQ(json::EscapeString(str), "\\u0000\\u0001\\u0002\\u001b\\u007f");
+
+	// Test range 0x00-0x1F
+	str = string("\000\001\002\003\004\005\006\007", 8); // 0x00-0x07
+	EXPECT_EQ(json::EscapeString(str), "\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007");
+
+	str = "\010\011\012\013\014\015\016\017"; // 0x08-0x0F (includes \b, \t, \n, \f, \r)
+	EXPECT_EQ(json::EscapeString(str), "\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f");
+
+	str = "\020\021\022\023\024\025\026\027"; // 0x10-0x17
+	EXPECT_EQ(json::EscapeString(str), "\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017");
+
+	str = "\030\031\032\033\034\035\036\037"; // 0x18-0x1F
+	EXPECT_EQ(json::EscapeString(str), "\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f");
+
+	// Combine standard escapes and control characters
+	str = "\\\033";
+	EXPECT_EQ(json::EscapeString(str), "\\\\\\u001b");
+
+	str = "\"\033";
+	EXPECT_EQ(json::EscapeString(str), "\\\"\\u001b");
+
+	// Customer reported cases
+	str = "\xc3\xa4\xc3\xb6\xc3\xbc";
+	EXPECT_EQ(json::EscapeString(str), "\xc3\xa4\xc3\xb6\xc3\xbc");
+
+	str = string(
+		"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 20);
+	EXPECT_EQ(
+		json::EscapeString(str),
+		"\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000"
+		"\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000\\u0000");
+}
+
 TEST(Json, GetDouble) {
 	auto ej = json::Load(R"(141.14)");
 	ASSERT_TRUE(ej);
