@@ -284,6 +284,9 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 
 	if (err != error::NoError) {
 		log::Error("Error when trying to poll for deployment: " + err.String());
+		// If we're here, no handler will be called, so we need to manually schedule the next
+		// deployment poll
+		HandlePollingError(ctx, poster);
 		poster.PostEvent(StateEvent::Failure);
 	}
 }

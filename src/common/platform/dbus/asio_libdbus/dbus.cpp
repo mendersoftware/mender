@@ -132,7 +132,7 @@ error::Error DBusClient::CallMethod(
 	const string &iface,
 	const string &method,
 	DBusCallReplyHandler<ReplyType> handler) {
-	if (!dbus_conn_) {
+	if (!dbus_conn_ || !dbus_connection_get_is_connected(dbus_conn_.get())) {
 		auto err = InitializeConnection();
 		if (err != error::NoError) {
 			return err;
@@ -209,7 +209,7 @@ static inline string GetSignalMatchRule(const string &iface, const string &signa
 template <typename SignalValueType>
 error::Error DBusClient::RegisterSignalHandler(
 	const string &iface, const string &signal, DBusSignalHandler<SignalValueType> handler) {
-	if (!dbus_conn_) {
+	if (!dbus_conn_ || !dbus_connection_get_is_connected(dbus_conn_.get())) {
 		auto err = InitializeConnection();
 		if (err != error::NoError) {
 			return err;
@@ -231,7 +231,7 @@ error::Error DBusClient::RegisterSignalHandler(
 		dbus_error_free(&dbus_error);
 		return err;
 	}
-	AddSignalHandler<SignalValueType>(match_rule, handler);
+	AddSignalHandler<SignalValueType>({iface, signal}, handler);
 	return error::NoError;
 }
 
@@ -241,13 +241,29 @@ template error::Error DBusClient::RegisterSignalHandler(
 template error::Error DBusClient::RegisterSignalHandler(
 	const string &iface, const string &signal, DBusSignalHandler<ExpectedStringPair> handler);
 
-void DBusClient::UnregisterSignalHandler(const string &iface, const string &signal) {
+error::Error DBusClient::UnregisterSignalHandler(const string &iface, const string &signal) {
 	// we use the match rule as a unique string for the given signal
-	const string spec = GetSignalMatchRule(iface, signal);
+	const string match_rule = GetSignalMatchRule(iface, signal);
 
 	// should be in at most one set, but erase() is a noop if not found
-	signal_handlers_string_.erase(spec);
-	signal_handlers_string_pair_.erase(spec);
+	// Remove handlers even if subsequent dbus_bus_remove_match fails. This will result in
+	// simply nothing being called when the signal comes. Besides, if remove_match fails, it most
+	// probably means that the match was already not there, due to e.g. connection reestablishment.
+	signal_handlers_string_.erase({iface, signal});
+	signal_handlers_string_pair_.erase({iface, signal});
+
+	DBusError dbus_error;
+	dbus_error_init(&dbus_error);
+	dbus_bus_remove_match(dbus_conn_.get(), match_rule.c_str(), &dbus_error);
+	if (dbus_error_is_set(&dbus_error)) {
+		auto err = MakeError(
+			ConnectionError,
+			string("Failed to unregister signal reception: ") + dbus_error.message);
+		dbus_error_free(&dbus_error);
+		return err;
+	}
+
+	return error::NoError;
 }
 
 void HandleDispatch(DBusConnection *conn, DBusDispatchStatus status, void *data) {
@@ -257,11 +273,29 @@ void HandleDispatch(DBusConnection *conn, DBusDispatchStatus status, void *data)
 		// dbus_connection_dispatch() below can cause this to be called again.
 		client->loop_.Post([conn]() {
 			while (dbus_connection_get_dispatch_status(conn) == DBUS_DISPATCH_DATA_REMAINS) {
-				dbus_connection_dispatch(conn);
+				// The data from the socket should be read by now into internal libdbus buffer,
+				// but just in case call dbus_connection_read_write_dispatch instead of
+				// dbus_connection_dispatch.
+				// Timeout is set to 0 to make sure we read only data that is ready to be read, we
+				// don't wait for anything - waiting is done in RepeatedWaitFunctor.
+				dbus_connection_read_write_dispatch(conn, 0);
 			}
 		});
 	}
 }
+
+
+struct WatchState {
+	std::shared_ptr<asio::posix::stream_descriptor> sd_;
+	bool finished_;
+	DBusClient *client_;
+
+	WatchState(std::shared_ptr<asio::posix::stream_descriptor> sd, DBusClient *client) :
+		sd_ {sd},
+		finished_ {false},
+		client_ {client} {
+	}
+};
 
 dbus_bool_t AddDBusWatch(DBusWatch *w, void *data) {
 	// libdbus adds watches in two steps -- using AddDBusWatch() with a disabled
@@ -274,7 +308,7 @@ dbus_bool_t AddDBusWatch(DBusWatch *w, void *data) {
 	}
 
 	DBusClient *client = static_cast<DBusClient *>(data);
-	unique_ptr<asio::posix::stream_descriptor> sd {
+	std::shared_ptr<asio::posix::stream_descriptor> sd {
 		new asio::posix::stream_descriptor(DBusClient::GetAsioIoContext(client->loop_))};
 	boost::system::error_code ec;
 	sd->assign(dbus_watch_get_unix_fd(w), ec);
@@ -283,15 +317,17 @@ dbus_bool_t AddDBusWatch(DBusWatch *w, void *data) {
 		return FALSE;
 	}
 
+	auto watch_state = make_shared<WatchState>(sd, client);
+
 	class RepeatedWaitFunctor {
 	public:
 		RepeatedWaitFunctor(
-			asio::posix::stream_descriptor *sd,
+			std::shared_ptr<WatchState> watch_state,
 			asio::posix::stream_descriptor::wait_type type,
 			DBusWatch *watch,
 			DBusClient *client,
 			unsigned int flags) :
-			sd_ {sd},
+			watch_state_ {watch_state},
 			type_ {type},
 			watch_ {watch},
 			client_ {client},
@@ -302,15 +338,30 @@ dbus_bool_t AddDBusWatch(DBusWatch *w, void *data) {
 			if (ec == boost::asio::error::operation_aborted) {
 				return;
 			}
+			// RepeatedWaitFunctor is called once by asio on completion - i.e. when dbus removes a
+			// watch, we don't have anything more to handle, but this function is called once more.
+			// We mark it with finished_ flag to avoid trying to handle an invalid (removed) watch.
+			if (watch_state_->finished_) {
+				return;
+			}
 			if (!dbus_watch_handle(watch_, flags_)) {
 				log::Error("Failed to handle watch");
 			}
 			HandleDispatch(client_->dbus_conn_.get(), DBUS_DISPATCH_DATA_REMAINS, client_);
-			sd_->async_wait(type_, *this);
+			// Check again if we're finished, as dbus_watch_handle may have caused it in the
+			// meantime.
+			if (watch_state_->finished_) {
+				return;
+			}
+
+			// In case we return before calling async_wait with *this in all functors,
+			// the last instance of WatchState will be unreferenced, and thus sd will be deleted
+			// too.
+			watch_state_->sd_->async_wait(type_, *this);
 		}
 
 	private:
-		asio::posix::stream_descriptor *sd_;
+		std::shared_ptr<WatchState> watch_state_;
 		asio::posix::stream_descriptor::wait_type type_;
 		DBusWatch *watch_;
 		DBusClient *client_;
@@ -320,32 +371,40 @@ dbus_bool_t AddDBusWatch(DBusWatch *w, void *data) {
 	unsigned int flags {dbus_watch_get_flags(w)};
 	if (flags & DBUS_WATCH_READABLE) {
 		RepeatedWaitFunctor read_ftor {
-			sd.get(), asio::posix::stream_descriptor::wait_read, w, client, flags};
+			watch_state, asio::posix::stream_descriptor::wait_read, w, client, flags};
 		sd->async_wait(asio::posix::stream_descriptor::wait_read, read_ftor);
 	}
 	if (flags & DBUS_WATCH_WRITABLE) {
 		RepeatedWaitFunctor write_ftor {
-			sd.get(), asio::posix::stream_descriptor::wait_write, w, client, flags};
+			watch_state, asio::posix::stream_descriptor::wait_write, w, client, flags};
 		sd->async_wait(asio::posix::stream_descriptor::wait_write, write_ftor);
 	}
 	// Always watch for errors.
 	RepeatedWaitFunctor error_ftor {
-		sd.get(), asio::posix::stream_descriptor::wait_error, w, client, DBUS_WATCH_ERROR};
+		watch_state, asio::posix::stream_descriptor::wait_error, w, client, DBUS_WATCH_ERROR};
 	sd->async_wait(asio::posix::stream_descriptor::wait_error, error_ftor);
 
-	// Assign the stream_descriptor so that we have access to it in
-	// RemoveDBusWatch() and we can delete it.
-	dbus_watch_set_data(w, sd.release(), NULL);
+	// Assign the watch_state so that we have access to it in
+	// RemoveDBusWatch() and we can mark it as finished.
+	// watch_state will exist until the watch is marked as finished. So there's no
+	// danger of dereferencing a deleted pointer.
+	dbus_watch_set_data(w, watch_state.get(), NULL);
 	return TRUE;
 }
 
 static void RemoveDBusWatch(DBusWatch *w, void *data) {
-	asio::posix::stream_descriptor *sd =
-		static_cast<asio::posix::stream_descriptor *>(dbus_watch_get_data(w));
+	WatchState *watch_state = static_cast<WatchState *>(dbus_watch_get_data(w));
 	dbus_watch_set_data(w, NULL, NULL);
-	if (sd != nullptr) {
-		sd->cancel();
-		delete sd;
+	if (nullptr == watch_state) {
+		// The watch was already removed (marked as nullptr with dbus_watch_set_data above).
+		// dbus calls this function twice, so we need to check for it.
+		// Nothing to do.
+		return;
+	}
+
+	watch_state->finished_ = true;
+	if (watch_state->sd_ != nullptr) {
+		watch_state->sd_->cancel();
 	}
 }
 
@@ -545,14 +604,22 @@ DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, vo
 
 	DBusClient *client = static_cast<DBusClient *>(data);
 
+	// first check special case: disconnected message. In this case, clean up the connection state
+	// to mark that we're not watching any signals, so whoever wants them to be watched, needs to
+	// register them again.
+	if (dbus_message_is_signal(message, DBUS_INTERFACE_LOCAL, "Disconnected")) {
+		client->CleanUp();
+		return DBUS_HANDLER_RESULT_HANDLED;
+	}
+
 	// we use the match rule as a unique string for the given signal
-	const string spec =
-		GetSignalMatchRule(dbus_message_get_interface(message), dbus_message_get_member(message));
+	const string iface = dbus_message_get_interface(message);
+	const string signal = dbus_message_get_member(message);
 
 	const string signature {dbus_message_get_signature(message)};
 
-	auto opt_string_handler = client->GetSignalHandler<expected::ExpectedString>(spec);
-	auto opt_string_pair_handler = client->GetSignalHandler<ExpectedStringPair>(spec);
+	auto opt_string_handler = client->GetSignalHandler<expected::ExpectedString>({iface, signal});
+	auto opt_string_pair_handler = client->GetSignalHandler<ExpectedStringPair>({iface, signal});
 
 	// either no match or only one match
 	assert(
@@ -581,6 +648,34 @@ DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, vo
 		return DBUS_HANDLER_RESULT_HANDLED;
 	} else {
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+	}
+}
+
+bool DBusClient::WatchingSignal(const string &iface, const string &signal) const {
+	SignalSpec spec {iface, signal};
+
+	if (signal_handlers_string_.find(spec) != signal_handlers_string_.end()) {
+		return true;
+	}
+
+	if (signal_handlers_string_pair_.find(spec) != signal_handlers_string_pair_.end()) {
+		return true;
+	}
+
+	return false;
+}
+
+void DBusClient::CleanUp() {
+	std::vector<mender::common::dbus::SignalSpec> keys;
+	for (const auto &pair : signal_handlers_string_) {
+		keys.push_back(pair.first);
+	}
+	for (const auto &pair : signal_handlers_string_pair_) {
+		keys.push_back(pair.first);
+	}
+
+	for (const auto &key : keys) {
+		UnregisterSignalHandler(key.iface_, key.signal_);
 	}
 }
 
@@ -641,33 +736,6 @@ optional<DBusMethodHandler<expected::ExpectedBool>> DBusObject::GetMethodHandler
 	} else {
 		return nullopt;
 	}
-}
-
-error::Error DBusServer::InitializeConnection() {
-	auto err = DBusPeer::InitializeConnection();
-	if (err != error::NoError) {
-		return err;
-	}
-
-	DBusError dbus_error;
-	dbus_error_init(&dbus_error);
-
-	// We could also do DBUS_NAME_FLAG_ALLOW_REPLACEMENT for cases where two of
-	// processes request the same name, but it would require handling of the
-	// NameLost signal and triggering termination.
-	if (dbus_bus_request_name(
-			dbus_conn_.get(), service_name_.c_str(), DBUS_NAME_FLAG_DO_NOT_QUEUE, &dbus_error)
-		== -1) {
-		dbus_conn_.reset();
-		auto err = MakeError(
-			ConnectionError,
-			(string("Failed to register DBus name: ") + dbus_error.message + " [" + dbus_error.name
-			 + "]"));
-		dbus_error_free(&dbus_error);
-		return err;
-	}
-
-	return error::NoError;
 }
 
 DBusServer::~DBusServer() {
@@ -818,7 +886,7 @@ DBusHandlerResult HandleMethodCall(DBusConnection *connection, DBusMessage *mess
 static DBusObjectPathVTable dbus_vtable = {.message_function = HandleMethodCall};
 
 error::Error DBusServer::AdvertiseObject(DBusObjectPtr obj) {
-	if (!dbus_conn_) {
+	if (!dbus_conn_ || !dbus_connection_get_is_connected(dbus_conn_.get())) {
 		auto err = InitializeConnection();
 		if (err != error::NoError) {
 			return err;
@@ -838,19 +906,40 @@ error::Error DBusServer::AdvertiseObject(DBusObjectPtr obj) {
 		dbus_error_free(&dbus_error);
 		return err;
 	}
-
 	objects_.push_back(obj);
+
+	// We must register dbus name AFTER we already registered object paths.
+	// If our server was started due to a message directed at our name configured in a .service
+	// file, the messages aimed at the name will be delivered immediately after we successuly
+	// register the name. If we registered the name before registering object paths, the messages
+	// would be discared silently.
+	auto err = RegisterDBusName();
+	if (err != error::NoError) {
+		return err;
+	}
+
+	// If at this point we already have messages in the buffer (i.e. this service was started by
+	// dbus because a message was sent to our registered name), we must call HandleDispatch manually
+	// once to make sure that all messages are handled. We cannot rely on
+	// dbus_connection_set_dispatch_status_function from InitializeConnection to call it for us at
+	// this point.
+	HandleDispatch(dbus_conn_.get(), DBUS_DISPATCH_DATA_REMAINS, this);
 	return error::NoError;
 }
 
 template <typename SignalValueType>
 error::Error DBusServer::EmitSignal(
 	const string &path, const string &iface, const string &signal, SignalValueType value) {
-	if (!dbus_conn_) {
+	if (!dbus_conn_ || !dbus_connection_get_is_connected(dbus_conn_.get())) {
 		auto err = InitializeConnection();
 		if (err != error::NoError) {
 			return err;
 		}
+	}
+
+	auto err = RegisterDBusName();
+	if (err != error::NoError) {
+		return err;
 	}
 
 	unique_ptr<DBusMessage, decltype(&dbus_message_unref)> signal_msg {
@@ -877,6 +966,27 @@ template error::Error DBusServer::EmitSignal(
 template error::Error DBusServer::EmitSignal(
 	const string &path, const string &iface, const string &signal, StringPair value);
 
+error::Error DBusServer::RegisterDBusName() {
+	// We could also do DBUS_NAME_FLAG_ALLOW_REPLACEMENT for cases where two of
+	// processes request the same name, but it would require handling of the
+	// NameLost signal and triggering termination.
+	DBusError dbus_error;
+	dbus_error_init(&dbus_error);
+
+	if (dbus_bus_request_name(
+			dbus_conn_.get(), service_name_.c_str(), DBUS_NAME_FLAG_DO_NOT_QUEUE, &dbus_error)
+		== -1) {
+		dbus_conn_.reset();
+		auto err = MakeError(
+			ConnectionError,
+			(string("Failed to register DBus name: ") + dbus_error.message + " [" + dbus_error.name
+			 + "]"));
+		dbus_error_free(&dbus_error);
+		return err;
+	}
+
+	return error::NoError;
+}
 } // namespace dbus
 } // namespace common
 } // namespace mender
