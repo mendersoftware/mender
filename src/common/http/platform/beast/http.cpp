@@ -214,10 +214,9 @@ public:
 	}
 
 	void Cancel() override {
-		if (stream_->lowest_layer().is_open()) {
-			stream_->lowest_layer().cancel();
-			stream_->lowest_layer().close();
-		}
+		// close() is sufficient:
+		// https://www.boost.org/doc/libs/latest/doc/html/boost_asio/reference/basic_stream_socket/close/overload1.html
+		beast::close_socket(beast::get_lowest_layer(*stream_));
 	}
 
 private:
@@ -293,8 +292,7 @@ Client::Client(
 	no_proxy_ {client.no_proxy},
 	cancelled_ {make_shared<bool>(true)},
 	resolver_(GetAsioIoContext(event_loop)),
-	body_buffer_(HTTP_BEAST_BUFFER_SIZE),
-	read_timeout_timer_(event_loop) {
+	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 }
 
 Client::~Client() {
@@ -599,15 +597,15 @@ io::ExpectedAsyncReadWriterPtr Client::SwitchProtocol(IncomingResponsePtr req) {
 
 	switch (socket_mode_) {
 	case SocketMode::TlsTls:
-		return make_shared<RawSocket<ssl::stream<ssl::stream<tcp::socket>>>>(
+		return make_shared<RawSocket<ssl::stream<ssl::stream<beast::tcp_stream>>>>(
 			stream, response_data_.response_buffer_);
 	case SocketMode::Tls:
-		return make_shared<RawSocket<ssl::stream<tcp::socket>>>(
-			make_shared<ssl::stream<tcp::socket>>(std::move(stream->next_layer())),
+		return make_shared<RawSocket<ssl::stream<beast::tcp_stream>>>(
+			make_shared<ssl::stream<beast::tcp_stream>>(std::move(stream->next_layer())),
 			response_data_.response_buffer_);
 	case SocketMode::Plain:
-		return make_shared<RawSocket<tcp::socket>>(
-			make_shared<tcp::socket>(std::move(stream->next_layer().next_layer())),
+		return make_shared<RawSocket<beast::tcp_stream>>(
+			make_shared<beast::tcp_stream>(std::move(stream->next_layer().next_layer())),
 			response_data_.response_buffer_);
 	}
 
@@ -659,8 +657,10 @@ void Client::ResolveHandler(
 
 	resolver_results_ = results;
 
-	stream_ = make_shared<ssl::stream<ssl::stream<tcp::socket>>>(
-		ssl::stream<tcp::socket>(GetAsioIoContext(event_loop_), ssl_ctx_[0]), ssl_ctx_[1]);
+	stream_ = make_shared<ssl::stream<ssl::stream<beast::tcp_stream>>>(
+		ssl::stream<beast::tcp_stream>(
+			beast::tcp_stream(GetAsioIoContext(event_loop_)), ssl_ctx_[0]),
+		ssl_ctx_[1]);
 
 	if (response_data_.response_buffer_) {
 		// We can reuse this if preexisting, just make sure we start with a
@@ -1173,24 +1173,13 @@ void Client::AsyncReadNextBodyPart(
 	auto &cancelled = cancelled_;
 	auto &response_data = response_data_;
 
-	// Add a timeout timer to ensure we don't get stuck if we lose connection
-	read_timeout_timer_.AsyncWait(chrono::minutes(5), [this, cancelled](error::Error err) {
-		if (!*cancelled) {
-			if (err != error::NoError) {
-				if (err.code != make_error_condition(errc::operation_canceled)) {
-					log::Error("Read timeout timer caused error: " + err.String());
-					CallErrorHandler(err, request_, body_handler_);
-				}
-			} else {
-				CallErrorHandler(
-					MakeError(DownloadResumerError, "Read timed out"), request_, body_handler_);
-			}
-		}
-	});
+	// Set timeout to 5 minutes to ensure we don't hang during async read
+	// `next_layer().next_layer()` accesses the `beast::tcp_stream` from
+	// `ssl::stream<ssl::stream<beast::tcp_stream>>`
+	stream_->next_layer().next_layer().expires_after(chrono::minutes(5));
 
 	auto async_handler = [this, cancelled, response_data](const error_code &ec, size_t num_read) {
 		if (!*cancelled) {
-			read_timeout_timer_.Cancel();
 			ReadBodyHandler(ec, num_read);
 		}
 	};
@@ -1301,10 +1290,10 @@ void Client::Cancel() {
 
 void Client::DoCancel() {
 	resolver_.cancel();
-	read_timeout_timer_.Cancel();
 	if (stream_) {
-		stream_->lowest_layer().cancel();
-		stream_->lowest_layer().close();
+		beast::error_code ec;
+		stream_->lowest_layer().cancel(ec);
+		stream_->lowest_layer().close(ec);
 		stream_.reset();
 	}
 
