@@ -612,6 +612,8 @@ io::ExpectedAsyncReadWriterPtr Client::SwitchProtocol(IncomingResponsePtr req) {
 	}
 
 	AssertOrReturnUnexpected(false);
+	// This should not happen. It's here to silence compiler warnings.
+	return expected::unexpected(MakeError(error::ProgrammingError, "Invalid socket mode"));
 }
 
 void Client::CallHandler(ResponseHandler handler) {
