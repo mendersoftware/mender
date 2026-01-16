@@ -40,11 +40,11 @@ test:no-tests:
 
 test:unit:
   stage: test
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:11
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:13
   before_script:
-    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget zstd
+    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat-openbsd wget zstd xz-utils
     # mender-artifact install
-    - wget "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bdebian%2bbullseye_amd64.deb"
+    - wget "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bdebian%2btrixie_amd64.deb"
       --output-document mender-artifact.deb
     - apt install --assume-yes --quiet ./mender-artifact.deb
   script:
@@ -60,11 +60,11 @@ test:unit:
 test:backward-compat:
   stage: test
   # Keep the image aligned with the oldest LTS at mender-dist-packages
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:11
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:12
   before_script:
     - apt update && apt install -yyq ccache g++ git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libboost-regex-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus cmake
   script:
-    - cmake -D MENDER_DOWNLOAD_BOOST=ON .
+    - cmake .
     - make --jobs=$(nproc --all) --keep-going
 
 .test:static-template:
