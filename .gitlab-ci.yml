@@ -67,6 +67,17 @@ test:backward-compat:
     - cmake .
     - make --jobs=$(nproc --all) --keep-going
 
+test:boost-download:
+  stage: test
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
+  before_script:
+    - apt update && apt install -yyq ccache g++ git make lcov pkg-config liblmdb++-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus cmake
+  script:
+    - cmake -D MENDER_DOWNLOAD_BOOST=ON .
+    - make --jobs=$(nproc --all) --keep-going
+  tags:
+    - mender-qa-worker-generic
+
 .test:static-template:
   stage: test
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
