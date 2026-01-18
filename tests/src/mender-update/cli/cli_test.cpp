@@ -83,10 +83,6 @@ TEST(CliTest, ShowArtifact) {
 
 	conf::MenderConfig conf;
 	conf.paths.SetDataStore(tmpdir.Path());
-	context::MenderContext context(conf);
-
-	auto err = context.Initialize();
-	ASSERT_EQ(err, error::NoError) << err.String();
 
 	{
 		mtesting::RedirectStreamOutputs redirect_output;
@@ -95,10 +91,16 @@ TEST(CliTest, ShowArtifact) {
 		EXPECT_EQ(redirect_output.GetCout(), "unknown\n");
 	}
 
-	auto &db = context.GetMenderStoreDB();
-	string data = "my-name";
-	err = db.Write(context.artifact_name_key, vector<uint8_t>(data.begin(), data.end()));
-	ASSERT_EQ(err, error::NoError) << err.String();
+	{
+		context::MenderContext context(conf);
+		auto err = context.Initialize();
+		ASSERT_EQ(err, error::NoError) << err.String();
+
+		auto &db = context.GetMenderStoreDB();
+		string data = "my-name";
+		err = db.Write(context.artifact_name_key, vector<uint8_t>(data.begin(), data.end()));
+		ASSERT_EQ(err, error::NoError) << err.String();
+	}
 
 	{
 		mtesting::RedirectStreamOutputs redirect_output;
@@ -138,10 +140,6 @@ TEST(CliTest, ShowProvides) {
 
 	conf::MenderConfig conf;
 	conf.paths.SetDataStore(tmpdir.Path());
-	context::MenderContext context(conf);
-
-	auto err = context.Initialize();
-	ASSERT_EQ(err, error::NoError) << err.String();
 
 	{
 		mtesting::RedirectStreamOutputs redirect_output;
@@ -160,8 +158,34 @@ TEST(CliTest, ShowProvides) {
 		}
 	};
 
-	auto &db = context.GetMenderStoreDB();
-	string data;
+	auto write = [&](const string &artifact_provides,
+					 const string &artifact_name,
+					 const string &artifact_group) {
+		{
+			context::MenderContext context(conf);
+			ASSERT_EQ(context.Initialize(), error::NoError);
+			auto &db = context.GetMenderStoreDB();
+			if (artifact_provides != "") {
+				ASSERT_EQ(
+					db.Write(
+						context.artifact_provides_key,
+						common::ByteVectorFromString(artifact_provides)),
+					error::NoError);
+			}
+			if (artifact_name != "") {
+				ASSERT_EQ(
+					db.Write(
+						context.artifact_name_key, common::ByteVectorFromString(artifact_name)),
+					error::NoError);
+			}
+			if (artifact_group != "") {
+				ASSERT_EQ(
+					db.Write(
+						context.artifact_group_key, common::ByteVectorFromString(artifact_group)),
+					error::NoError);
+			}
+		}
+	};
 
 	{
 		SCOPED_TRACE("Line number");
@@ -171,60 +195,46 @@ TEST(CliTest, ShowProvides) {
 
 	{
 		SCOPED_TRACE("Line number");
-		data = "my-name";
-		err = db.Write(context.artifact_name_key, vector<uint8_t>(data.begin(), data.end()));
-		ASSERT_EQ(err, error::NoError) << err.String();
+		write("", "my-name", "");
 		verify("artifact_name=my-name\n");
 	}
 
 	{
 		SCOPED_TRACE("Line number");
-		data = R"({"rootfs-image.checksum":"abc"})";
-		err = db.Write(context.artifact_provides_key, vector<uint8_t>(data.begin(), data.end()));
-		data = "my-name";
-		err = db.Write(context.artifact_name_key, vector<uint8_t>(data.begin(), data.end()));
-		ASSERT_EQ(err, error::NoError) << err.String();
+		write(R"({"rootfs-image.checksum":"abc"})", "my-name", "");
 		verify("rootfs-image.checksum=abc\nartifact_name=my-name\n");
 	}
 
 	{
 		SCOPED_TRACE("Line number");
-		data = R"({"artifact_name":"this-one", "rootfs-image.checksum":"abc"})";
-		err = db.Write(context.artifact_provides_key, vector<uint8_t>(data.begin(), data.end()));
-		data = "not-this-one";
-		err = db.Write(context.artifact_name_key, vector<uint8_t>(data.begin(), data.end()));
-		ASSERT_EQ(err, error::NoError) << err.String();
+		write(R"({"artifact_name":"this-one", "rootfs-image.checksum":"abc"})", "not-this-one", "");
 		verify("rootfs-image.checksum=abc\nartifact_name=this-one\n");
 	}
 
-	ASSERT_EQ(db.Remove(context.artifact_provides_key), error::NoError);
-	ASSERT_EQ(db.Remove(context.artifact_name_key), error::NoError);
+	{
+		context::MenderContext context(conf);
+		ASSERT_EQ(context.Initialize(), error::NoError);
+		auto &db = context.GetMenderStoreDB();
+		ASSERT_EQ(db.Remove(context.artifact_provides_key), error::NoError);
+		ASSERT_EQ(db.Remove(context.artifact_name_key), error::NoError);
+	}
 
 	{
 		SCOPED_TRACE("Line number");
-		data = "my-group";
-		err = db.Write(context.artifact_group_key, vector<uint8_t>(data.begin(), data.end()));
-		ASSERT_EQ(err, error::NoError) << err.String();
+		write("", "", "my-group");
 		verify("artifact_group=my-group\nartifact_name=unknown\n");
 	}
 
 	{
 		SCOPED_TRACE("Line number");
-		data = R"({"rootfs-image.checksum":"abc"})";
-		err = db.Write(context.artifact_provides_key, vector<uint8_t>(data.begin(), data.end()));
-		data = "my-group";
-		err = db.Write(context.artifact_group_key, vector<uint8_t>(data.begin(), data.end()));
-		ASSERT_EQ(err, error::NoError) << err.String();
+		write(R"({"rootfs-image.checksum":"abc"})", "", "my-group");
 		verify("rootfs-image.checksum=abc\nartifact_group=my-group\nartifact_name=unknown\n");
 	}
 
 	{
 		SCOPED_TRACE("Line number");
-		data = R"({"artifact_group":"this-one", "rootfs-image.checksum":"abc"})";
-		err = db.Write(context.artifact_provides_key, vector<uint8_t>(data.begin(), data.end()));
-		data = "not-this-one";
-		err = db.Write(context.artifact_group_key, vector<uint8_t>(data.begin(), data.end()));
-		ASSERT_EQ(err, error::NoError) << err.String();
+		write(
+			R"({"artifact_group":"this-one", "rootfs-image.checksum":"abc"})", "", "not-this-one");
 		verify("rootfs-image.checksum=abc\nartifact_group=this-one\nartifact_name=unknown\n");
 	}
 }
