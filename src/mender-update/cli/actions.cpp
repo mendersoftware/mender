@@ -35,6 +35,7 @@
 
 #ifdef MENDER_EMBED_MENDER_AUTH
 #include <mender-auth/cli/actions.hpp>
+#include <mender-auth/cli/keystore.hpp>
 #endif
 
 namespace mender {
@@ -311,17 +312,39 @@ error::Error RollbackAction::Execute(context::MenderContext &main_context) {
 error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 	events::EventLoop event_loop;
 	daemon::Context ctx(main_context, event_loop);
+	error::Error err;
 
 #if not defined(MENDER_USE_DBUS) and defined(MENDER_EMBED_MENDER_AUTH)
 	// Passphrase is not currently supported when launching from mender-update cli.
 	auto key_store = mender::auth::cli::KeystoreFromConfig(ctx.mender_context.GetConfig(), "");
+	err = key_store->Load();
+	if (err != error::NoError
+		&& err.code != mender::auth::cli::MakeError(mender::auth::cli::NoKeysError, "").code) {
+		return err;
+	}
+	if (err != error::NoError) {
+		log::Error("Got error loading the private key from the keystore: " + err.String());
+	}
+	if (err.code == mender::auth::cli::MakeError(mender::auth::cli::NoKeysError, "").code) {
+		log::Info("Generating new ED25519 key");
+		err = key_store->Generate();
+		if (err != error::NoError) {
+			log::Error("Failed to generate new key: " + err.String());
+			return err;
+		}
+		err = key_store->Save();
+		if (err != error::NoError) {
+			log::Error("Failed to save new key: " + err.String());
+			return err;
+		}
+	}
 	ctx.authenticator.SetCryptoArgs(
 		{key_store->KeyName(), key_store->PassPhrase(), key_store->SSLEngine()});
 #endif
 
 	daemon::StateMachine state_machine(ctx, event_loop);
 	state_machine.LoadStateFromDb();
-	error::Error err = MaybeInstallBootstrapArtifact(main_context);
+	err = MaybeInstallBootstrapArtifact(main_context);
 	if (err != error::NoError) {
 		return err;
 	}
