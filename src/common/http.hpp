@@ -520,12 +520,9 @@ private:
 	};
 
 	boost::asio::ip::tcp::resolver resolver_;
-	shared_ptr<ssl::stream<ssl::stream<tcp::socket>>> stream_;
+	shared_ptr<ssl::stream<ssl::stream<beast::tcp_stream>>> stream_;
 
 	vector<uint8_t> body_buffer_;
-
-	// Timer for read timeouts to prevent hanging on connection loss
-	events::Timer read_timeout_timer_;
 
 	asio::ip::tcp::resolver::results_type resolver_results_;
 
