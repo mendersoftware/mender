@@ -25,7 +25,7 @@ RUN MENDER_ARTIFACT_VERSION=$(sed -n 's/.*MENDER_ARTIFACT_VERSION: \(.*\)/\1/p' 
     fi; \
     curl "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1+ubuntu+noble_amd64.deb" \
         --output /mender-artifact.deb && \
-    dpkg --install /mender-artifact.deb && \
+    apt install --assume-yes --quiet /mender-artifact.deb && \
     rm /mender-artifact.deb
 RUN mender-artifact write bootstrap-artifact \
         --artifact-name original \
