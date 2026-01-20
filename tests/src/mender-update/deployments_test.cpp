@@ -326,9 +326,9 @@ TEST_F(DeploymentsTests, TestV2APIError) {
 			handler_called = true;
 			ASSERT_FALSE(resp);
 
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("Got unexpected response"));
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("403"));
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("JWT token expired"));
+			EXPECT_THAT(resp.error().error.message, testing::HasSubstr("Got unexpected response"));
+			EXPECT_THAT(resp.error().error.message, testing::HasSubstr("403"));
+			EXPECT_THAT(resp.error().error.message, testing::HasSubstr("JWT token expired"));
 
 			loop.Stop();
 		});
@@ -655,9 +655,9 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithError) {
 
 			ASSERT_FALSE(resp);
 
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("Got unexpected response"));
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("403"));
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("Forbidden"));
+			EXPECT_THAT(resp.error().error.message, testing::HasSubstr("Got unexpected response"));
+			EXPECT_THAT(resp.error().error.message, testing::HasSubstr("403"));
+			EXPECT_THAT(resp.error().error.message, testing::HasSubstr("Forbidden"));
 
 			loop.Stop();
 		});

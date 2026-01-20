@@ -229,6 +229,55 @@ void PollForDeploymentState::HandlePollingError(Context &ctx, sm::EventPoster<St
 	});
 }
 
+void PollForDeploymentState::CheckNewDeploymentsHandler(
+	Context &ctx,
+	sm::EventPoster<StateEvent> &poster,
+	mender::update::deployments::CheckUpdatesAPIResponse response) {
+	if (!response) {
+		log::Error("Error while polling for deployment: " + response.error().error.String());
+		// Replace the update poll timer with a backoff
+		HandlePollingError(ctx, poster);
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	} else if (!response.value()) {
+		log::Info("No update available");
+		poster.PostEvent(StateEvent::NothingToDo);
+		if (not ctx.inventory_client->has_submitted_inventory) {
+			// If we have not submitted inventory successfully at least
+			// once, schedule this after receiving a successful response
+			// with no update. This enables inventory to be submitted
+			// immediately after the device has been accepted. If there
+			// is an update available, an inventory update will be
+			// scheduled at the end of it unconditionally.
+			poster.PostEvent(StateEvent::InventoryPollingTriggered);
+		}
+
+		backoff_.Reset();
+		return;
+	}
+	backoff_.Reset();
+
+	auto exp_data = ApiResponseJsonToStateData(response.value().value());
+	if (!exp_data) {
+		log::Error("Error in API response: " + exp_data.error().String());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+
+	// Make a new set of update data.
+	ctx.deployment.state_data.reset(new StateData(std::move(exp_data.value())));
+
+	ctx.BeginDeploymentLogging();
+
+	// This is a duplicate message to one logged when mender-update
+	// starts, but this one goes into the deployment log.
+	log::Info("Running mender-update " + conf::kMenderVersion);
+	log::Info("Deployment with ID " + ctx.deployment.state_data->update_info.id + " started.");
+
+	poster.PostEvent(StateEvent::DeploymentStarted);
+	poster.PostEvent(StateEvent::Success);
+}
+
 void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Polling for update");
 
@@ -236,50 +285,7 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 		ctx.mender_context,
 		ctx.http_client,
 		[this, &ctx, &poster](mender::update::deployments::CheckUpdatesAPIResponse response) {
-			if (!response) {
-				log::Error("Error while polling for deployment: " + response.error().String());
-				// Replace the update poll timer with a backoff
-				HandlePollingError(ctx, poster);
-				poster.PostEvent(StateEvent::Failure);
-				return;
-			} else if (!response.value()) {
-				log::Info("No update available");
-				poster.PostEvent(StateEvent::NothingToDo);
-				if (not ctx.inventory_client->has_submitted_inventory) {
-					// If we have not submitted inventory successfully at least
-					// once, schedule this after receiving a successful response
-					// with no update. This enables inventory to be submitted
-					// immediately after the device has been accepted. If there
-					// is an update available, an inventory update will be
-					// scheduled at the end of it unconditionally.
-					poster.PostEvent(StateEvent::InventoryPollingTriggered);
-				}
-
-				backoff_.Reset();
-				return;
-			}
-			backoff_.Reset();
-
-			auto exp_data = ApiResponseJsonToStateData(response.value().value());
-			if (!exp_data) {
-				log::Error("Error in API response: " + exp_data.error().String());
-				poster.PostEvent(StateEvent::Failure);
-				return;
-			}
-
-			// Make a new set of update data.
-			ctx.deployment.state_data.reset(new StateData(std::move(exp_data.value())));
-
-			ctx.BeginDeploymentLogging();
-
-			// This is a duplicate message to one logged when mender-update
-			// starts, but this one goes into the deployment log.
-			log::Info("Running mender-update " + conf::kMenderVersion);
-			log::Info(
-				"Deployment with ID " + ctx.deployment.state_data->update_info.id + " started.");
-
-			poster.PostEvent(StateEvent::DeploymentStarted);
-			poster.PostEvent(StateEvent::Success);
+			this->CheckNewDeploymentsHandler(ctx, poster, response);
 		});
 
 	if (err != error::NoError) {

@@ -134,7 +134,8 @@ error::Error DeploymentClient::CheckNewDeployments(
 				CheckUpdatesAPIResponse response {optional<json::Json> {ex_j.value()}};
 				api_handler(response);
 			} else {
-				api_handler(expected::unexpected(ex_j.error()));
+				api_handler(expected::unexpected(
+					CheckUpdatesAPIResponseError {status, nullopt, ex_j.error()}));
 			}
 		} else if (status == http::StatusNoContent) {
 			api_handler(CheckUpdatesAPIResponse {nullopt});
@@ -142,32 +143,26 @@ error::Error DeploymentClient::CheckNewDeployments(
 			log::Warning(
 				"DeploymentClient::CheckNewDeployments - received unhandled http response: "
 				+ to_string(status));
-			api_handler(expected::unexpected(MakeError(
-				DeploymentAbortedError, "received unhandled HTTP response: " + to_string(status))));
+			api_handler(expected::unexpected(CheckUpdatesAPIResponseError {
+				status,
+				nullopt,
+				MakeError(
+					DeploymentAbortedError,
+					"received unhandled HTTP response: " + to_string(status))}));
 		}
 	};
 
 	http::ResponseHandler header_handler =
-		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
-			if (!exp_resp) {
-				log::Error("Request to check new deployments failed: " + exp_resp.error().message);
-				CheckUpdatesAPIResponse response = expected::unexpected(exp_resp.error());
-				api_handler(response);
-				return;
-			}
-
-			auto resp = exp_resp.value();
-			received_body->clear();
-			auto body_writer = make_shared<io::ByteWriter>(received_body);
-			body_writer->SetUnlimited(true);
-			resp->SetBodyWriter(body_writer);
+		[this, received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
+			this->HeaderHandler(received_body, api_handler, exp_resp);
 		};
 
 	http::ResponseHandler v1_body_handler =
 		[received_body, api_handler, handle_data](http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
 				log::Error("Request to check new deployments failed: " + exp_resp.error().message);
-				CheckUpdatesAPIResponse response = expected::unexpected(exp_resp.error());
+				CheckUpdatesAPIResponse response = expected::unexpected(
+					CheckUpdatesAPIResponseError {nullopt, nullopt, exp_resp.error()});
 				api_handler(response);
 				return;
 			}
@@ -183,9 +178,12 @@ error::Error DeploymentClient::CheckNewDeployments(
 				} else {
 					err_str = resp->GetStatusMessage();
 				}
-				api_handler(expected::unexpected(MakeError(
-					BadResponseError,
-					"Got unexpected response " + to_string(status) + ": " + err_str)));
+				api_handler(expected::unexpected(CheckUpdatesAPIResponseError {
+					status,
+					nullopt,
+					MakeError(
+						BadResponseError,
+						"Got unexpected response " + to_string(status) + ": " + err_str)}));
 			}
 		};
 
@@ -198,7 +196,8 @@ error::Error DeploymentClient::CheckNewDeployments(
 											 &client](http::ExpectedIncomingResponsePtr exp_resp) {
 		if (!exp_resp) {
 			log::Error("Request to check new deployments failed: " + exp_resp.error().message);
-			CheckUpdatesAPIResponse response = expected::unexpected(exp_resp.error());
+			CheckUpdatesAPIResponse response = expected::unexpected(
+				CheckUpdatesAPIResponseError {nullopt, nullopt, exp_resp.error()});
 			api_handler(response);
 			return;
 		}
@@ -211,7 +210,8 @@ error::Error DeploymentClient::CheckNewDeployments(
 				"POST request to v2 version of the deployments API failed, falling back to v1 version and GET");
 			auto err = client.AsyncCall(v1_req, header_handler, v1_body_handler);
 			if (err != error::NoError) {
-				api_handler(expected::unexpected(err.WithContext("While calling v1 endpoint")));
+				api_handler(expected::unexpected(CheckUpdatesAPIResponseError {
+					status, nullopt, err.WithContext("While calling v1 endpoint")}));
 			}
 		} else {
 			auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
@@ -221,13 +221,35 @@ error::Error DeploymentClient::CheckNewDeployments(
 			} else {
 				err_str = resp->GetStatusMessage();
 			}
-			api_handler(expected::unexpected(MakeError(
-				BadResponseError,
-				"Got unexpected response " + to_string(status) + ": " + err_str)));
+			api_handler(expected::unexpected(CheckUpdatesAPIResponseError {
+				status,
+				nullopt,
+				MakeError(
+					BadResponseError,
+					"Got unexpected response " + to_string(status) + ": " + err_str)}));
 		}
 	};
 
 	return client.AsyncCall(v2_req, header_handler, v2_body_handler);
+}
+
+void DeploymentClient::HeaderHandler(
+	shared_ptr<vector<uint8_t>> received_body,
+	CheckUpdatesAPIResponseHandler api_handler,
+	http::ExpectedIncomingResponsePtr exp_resp) {
+	if (!exp_resp) {
+		log::Error("Request to check new deployments failed: " + exp_resp.error().message);
+		CheckUpdatesAPIResponse response =
+			expected::unexpected(CheckUpdatesAPIResponseError {nullopt, nullopt, exp_resp.error()});
+		api_handler(response);
+		return;
+	}
+
+	auto resp = exp_resp.value();
+	received_body->clear();
+	auto body_writer = make_shared<io::ByteWriter>(received_body);
+	body_writer->SetUnlimited(true);
+	resp->SetBodyWriter(body_writer);
 }
 
 static const string deployment_status_strings[static_cast<int>(DeploymentStatus::End_) + 1] = {

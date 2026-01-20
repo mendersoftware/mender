@@ -77,6 +77,10 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
 private:
+	void CheckNewDeploymentsHandler(
+		Context &ctx,
+		sm::EventPoster<StateEvent> &poster,
+		mender::update::deployments::CheckUpdatesAPIResponse response);
 	void HandlePollingError(Context &ctx, sm::EventPoster<StateEvent> &poster);
 	http::ExponentialBackoff backoff_;
 };
