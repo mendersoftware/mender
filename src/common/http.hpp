@@ -40,6 +40,8 @@
 #include <common/log.hpp>
 #include <client_shared/config_parser.hpp>
 
+// For friend declaration below, used in tests.
+class DeploymentsTests;
 namespace mender {
 namespace common {
 namespace http {
@@ -89,6 +91,7 @@ enum ErrorCode {
 	MaxRetryError,
 	DownloadResumerError,
 	ProxyError,
+	InvalidDateFormatError
 };
 
 error::Error MakeError(ErrorCode code, const string &msg);
@@ -116,6 +119,7 @@ enum StatusCode {
 	StatusUnauthorized = 401,
 	StatusNotFound = 404,
 	StatusConflict = 409,
+	StatusTooManyRequests = 429,
 
 	StatusInternalServerError = 500,
 	StatusNotImplemented = 501,
@@ -147,6 +151,14 @@ string JoinUrl(const string &prefix, const Urls &...urls) {
 	}
 	return final_url;
 }
+
+// HTTP standard defines some headers, e.g. Retry-After to contain either the number of seconds
+// to wait, or an HTTP-date after which something should happen.
+// Based on either a number of seconds or a HTTP-date in the string calculate the number of seconds
+// remaining from current time.
+// HTTP-date format is defined in https://datatracker.ietf.org/doc/html/rfc7231#section-7.1.1.1
+// example: Sun, 06 Nov 1994 08:49:37 GMT
+expected::Expected<chrono::seconds> GetRemainingTime(const string &date);
 
 class CaseInsensitiveHasher {
 public:
@@ -349,6 +361,7 @@ private:
 	// The DownloadResumer's handlers needs to manipulate internals of IncomingResponse
 	friend class resumer::HeaderHandlerFunctor;
 	friend class resumer::BodyHandlerFunctor;
+	friend class ::DeploymentsTests;
 };
 
 class OutgoingResponse :

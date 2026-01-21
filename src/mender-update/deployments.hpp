@@ -36,6 +36,8 @@
 #include <common/optional.hpp>
 #include <mender-update/context.hpp>
 
+// For friend declaration below, used in tests.
+class DeploymentsTests;
 namespace mender {
 namespace update {
 namespace deployments {
@@ -60,6 +62,7 @@ enum DeploymentsErrorCode {
 	InvalidDataError,
 	BadResponseError,
 	DeploymentAbortedError,
+	TooManyRequestsError,
 };
 
 class DeploymentsErrorCategoryClass : public std::error_category {
@@ -72,8 +75,8 @@ extern const DeploymentsErrorCategoryClass DeploymentsErrorCategory;
 error::Error MakeError(DeploymentsErrorCode code, const string &msg);
 
 struct CheckUpdatesAPIResponseError {
-	optional<unsigned> code;
-	optional<http::Transaction::HeaderMap> headers;
+	optional<unsigned> http_code;
+	optional<http::Transaction::HeaderMap> http_headers;
 	error::Error error;
 };
 
@@ -147,6 +150,7 @@ public:
 		LogsAPIResponseHandler api_handler) override;
 
 private:
+	friend class ::DeploymentsTests;
 	void HeaderHandler(
 		shared_ptr<vector<uint8_t>> received_body,
 		CheckUpdatesAPIResponseHandler api_handler,

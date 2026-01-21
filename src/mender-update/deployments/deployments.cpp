@@ -64,6 +64,8 @@ string DeploymentsErrorCategoryClass::message(int code) const {
 		return "Bad response error";
 	case DeploymentAbortedError:
 		return "Deployment was aborted on the server";
+	case TooManyRequestsError:
+		return "Too many requests";
 	}
 	assert(false);
 	return "Unknown";
@@ -168,6 +170,10 @@ error::Error DeploymentClient::CheckNewDeployments(
 			}
 			auto resp = exp_resp.value();
 			auto status = resp->GetStatusCode();
+
+			// StatusTooManyRequests must have been handled in HeaderHandler already
+			assert(status != http::StatusTooManyRequests);
+
 			if ((status == http::StatusOK) || (status == http::StatusNoContent)) {
 				handle_data(status);
 			} else {
@@ -203,6 +209,10 @@ error::Error DeploymentClient::CheckNewDeployments(
 		}
 		auto resp = exp_resp.value();
 		auto status = resp->GetStatusCode();
+
+		// StatusTooManyRequests must have been handled in HeaderHandler already
+		assert(status != http::StatusTooManyRequests);
+
 		if ((status == http::StatusOK) || (status == http::StatusNoContent)) {
 			handle_data(status);
 		} else if (status == http::StatusNotFound) {
@@ -246,6 +256,13 @@ void DeploymentClient::HeaderHandler(
 	}
 
 	auto resp = exp_resp.value();
+	auto status = resp->GetStatusCode();
+	if (status == http::StatusTooManyRequests) {
+		CheckUpdatesAPIResponse response = expected::unexpected(CheckUpdatesAPIResponseError {
+			status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")});
+		api_handler(response);
+		return;
+	}
 	received_body->clear();
 	auto body_writer = make_shared<io::ByteWriter>(received_body);
 	body_writer->SetUnlimited(true);
