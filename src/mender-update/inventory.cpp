@@ -60,6 +60,8 @@ string InventoryErrorCategoryClass::message(int code) const {
 		return "Success";
 	case BadResponseError:
 		return "Bad response error";
+	case TooManyRequestsError:
+		return "Too many requests";
 	}
 	assert(false);
 	return "Unknown";
@@ -159,6 +161,10 @@ error::Error InventoryClient::PushInventoryData(
 
 			auto resp = exp_resp.value();
 			auto status = resp->GetStatusCode();
+
+			// StatusTooManyRequests must have been handled in HeaderHandler already
+			assert(status != http::StatusTooManyRequests);
+
 			if (status == http::StatusOK) {
 				log::Info("Inventory data submitted successfully");
 				last_data_hash = payload_hash;
@@ -194,6 +200,12 @@ void InventoryClient::HeaderHandler(
 
 	auto body_writer = make_shared<io::ByteWriter>(received_body);
 	auto resp = exp_resp.value();
+	auto status = resp->GetStatusCode();
+	if (status == http::StatusTooManyRequests) {
+		api_handler(APIResponse {
+			status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")});
+		return;
+	}
 	auto content_length = resp->GetHeader("Content-Length");
 	auto ex_len = common::StringTo<size_t>(content_length.value());
 	if (!ex_len) {

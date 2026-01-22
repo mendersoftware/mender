@@ -79,6 +79,11 @@ std::string ProvideFileSizesToString(ProvideFileSizes sizes) {
 	return ProvideFileSizesString[static_cast<int>(sizes)];
 }
 
+class MockPoster : virtual public mender::common::state_machine::EventPoster<StateEvent> {
+public:
+	MOCK_METHOD(void, PostEvent, (StateEvent event), (override));
+};
+
 struct StateTransitionsTestCase {
 	string case_name;
 	vector<string> state_chain;
@@ -3982,15 +3987,9 @@ TEST_F(StateTestWithArtifact, DeploymentLogging) {
 		path::Join(tmpdir.Path(), "deployments.0002." DEPLOYMENT_ID ".log");
 	EXPECT_FALSE(mtesting::FileContains(no_such_deployment_log, "Running mender-update"));
 }
-
-class MockPoster : virtual public mender::common::state_machine::EventPoster<StateEvent> {
+class StateTests : public testing::Test {
 public:
-	MOCK_METHOD(void, PostEvent, (StateEvent event), (override));
-};
-class PollForDeploymentStateTests : public testing::Test {
-public:
-	PollForDeploymentStateTests() :
-		state_(3600, 0),
+	StateTests() :
 		event_loop_ {chrono::seconds {3}} {
 	}
 
@@ -4004,12 +4003,6 @@ public:
 	}
 
 protected:
-	void callPollForDeploymentStateHandler(
-		mender::update::deployments::CheckUpdatesAPIResponse response) {
-		state_.CheckNewDeploymentsHandler(*ctx_, poster_, response);
-		ctx_->deployment_timer.Cancel();
-	}
-
 	void ExpectLogsInOrder(
 		const std::string &output, const std::vector<std::string> &logs_in_order) {
 		size_t last_pos = 0;
@@ -4024,13 +4017,27 @@ protected:
 		}
 	}
 
-	PollForDeploymentState state_;
 	mtesting::TemporaryDirectory tmpdir_;
 	conf::MenderConfig config_;
 	unique_ptr<context::MenderContext> main_context_;
 	mtesting::TestEventLoop event_loop_;
 	unique_ptr<Context> ctx_;
 	testing::StrictMock<MockPoster> poster_;
+};
+class PollForDeploymentStateTests : public StateTests {
+public:
+	PollForDeploymentStateTests() :
+		state_(3600, 0) {
+	}
+
+protected:
+	void callPollForDeploymentStateHandler(
+		mender::update::deployments::CheckUpdatesAPIResponse response) {
+		state_.CheckNewDeploymentsHandler(*ctx_, poster_, response);
+		ctx_->deployment_timer.Cancel();
+	}
+
+	PollForDeploymentState state_;
 };
 
 TEST_F(PollForDeploymentStateTests, TooManyRequests_SecondsInRetryAfterHeader) {
@@ -4303,6 +4310,124 @@ TEST(DBSchemaMigrationTest, TestFromVersion1To2) {
 	ASSERT_EQ(migrated_data.update_info.artifact.compatible_devices.size(), 1);
 	EXPECT_EQ(migrated_data.update_info.artifact.compatible_devices[0], "qemux86-64");
 	EXPECT_EQ(migrated_data.update_info.artifact.artifact_name, "mender-98415760");
+}
+
+class SubmitInventoryStateTests : public StateTests {
+public:
+	SubmitInventoryStateTests() :
+		state_(3600, 0) {
+	}
+
+protected:
+	void callPushDataHandler(inventory::APIResponse response) {
+		state_.PushDataHandler(*ctx_, poster_, response);
+		ctx_->deployment_timer.Cancel();
+	}
+
+	SubmitInventoryState state_;
+};
+
+TEST_F(SubmitInventoryStateTests, TooManyRequests_SecondsInRetryAfterHeader) {
+	http::Transaction::HeaderMap headers;
+	headers.insert({"Retry-After", "3600"});
+
+	inventory::APIResponse resp = {
+		http::StatusTooManyRequests,
+		headers,
+		MakeError(inventory::TooManyRequestsError, "Too many requests")};
+
+	inventory::APIResponse resp_unauthorized = {
+		http::StatusUnauthorized,
+		headers,
+		MakeError(inventory::BadResponseError, "doesn't matter")};
+
+	EXPECT_CALL(poster_, PostEvent(StateEvent::Failure)).Times(6);
+	testing::internal::CaptureStderr();
+
+	callPushDataHandler(resp_unauthorized);
+	callPushDataHandler(resp);
+	callPushDataHandler(resp_unauthorized);
+	callPushDataHandler(resp_unauthorized);
+	callPushDataHandler(resp_unauthorized);
+	callPushDataHandler(resp);
+
+	auto output = testing::internal::GetCapturedStderr();
+	// make sure that retrying with Retry-After does not modify normal
+	// exponential backoff behavior
+	ExpectLogsInOrder(
+		output,
+		{
+			"Retrying inventory polling in 60 second",
+			"Retrying inventory polling in 3600 second",
+			"Retrying inventory polling in 60 second",
+			"Retrying inventory polling in 60 second",
+			"Retrying inventory polling in 120 second",
+			"Retrying inventory polling in 3600 second",
+		});
+}
+
+TEST_F(SubmitInventoryStateTests, TooManyRequests_DateInRetryAfterHeader) {
+	time_t now = time(nullptr);
+	time_t futureTime = now + 1298;
+	struct tm *tm_ptr = gmtime(&futureTime);
+	char buffer[100];
+	// HTTP Format, e.g. "Wed, 21 Oct 2015 07:28:00 GMT", 1298 seconds from now
+	strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S GMT", tm_ptr);
+	string httpDate(buffer);
+
+	http::Transaction::HeaderMap headers;
+	headers.insert({"Retry-After", httpDate});
+
+	inventory::APIResponse resp = {
+		http::StatusTooManyRequests,
+		headers,
+		MakeError(mender::update::deployments::TooManyRequestsError, "Too many requests")};
+
+	EXPECT_CALL(poster_, PostEvent(StateEvent::Failure)).Times(1);
+	testing::internal::CaptureStderr();
+
+	callPushDataHandler(resp);
+
+	auto output = testing::internal::GetCapturedStderr();
+	// make sure that retrying with Retry-After does not modify normal
+	// exponential backoff behavior
+	ExpectLogsInOrder(
+		output,
+		{
+			"Retrying inventory polling in 1298 second",
+		});
+}
+
+TEST_F(SubmitInventoryStateTests, TooManyRequests_NoRetryAfterHeader) {
+	http::Transaction::HeaderMap headers;
+
+	inventory::APIResponse resp = {
+		http::StatusTooManyRequests,
+		headers,
+		MakeError(mender::update::deployments::TooManyRequestsError, "Too many requests")};
+
+	int iterations = 7;
+	EXPECT_CALL(poster_, PostEvent(StateEvent::Failure)).Times(iterations);
+	testing::internal::CaptureStderr();
+
+	for (int i = 0; i < iterations; i++) {
+		callPushDataHandler(resp);
+	}
+
+	auto output = testing::internal::GetCapturedStderr();
+
+	// Make sure that normal exponential backoff is used
+	ExpectLogsInOrder(
+		output,
+		{
+			"Retrying inventory polling in 60 second",
+			"Retrying inventory polling in 60 second",
+			"Retrying inventory polling in 60 second",
+			"Retrying inventory polling in 120 second",
+			"Retrying inventory polling in 120 second",
+			"Retrying inventory polling in 120 second",
+			"Retrying inventory polling in 240 second",
+		});
 }
 
 } // namespace daemon

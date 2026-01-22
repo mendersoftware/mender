@@ -43,6 +43,7 @@ namespace json = mender::common::json;
 enum InventoryErrorCode {
 	NoError = 0,
 	BadResponseError,
+	TooManyRequestsError,
 };
 class InventoryErrorCategoryClass : public std::error_category {
 public:

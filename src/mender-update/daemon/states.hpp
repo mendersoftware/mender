@@ -28,6 +28,7 @@
 
 // For friend declaration below, used in tests.
 class PollForDeploymentStateTests;
+class SubmitInventoryStateTests;
 namespace mender {
 namespace update {
 namespace daemon {
@@ -97,9 +98,11 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
 private:
+	friend class SubmitInventoryStateTests;
 	void PushDataHandler(
 		Context &ctx, sm::EventPoster<StateEvent> &poster, inventory::APIResponse response);
-	void HandlePollingError(Context &ctx, sm::EventPoster<StateEvent> &poster);
+	void HandlePollingError(
+		Context &ctx, sm::EventPoster<StateEvent> &poster, inventory::APIResponse response);
 	http::ExponentialBackoff backoff_;
 };
 

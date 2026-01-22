@@ -130,7 +130,8 @@ SubmitInventoryState::SubmitInventoryState(int retry_interval_seconds, int retry
 	backoff_ {chrono::seconds(retry_interval_seconds), retry_count} {
 }
 
-void SubmitInventoryState::HandlePollingError(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void SubmitInventoryState::HandlePollingError(
+	Context &ctx, sm::EventPoster<StateEvent> &poster, inventory::APIResponse response) {
 	// When using short polling intervals, we should adjust the backoff to ensure
 	// that the intervals do not exceed the maximum retry polling interval, which
 	// converts the backoff to a fixed interval.
@@ -140,19 +141,40 @@ void SubmitInventoryState::HandlePollingError(Context &ctx, sm::EventPoster<Stat
 		backoff_.SetSmallestInterval(max_interval);
 		backoff_.SetMaxInterval(max_interval);
 	}
-	auto exp_interval = backoff_.NextInterval();
-	if (!exp_interval) {
-		log::Debug(
-			"Not retrying with backoff, retrying InventoryPollIntervalSeconds: "
-			+ exp_interval.error().String());
-		return;
+
+	chrono::milliseconds interval;
+	bool retry_after_defined {false};
+
+	if (response.http_code.has_value() && response.http_code.value() == http::StatusTooManyRequests
+		&& response.http_headers.has_value()) {
+		auto retry_after_header = response.http_headers.value().find("Retry-After");
+		if (retry_after_header != response.http_headers.value().end()) {
+			auto exp_interval = http::GetRemainingTime(retry_after_header->second);
+			if (exp_interval) {
+				interval = exp_interval.value();
+				retry_after_defined = true;
+			} else {
+				log::Debug("Could not get the Retry-After value from HTTP response");
+			}
+		}
+	}
+
+	if (!retry_after_defined) {
+		auto exp_interval = backoff_.NextInterval();
+		if (!exp_interval) {
+			log::Debug(
+				"Not retrying with backoff, retrying InventoryPollIntervalSeconds: "
+				+ exp_interval.error().String());
+			return;
+		}
+		interval = exp_interval.value();
 	}
 	log::Info(
 		"Retrying inventory polling in "
-		+ to_string(chrono::duration_cast<chrono::seconds>(*exp_interval).count()) + " seconds");
+		+ to_string(chrono::duration_cast<chrono::seconds>(interval).count()) + " seconds");
 
 	ctx.inventory_timer.Cancel();
-	ctx.inventory_timer.AsyncWait(*exp_interval, [&poster](error::Error err) {
+	ctx.inventory_timer.AsyncWait(interval, [&poster](error::Error err) {
 		if (err != error::NoError) {
 			if (err.code != make_error_condition(errc::operation_canceled)) {
 				log::Error("Retry poll timer caused error: " + err.String());
@@ -191,8 +213,11 @@ void SubmitInventoryState::PushDataHandler(
 	Context &ctx, sm::EventPoster<StateEvent> &poster, inventory::APIResponse resp) {
 	if (resp.error != error::NoError) {
 		log::Error("Failed to submit inventory: " + resp.error.String());
-		// Replace the inventory poll timer with a backoff
-		HandlePollingError(ctx, poster);
+		// Replace the inventory poll timer with:
+		// - a backoff, or
+		// - if HTTP 429 Too Many Requests with  Retry-After header is provided - appropriate time
+		// based on it
+		HandlePollingError(ctx, poster, resp);
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	}

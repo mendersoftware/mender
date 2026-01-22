@@ -42,6 +42,7 @@
 
 // For friend declaration below, used in tests.
 class DeploymentsTests;
+class InventoryAPITests;
 namespace mender {
 namespace common {
 namespace http {
@@ -362,6 +363,7 @@ private:
 	friend class resumer::HeaderHandlerFunctor;
 	friend class resumer::BodyHandlerFunctor;
 	friend class ::DeploymentsTests;
+	friend class ::InventoryAPITests;
 };
 
 class OutgoingResponse :
