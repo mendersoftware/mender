@@ -84,11 +84,11 @@ private:
 	void CheckNewDeploymentsHandler(
 		Context &ctx,
 		sm::EventPoster<StateEvent> &poster,
-		mender::update::deployments::CheckUpdatesAPIResponse response);
+		deployments::CheckUpdatesAPIResponse response);
 	void HandlePollingError(
 		Context &ctx,
 		sm::EventPoster<StateEvent> &poster,
-		mender::update::deployments::CheckUpdatesAPIResponseError error);
+		deployments::CheckUpdatesAPIResponseError error);
 	http::ExponentialBackoff backoff_;
 };
 
@@ -152,6 +152,8 @@ public:
 
 private:
 	void DoStatusUpdate(Context &ctx, sm::EventPoster<StateEvent> &poster);
+	void DoStatusUpdateHandler(
+		Context &ctx, sm::EventPoster<StateEvent> &poster, deployments::APIResponseError error);
 
 	enum class FailureMode {
 		Ignore,

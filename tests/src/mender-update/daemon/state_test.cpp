@@ -3509,7 +3509,7 @@ public:
 		const string &substate,
 		api::Client &client,
 		deployments::StatusAPIResponseHandler api_handler) override {
-		api_handler(error::NoError);
+		api_handler(deployments::StatusAPIResponse {nullopt, nullopt, error::NoError});
 		return error::NoError;
 	}
 
@@ -3518,7 +3518,7 @@ public:
 		const string &log_file_path,
 		api::Client &client,
 		deployments::LogsAPIResponseHandler api_handler) override {
-		api_handler(error::NoError);
+		api_handler(deployments::LogsAPIResponse {nullopt, nullopt, error::NoError});
 		return error::NoError;
 	}
 };
@@ -3573,11 +3573,17 @@ public:
 			if (fail_status_report_status_ == status && fail_status_report_count_ > 0) {
 				fail_status_report_count_--;
 				if (fail_status_aborted_) {
-					api_handler(deployments::MakeError(
-						deployments::DeploymentAbortedError, "Cannot send status"));
+					api_handler(deployments::StatusAPIResponse {
+						nullopt,
+						nullopt,
+						deployments::MakeError(
+							deployments::DeploymentAbortedError, "Cannot send status")});
 				} else {
-					api_handler(error::Error(
-						make_error_condition(errc::host_unreachable), "Cannot send status"));
+					api_handler(deployments::StatusAPIResponse {
+						nullopt,
+						nullopt,
+						error::Error(
+							make_error_condition(errc::host_unreachable), "Cannot send status")});
 				}
 				return;
 			}
@@ -3586,13 +3592,16 @@ public:
 				ofstream f(status_log_path_, ios::out | ios::app);
 				f << deployments::DeploymentStatusString(status) << endl;
 				if (!f) {
-					api_handler(error::Error(
-						generic_category().default_error_condition(errno),
-						"Could not do PushStatus"));
+					api_handler(deployments::StatusAPIResponse {
+						nullopt,
+						nullopt,
+						error::Error(
+							generic_category().default_error_condition(errno),
+							"Could not do PushStatus")});
 				}
 			}
 
-			api_handler(error::NoError);
+			api_handler(deployments::StatusAPIResponse {nullopt, nullopt, error::NoError});
 		});
 		return error::NoError;
 	}
@@ -3604,7 +3613,9 @@ public:
 		deployments::LogsAPIResponseHandler api_handler) override {
 		// Just save the log file name so they can be checked later.
 		log_files.push_back(log_file_path);
-		event_loop_.Post([api_handler]() { api_handler(error::NoError); });
+		event_loop_.Post([api_handler]() {
+			api_handler(deployments::StatusAPIResponse {nullopt, nullopt, error::NoError});
+		});
 		return error::NoError;
 	}
 

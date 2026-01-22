@@ -229,7 +229,7 @@ void SubmitInventoryState::PushDataHandler(
 void PollForDeploymentState::HandlePollingError(
 	Context &ctx,
 	sm::EventPoster<StateEvent> &poster,
-	mender::update::deployments::CheckUpdatesAPIResponseError error) {
+	deployments::CheckUpdatesAPIResponseError error) {
 	// When using short polling intervals, we should adjust the backoff to ensure
 	// that the intervals do not exceed the maximum retry polling interval, which
 	// converts the backoff to a fixed interval.
@@ -288,7 +288,7 @@ void PollForDeploymentState::HandlePollingError(
 void PollForDeploymentState::CheckNewDeploymentsHandler(
 	Context &ctx,
 	sm::EventPoster<StateEvent> &poster,
-	mender::update::deployments::CheckUpdatesAPIResponse response) {
+	deployments::CheckUpdatesAPIResponse response) {
 	if (!response) {
 		log::Error("Error while polling for deployment: " + response.error().error.String());
 		// Replace the update poll timer with:
@@ -343,7 +343,7 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 	auto err = ctx.deployment_client->CheckNewDeployments(
 		ctx.mender_context,
 		ctx.http_client,
-		[this, &ctx, &poster](mender::update::deployments::CheckUpdatesAPIResponse response) {
+		[this, &ctx, &poster](deployments::CheckUpdatesAPIResponse response) {
 			this->CheckNewDeploymentsHandler(ctx, poster, response);
 		});
 
@@ -637,58 +637,8 @@ void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEv
 
 	log::Info("Sending status update to server");
 
-	auto result_handler = [this, &ctx, &poster](const error::Error &err) {
-		if (err != error::NoError) {
-			log::Error("Could not send deployment status: " + err.String());
-
-			if (err.code == deployments::MakeError(deployments::DeploymentAbortedError, "").code) {
-				// If the deployment was aborted upstream it is an immediate
-				// failure, even if retry is enabled.
-				poster.PostEvent(StateEvent::DeploymentAborted);
-				return;
-			}
-
-			switch (mode_) {
-			case FailureMode::Ignore:
-				break;
-			case FailureMode::RetryThenFail:
-
-				auto exp_interval = retry_->backoff.NextInterval();
-				if (!exp_interval) {
-					log::Error(
-						"Giving up on sending status updates to server: "
-						+ exp_interval.error().String());
-					poster.PostEvent(StateEvent::Failure);
-					return;
-				}
-
-				log::Info(
-					"Retrying status update after "
-					+ to_string(chrono::duration_cast<chrono::seconds>(*exp_interval).count())
-					+ " seconds");
-				retry_->wait_timer.AsyncWait(
-					*exp_interval, [this, &ctx, &poster](error::Error err) {
-						// Error here is quite unexpected (from a timer), so treat
-						// this as an immediate error, despite Retry flag.
-						if (err != error::NoError) {
-							log::Error(
-								"Unexpected error in SendStatusUpdateState wait timer: "
-								+ err.String());
-							poster.PostEvent(StateEvent::Failure);
-							return;
-						}
-
-						// Try again. Since both status and logs are sent
-						// from here, there's a chance this might resubmit
-						// the status, but there's no harm in it, and it
-						// won't happen often.
-						DoStatusUpdate(ctx, poster);
-					});
-				return;
-			}
-		}
-
-		poster.PostEvent(StateEvent::Success);
+	auto result_handler = [this, &ctx, &poster](deployments::APIResponseError error) {
+		this->DoStatusUpdateHandler(ctx, poster, error);
 	};
 
 	deployments::DeploymentStatus status;
@@ -710,33 +660,87 @@ void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEv
 		status,
 		"",
 		ctx.http_client,
-		[result_handler, &ctx](error::Error err) {
+		[result_handler, &ctx](deployments::StatusAPIResponse error) {
 			// If there is an error, we don't submit logs now, but call the handler,
 			// which may schedule a retry later. If there is no error, and the
 			// deployment as a whole was successful, then also call the handler here,
 			// since we don't need to submit logs at all then.
-			if (err != error::NoError || !ctx.deployment.failed) {
-				result_handler(err);
+			if (error.error != error::NoError || !ctx.deployment.failed) {
+				result_handler(error);
 				return;
 			}
 
 			// Push logs.
-			err = ctx.deployment_client->PushLogs(
+			auto err = ctx.deployment_client->PushLogs(
 				ctx.deployment.state_data->update_info.id,
 				ctx.deployment.logger->LogFilePath(),
 				ctx.http_client,
 				result_handler);
 
 			if (err != error::NoError) {
-				result_handler(err);
+				result_handler(deployments::APIResponseError {nullopt, nullopt, err});
 			}
 		});
 
 	if (err != error::NoError) {
-		result_handler(err);
+		result_handler(deployments::APIResponseError {nullopt, nullopt, err});
 	}
 
 	// No action, wait for reply from status endpoint.
+}
+
+void SendStatusUpdateState::DoStatusUpdateHandler(
+	Context &ctx, sm::EventPoster<StateEvent> &poster, deployments::APIResponseError error) {
+	if (error.error != error::NoError) {
+		log::Error("Could not send deployment status: " + error.error.String());
+
+		if (error.error.code
+			== deployments::MakeError(deployments::DeploymentAbortedError, "").code) {
+			// If the deployment was aborted upstream it is an immediate
+			// failure, even if retry is enabled.
+			poster.PostEvent(StateEvent::DeploymentAborted);
+			return;
+		}
+
+		switch (mode_) {
+		case FailureMode::Ignore:
+			break;
+		case FailureMode::RetryThenFail:
+
+			auto exp_interval = retry_->backoff.NextInterval();
+			if (!exp_interval) {
+				log::Error(
+					"Giving up on sending status updates to server: "
+					+ exp_interval.error().String());
+				poster.PostEvent(StateEvent::Failure);
+				return;
+			}
+
+			log::Info(
+				"Retrying status update after "
+				+ to_string(chrono::duration_cast<chrono::seconds>(*exp_interval).count())
+				+ " seconds");
+			retry_->wait_timer.AsyncWait(*exp_interval, [this, &ctx, &poster](error::Error err) {
+				// Error here is quite unexpected (from a timer), so treat
+				// this as an immediate error, despite Retry flag.
+				if (err != error::NoError) {
+					log::Error(
+						"Unexpected error in SendStatusUpdateState wait timer: " + err.String());
+					poster.PostEvent(StateEvent::Failure);
+					return;
+				}
+
+				// Try again. Since both status and logs are sent
+				// from here, there's a chance this might resubmit
+				// the status, but there's no harm in it, and it
+				// won't happen often.
+				DoStatusUpdate(ctx, poster);
+			});
+			return;
+		}
+	}
+
+	poster.PostEvent(StateEvent::Success);
 }
 
 void UpdateInstallState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {

@@ -748,7 +748,7 @@ TEST_F(DeploymentsTests, PushStatusTest) {
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
-			EXPECT_EQ(resp, error::NoError);
+			EXPECT_EQ(resp.error, error::NoError);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -819,7 +819,7 @@ TEST_F(DeploymentsTests, PushStatusNoSubstatusTest) {
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
-			EXPECT_EQ(resp, error::NoError);
+			EXPECT_EQ(resp.error, error::NoError);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -896,11 +896,11 @@ TEST_F(DeploymentsTests, PushStatusFailureTest) {
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
-			EXPECT_NE(resp, error::NoError);
-			EXPECT_THAT(resp.message, testing::HasSubstr("Got unexpected response"));
-			EXPECT_THAT(resp.message, testing::HasSubstr("403"));
-			EXPECT_THAT(resp.message, testing::HasSubstr("Access denied"));
-			EXPECT_NE(resp.code, deps::MakeError(deps::DeploymentAbortedError, "").code);
+			EXPECT_NE(resp.error, error::NoError);
+			EXPECT_THAT(resp.error.message, testing::HasSubstr("Got unexpected response"));
+			EXPECT_THAT(resp.error.message, testing::HasSubstr("403"));
+			EXPECT_THAT(resp.error.message, testing::HasSubstr("Access denied"));
+			EXPECT_NE(resp.error.code, deps::MakeError(deps::DeploymentAbortedError, "").code);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -919,8 +919,8 @@ TEST_F(DeploymentsTests, PushStatusFailureTest) {
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
-			EXPECT_NE(resp, error::NoError);
-			EXPECT_EQ(resp.code, deps::MakeError(deps::DeploymentAbortedError, "").code);
+			EXPECT_NE(resp.error, error::NoError);
+			EXPECT_EQ(resp.error.code, deps::MakeError(deps::DeploymentAbortedError, "").code);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -1173,7 +1173,7 @@ TEST_F(DeploymentsTests, PushLogsTest) {
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
-			EXPECT_EQ(resp, error::NoError);
+			EXPECT_EQ(resp.error, error::NoError);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -1251,7 +1251,7 @@ TEST_F(DeploymentsTests, PushLogsOneMessageTest) {
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
-			EXPECT_EQ(resp, error::NoError);
+			EXPECT_EQ(resp.error, error::NoError);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -1329,10 +1329,10 @@ TEST_F(DeploymentsTests, PushLogsFailureTest) {
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
-			EXPECT_NE(resp, error::NoError);
-			EXPECT_THAT(resp.message, testing::HasSubstr("Got unexpected response"));
-			EXPECT_THAT(resp.message, testing::HasSubstr("403"));
-			EXPECT_THAT(resp.message, testing::HasSubstr("Access denied"));
+			EXPECT_NE(resp.error, error::NoError);
+			EXPECT_THAT(resp.error.message, testing::HasSubstr("Got unexpected response"));
+			EXPECT_THAT(resp.error.message, testing::HasSubstr("403"));
+			EXPECT_THAT(resp.error.message, testing::HasSubstr("Access denied"));
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
