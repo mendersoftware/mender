@@ -36,8 +36,7 @@ RUN mender-artifact write bootstrap-artifact \
 FROM ubuntu:24.04
 
 RUN mkdir -p /run/dbus
-RUN apt update && apt install -y libboost-log1.83.0 liblmdb0 libarchive13 dbus iproute2
-
+RUN apt update && apt install -y libboost-log1.83.0 liblmdb0 libarchive13 dbus iproute2 ca-certificates
 COPY --from=build /mender-install/usr/bin/mender-update /usr/bin/mender-update
 COPY --from=build /mender-install/usr/bin/mender-auth /usr/bin/mender-auth
 COPY --from=build /mender-install/etc/mender /etc/mender
