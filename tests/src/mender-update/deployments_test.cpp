@@ -1030,59 +1030,6 @@ TEST_F(DeploymentsTests, JsonLogMessageReaderSmallEvenBufferTest) {
 	EXPECT_EQ(ss.str(), expected_data);
 }
 
-TEST_F(DeploymentsTests, JsonLogMessageReaderRewindTest) {
-	const string messages =
-		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
-{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"}
-{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
-)";
-	const string test_log_file_path = test_state_dir.Path() + "/test.log";
-	ofstream os {test_log_file_path};
-	auto err = io::WriteStringIntoOfstream(os, messages);
-	ASSERT_EQ(err, error::NoError);
-	os.close();
-
-	string header = R"({"messages":[)";
-	string closing = "]}";
-	string expected_data =
-		R"({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})";
-
-	// the reader takes size of the data without a trailing newline
-	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
-	EXPECT_EQ(deps::JsonLogMessagesReader::TotalDataSize(messages.size() - 1), expected_total_size);
-
-	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
-	deps::JsonLogMessagesReader logs_reader {
-		file_reader, static_cast<int64_t>(messages.size() - 1)};
-
-	stringstream ss;
-	vector<uint8_t> buf(1024);
-	size_t n_read = 0;
-	do {
-		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
-		ASSERT_TRUE(ex_n_read);
-		n_read = ex_n_read.value();
-		EXPECT_LE(n_read, buf.size());
-		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
-			ss << static_cast<char>(*it);
-		}
-	} while (n_read > 0);
-	EXPECT_EQ(ss.str(), expected_data);
-
-	stringstream ss2;
-	logs_reader.Rewind();
-	do {
-		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
-		ASSERT_TRUE(ex_n_read);
-		n_read = ex_n_read.value();
-		EXPECT_LE(n_read, buf.size());
-		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
-			ss2 << static_cast<char>(*it);
-		}
-	} while (n_read > 0);
-	EXPECT_EQ(ss2.str(), expected_data);
-}
-
 TEST_F(DeploymentsTests, PushLogsTest) {
 	TestEventLoop loop;
 

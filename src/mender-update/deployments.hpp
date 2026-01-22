@@ -149,18 +149,10 @@ public:
 	 */
 	JsonLogMessagesReader(shared_ptr<io::FileReader> raw_data_reader, int64_t data_size) :
 		reader_ {raw_data_reader},
-		raw_data_size_ {data_size},
 		rem_raw_data_size_ {data_size} {};
 
 	expected::ExpectedSize Read(
 		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
-
-	error::Error Rewind() {
-		header_rem_ = header_.size();
-		closing_rem_ = closing_.size();
-		rem_raw_data_size_ = raw_data_size_;
-		return reader_->Rewind();
-	}
 
 	static int64_t TotalDataSize(int64_t raw_data_size) {
 		return raw_data_size + header_.size() + closing_.size();
@@ -168,7 +160,6 @@ public:
 
 private:
 	shared_ptr<io::FileReader> reader_;
-	int64_t raw_data_size_;
 	int64_t rem_raw_data_size_;
 	static const vector<uint8_t> header_;
 	static const vector<uint8_t> closing_;

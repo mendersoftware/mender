@@ -434,10 +434,7 @@ error::Error DeploymentClient::PushLogs(
 	req->SetHeader("Content-Type", "application/json");
 	req->SetHeader("Content-Length", to_string(JsonLogMessagesReader::TotalDataSize(data_size)));
 	req->SetHeader("Accept", "application/json");
-	req->SetBodyGenerator([logs_reader]() {
-		logs_reader->Rewind();
-		return logs_reader;
-	});
+	req->SetBodyGenerator([logs_reader]() { return logs_reader; });
 
 	auto received_body = make_shared<vector<uint8_t>>();
 	return client.AsyncCall(
