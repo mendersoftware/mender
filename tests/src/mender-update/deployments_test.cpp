@@ -97,6 +97,18 @@ protected:
 		deps::DeploymentClient().HeaderHandler(
 			make_shared<vector<uint8_t>>(), api_handler, exp_resp);
 	}
+
+	void DeploymentClientPushStatusHeaderHandler(
+		deps::StatusAPIResponseHandler api_handler, http::ExpectedIncomingResponsePtr exp_resp) {
+		deps::DeploymentClient().PushStatusHeaderHandler(
+			make_shared<vector<uint8_t>>(), api_handler, exp_resp);
+	}
+
+	void DeploymentClientPushLogsHeaderHandler(
+		deps::LogsAPIResponseHandler api_handler, http::ExpectedIncomingResponsePtr exp_resp) {
+		deps::DeploymentClient().PushLogsHeaderHandler(
+			make_shared<vector<uint8_t>>(), api_handler, exp_resp);
+	}
 };
 
 TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
@@ -1565,7 +1577,7 @@ TEST_F(DeploymentsTests, DeploymentLogRenameAndCleanPreviousLogsTest) {
 		"Test content in malformed file name 3\n");
 }
 
-TEST_F(DeploymentsTests, TestTooManyRequestsWithRetryAfterHeader) {
+TEST_F(DeploymentsTests, TestTooManyRequestsWithRetryAfterHeader_HeaderHandler) {
 	TestEventLoop loop;
 	http::ClientConfig client_config;
 	http::Client client {client_config, loop};
@@ -1593,7 +1605,7 @@ TEST_F(DeploymentsTests, TestTooManyRequestsWithRetryAfterHeader) {
 	}
 }
 
-TEST_F(DeploymentsTests, TestTooManyRequestsWithoutRetryAfterHeader) {
+TEST_F(DeploymentsTests, TestTooManyRequestsWithoutRetryAfterHeader_HeaderHandler) {
 	TestEventLoop loop;
 	http::ClientConfig client_config;
 	http::Client client {client_config, loop};
@@ -1613,5 +1625,103 @@ TEST_F(DeploymentsTests, TestTooManyRequestsWithoutRetryAfterHeader) {
 	};
 
 	DeploymentClientHeaderHandler(api_handler, exp_resp);
+	EXPECT_TRUE(handler_called);
+}
+
+TEST_F(DeploymentsTests, TestTooManyRequestsWithRetryAfterHeader_PushStatusHeaderHandler) {
+	TestEventLoop loop;
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+	auto cancelled = make_shared<bool>(false);
+
+	vector<string> retry_after_cases {"100", "Fri, 31 Dec 1999 23:59:59 GMT"};
+
+	for (auto retry_after : retry_after_cases) {
+		auto resp = CreateIncomingResponse(client, cancelled, retry_after);
+		http::ExpectedIncomingResponsePtr exp_resp = resp;
+		bool handler_called {false};
+
+		auto api_handler = [&handler_called, retry_after](deps::StatusAPIResponse resp) {
+			handler_called = true;
+			EXPECT_EQ(resp.http_code, http::StatusTooManyRequests);
+			ASSERT_TRUE(resp.http_headers.has_value());
+			auto retry_from_header = resp.http_headers.value().find("Retry-After");
+			EXPECT_NE(retry_from_header, resp.http_headers.value().end());
+			EXPECT_EQ(retry_from_header->second, retry_after);
+		};
+
+		DeploymentClientPushStatusHeaderHandler(api_handler, exp_resp);
+		EXPECT_TRUE(handler_called);
+	}
+}
+
+TEST_F(DeploymentsTests, TestTooManyRequestsWithoutRetryAfterHeader_PushStatusHeaderHandler) {
+	TestEventLoop loop;
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+	auto cancelled = make_shared<bool>(false);
+
+	auto resp = CreateIncomingResponse(client, cancelled, nullopt);
+	http::ExpectedIncomingResponsePtr exp_resp = resp;
+	bool handler_called {false};
+
+	auto api_handler = [&handler_called](deps::StatusAPIResponse resp) {
+		handler_called = true;
+		EXPECT_EQ(resp.http_code, http::StatusTooManyRequests);
+		EXPECT_TRUE(resp.http_headers.has_value());
+		auto retry_from_header = resp.http_headers.value().find("Retry-After");
+		EXPECT_EQ(retry_from_header, resp.http_headers.value().end());
+	};
+
+	DeploymentClientPushStatusHeaderHandler(api_handler, exp_resp);
+	EXPECT_TRUE(handler_called);
+}
+
+TEST_F(DeploymentsTests, TestTooManyRequestsWithRetryAfterHeader_PushLogsHeaderHandler) {
+	TestEventLoop loop;
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+	auto cancelled = make_shared<bool>(false);
+
+	vector<string> retry_after_cases {"100", "Fri, 31 Dec 1999 23:59:59 GMT"};
+
+	for (auto retry_after : retry_after_cases) {
+		auto resp = CreateIncomingResponse(client, cancelled, retry_after);
+		http::ExpectedIncomingResponsePtr exp_resp = resp;
+		bool handler_called {false};
+
+		auto api_handler = [&handler_called, retry_after](deps::LogsAPIResponse resp) {
+			handler_called = true;
+			EXPECT_EQ(resp.http_code, http::StatusTooManyRequests);
+			ASSERT_TRUE(resp.http_headers.has_value());
+			auto retry_from_header = resp.http_headers.value().find("Retry-After");
+			EXPECT_NE(retry_from_header, resp.http_headers.value().end());
+			EXPECT_EQ(retry_from_header->second, retry_after);
+		};
+
+		DeploymentClientPushLogsHeaderHandler(api_handler, exp_resp);
+		EXPECT_TRUE(handler_called);
+	}
+}
+
+TEST_F(DeploymentsTests, TestTooManyRequestsWithoutRetryAfterHeader_PushLogsHeaderHandler) {
+	TestEventLoop loop;
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+	auto cancelled = make_shared<bool>(false);
+
+	auto resp = CreateIncomingResponse(client, cancelled, nullopt);
+	http::ExpectedIncomingResponsePtr exp_resp = resp;
+	bool handler_called {false};
+
+	auto api_handler = [&handler_called](deps::LogsAPIResponse resp) {
+		handler_called = true;
+		EXPECT_EQ(resp.http_code, http::StatusTooManyRequests);
+		EXPECT_TRUE(resp.http_headers.has_value());
+		auto retry_from_header = resp.http_headers.value().find("Retry-After");
+		EXPECT_EQ(retry_from_header, resp.http_headers.value().end());
+	};
+
+	DeploymentClientPushLogsHeaderHandler(api_handler, exp_resp);
 	EXPECT_TRUE(handler_called);
 }

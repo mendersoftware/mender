@@ -29,6 +29,8 @@
 // For friend declaration below, used in tests.
 class PollForDeploymentStateTests;
 class SubmitInventoryStateTests;
+class SendStatusUpdateStateTests;
+
 namespace mender {
 namespace update {
 namespace daemon {
@@ -151,6 +153,7 @@ public:
 	void SetSmallestWaitInterval(chrono::milliseconds interval);
 
 private:
+	friend class SendStatusUpdateStateTests;
 	void DoStatusUpdate(Context &ctx, sm::EventPoster<StateEvent> &poster);
 	void DoStatusUpdateHandler(
 		Context &ctx, sm::EventPoster<StateEvent> &poster, deployments::APIResponseError error);

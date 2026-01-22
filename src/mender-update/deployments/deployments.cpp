@@ -328,6 +328,10 @@ error::Error DeploymentClient::PushStatus(
 
 			auto resp = exp_resp.value();
 			auto status = resp->GetStatusCode();
+
+			// StatusTooManyRequests must have been handled in PushStatusHeaderHandler already
+			assert(status != http::StatusTooManyRequests);
+
 			if (status == http::StatusNoContent) {
 				api_handler(StatusAPIResponse {status, nullopt, error::NoError});
 			} else if (status == http::StatusConflict) {
@@ -366,6 +370,13 @@ void DeploymentClient::PushStatusHeaderHandler(
 
 	auto body_writer = make_shared<io::ByteWriter>(received_body);
 	auto resp = exp_resp.value();
+	auto status = resp->GetStatusCode();
+	if (status == http::StatusTooManyRequests) {
+		StatusAPIResponse response = {
+			status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")};
+		api_handler(response);
+		return;
+	}
 	auto content_length = resp->GetHeader("Content-Length");
 	if (!content_length) {
 		log::Debug(
@@ -505,6 +516,10 @@ error::Error DeploymentClient::PushLogs(
 
 			auto resp = exp_resp.value();
 			auto status = resp->GetStatusCode();
+
+			// StatusTooManyRequests must have been handled in PushLogsHeaderHandler already
+			assert(status != http::StatusTooManyRequests);
+
 			if (status == http::StatusNoContent) {
 				api_handler(LogsAPIResponse {status, nullopt, error::NoError});
 			} else {
@@ -538,6 +553,13 @@ void DeploymentClient::PushLogsHeaderHandler(
 
 	auto body_writer = make_shared<io::ByteWriter>(received_body);
 	auto resp = exp_resp.value();
+	auto status = resp->GetStatusCode();
+	if (status == http::StatusTooManyRequests) {
+		LogsAPIResponse response = {
+			status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")};
+		api_handler(response);
+		return;
+	}
 	auto content_length = resp->GetHeader("Content-Length");
 	if (!content_length) {
 		log::Debug(

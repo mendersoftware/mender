@@ -706,21 +706,40 @@ void SendStatusUpdateState::DoStatusUpdateHandler(
 		case FailureMode::Ignore:
 			break;
 		case FailureMode::RetryThenFail:
+			chrono::milliseconds interval;
+			bool retry_after_defined {false};
 
-			auto exp_interval = retry_->backoff.NextInterval();
-			if (!exp_interval) {
-				log::Error(
-					"Giving up on sending status updates to server: "
-					+ exp_interval.error().String());
-				poster.PostEvent(StateEvent::Failure);
-				return;
+			if (error.http_code.has_value()
+				&& error.http_code.value() == http::StatusTooManyRequests
+				&& error.http_headers.has_value()) {
+				auto retry_after_header = error.http_headers.value().find("Retry-After");
+				if (retry_after_header != error.http_headers.value().end()) {
+					auto exp_interval = http::GetRemainingTime(retry_after_header->second);
+					if (exp_interval) {
+						interval = exp_interval.value();
+						retry_after_defined = true;
+					} else {
+						log::Debug("Could not get the Retry-After value from HTTP response");
+					}
+				}
+			}
+
+			if (!retry_after_defined) {
+				auto exp_interval = retry_->backoff.NextInterval();
+				if (!exp_interval) {
+					log::Error(
+						"Giving up on sending status updates to server: "
+						+ exp_interval.error().String());
+					poster.PostEvent(StateEvent::Failure);
+					return;
+				}
+				interval = exp_interval.value();
 			}
 
 			log::Info(
 				"Retrying status update after "
-				+ to_string(chrono::duration_cast<chrono::seconds>(*exp_interval).count())
-				+ " seconds");
-			retry_->wait_timer.AsyncWait(*exp_interval, [this, &ctx, &poster](error::Error err) {
+				+ to_string(chrono::duration_cast<chrono::seconds>(interval).count()) + " seconds");
+			retry_->wait_timer.AsyncWait(interval, [this, &ctx, &poster](error::Error err) {
 				// Error here is quite unexpected (from a timer), so treat
 				// this as an immediate error, despite Retry flag.
 				if (err != error::NoError) {

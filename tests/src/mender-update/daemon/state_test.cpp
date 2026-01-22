@@ -4441,6 +4441,123 @@ TEST_F(SubmitInventoryStateTests, TooManyRequests_NoRetryAfterHeader) {
 		});
 }
 
+class SendStatusUpdateStateTests : public StateTests {
+public:
+	SendStatusUpdateStateTests() :
+		state_(nullopt, event_loop_, 3600, 0) {
+	}
+
+protected:
+	void callDoStatusUpdateHandler(deployments::APIResponseError error) {
+		state_.DoStatusUpdateHandler(*ctx_, poster_, error);
+		ASSERT_TRUE(state_.retry_.has_value());
+		state_.retry_.value().wait_timer.Cancel();
+	}
+
+	SendStatusUpdateState state_;
+};
+
+TEST_F(SendStatusUpdateStateTests, TooManyRequests_SecondsInRetryAfterHeader) {
+	http::Transaction::HeaderMap headers;
+	headers.insert({"Retry-After", "3600"});
+
+	deployments::APIResponseError resp = {
+		http::StatusTooManyRequests,
+		headers,
+		MakeError(inventory::TooManyRequestsError, "Too many requests")};
+
+	deployments::APIResponseError resp_unauthorized = {
+		http::StatusUnauthorized,
+		headers,
+		MakeError(inventory::BadResponseError, "doesn't matter")};
+
+	testing::internal::CaptureStderr();
+
+	callDoStatusUpdateHandler(resp_unauthorized);
+	callDoStatusUpdateHandler(resp);
+	callDoStatusUpdateHandler(resp_unauthorized);
+	callDoStatusUpdateHandler(resp_unauthorized);
+	callDoStatusUpdateHandler(resp_unauthorized);
+	callDoStatusUpdateHandler(resp);
+
+	auto output = testing::internal::GetCapturedStderr();
+	// make sure that retrying with Retry-After does not modify normal
+	// exponential backoff behavior
+	ExpectLogsInOrder(
+		output,
+		{
+			"Retrying status update after 60 second",
+			"Retrying status update after 3600 second",
+			"Retrying status update after 60 second",
+			"Retrying status update after 60 second",
+			"Retrying status update after 120 second",
+			"Retrying status update after 3600 second",
+		});
+}
+
+TEST_F(SendStatusUpdateStateTests, TooManyRequests_DateInRetryAfterHeader) {
+	time_t now = time(nullptr);
+	time_t futureTime = now + 1298;
+	struct tm *tm_ptr = gmtime(&futureTime);
+	char buffer[100];
+	// HTTP Format, e.g. "Wed, 21 Oct 2015 07:28:00 GMT", 1298 seconds from now
+	strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S GMT", tm_ptr);
+	string httpDate(buffer);
+
+	http::Transaction::HeaderMap headers;
+	headers.insert({"Retry-After", httpDate});
+
+	deployments::APIResponseError resp = {
+		http::StatusTooManyRequests,
+		headers,
+		MakeError(mender::update::deployments::TooManyRequestsError, "Too many requests")};
+
+	testing::internal::CaptureStderr();
+
+	callDoStatusUpdateHandler(resp);
+
+	auto output = testing::internal::GetCapturedStderr();
+	// make sure that retrying with Retry-After does not modify normal
+	// exponential backoff behavior
+	ExpectLogsInOrder(
+		output,
+		{
+			"Retrying status update after 1298 second",
+		});
+}
+
+TEST_F(SendStatusUpdateStateTests, TooManyRequests_NoRetryAfterHeader) {
+	http::Transaction::HeaderMap headers;
+
+	deployments::APIResponseError resp = {
+		http::StatusTooManyRequests,
+		headers,
+		MakeError(mender::update::deployments::TooManyRequestsError, "Too many requests")};
+
+	int iterations = 7;
+	testing::internal::CaptureStderr();
+
+	for (int i = 0; i < iterations; i++) {
+		callDoStatusUpdateHandler(resp);
+	}
+
+	auto output = testing::internal::GetCapturedStderr();
+
+	// Make sure that normal exponential backoff is used
+	ExpectLogsInOrder(
+		output,
+		{
+			"Retrying status update after 60 second",
+			"Retrying status update after 60 second",
+			"Retrying status update after 60 second",
+			"Retrying status update after 120 second",
+			"Retrying status update after 120 second",
+			"Retrying status update after 120 second",
+			"Retrying status update after 240 second",
+		});
+}
+
+
 } // namespace daemon
 } // namespace update
 } // namespace mender
