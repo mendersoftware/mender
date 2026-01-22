@@ -289,14 +289,14 @@ error::Error DeploymentClient::PushStatus(
 			auto content_length = resp->GetHeader("Content-Length");
 			if (!content_length) {
 				log::Debug(
-					"Failed to get content length from the status API response headers: "
+					"Failed to get content length from the deployment status API response headers: "
 					+ content_length.error().String());
 				body_writer->SetUnlimited(true);
 			} else {
 				auto ex_len = common::StringTo<size_t>(content_length.value());
 				if (!ex_len) {
 					log::Error(
-						"Failed to convert the content length from the status API response headers to an integer: "
+						"Failed to convert the content length from the deployment status API response headers to an integer: "
 						+ ex_len.error().String());
 					body_writer->SetUnlimited(true);
 				} else {
@@ -454,14 +454,14 @@ error::Error DeploymentClient::PushLogs(
 			auto content_length = resp->GetHeader("Content-Length");
 			if (!content_length) {
 				log::Debug(
-					"Failed to get content length from the status API response headers: "
+					"Failed to get content length from the deployment log API response headers: "
 					+ content_length.error().String());
 				body_writer->SetUnlimited(true);
 			} else {
 				auto ex_len = common::StringTo<size_t>(content_length.value());
 				if (!ex_len) {
 					log::Error(
-						"Failed to convert the content length from the status API response headers to an integer: "
+						"Failed to convert the content length from the deployment log API response headers to an integer: "
 						+ ex_len.error().String());
 					body_writer->SetUnlimited(true);
 				} else {
