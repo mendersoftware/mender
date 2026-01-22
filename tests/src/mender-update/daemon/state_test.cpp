@@ -3481,7 +3481,7 @@ class NoopInventoryClient : virtual public inventory::InventoryAPI {
 		events::EventLoop &loop,
 		api::Client &client,
 		inventory::APIResponseHandler api_handler) override {
-		api_handler(error::NoError);
+		api_handler(inventory::APIResponse {nullopt, nullopt, error::NoError});
 		return error::NoError;
 	}
 	void ClearDataCache() override {
@@ -4191,7 +4191,7 @@ TEST(SubmitInventoryTests, SubmitInventoryStateTest) {
 			api::Client &client,
 			inventory::APIResponseHandler api_handler) override {
 			recorder_++;
-			api_handler(error::NoError);
+			api_handler(inventory::APIResponse {nullopt, nullopt, error::NoError});
 			EXPECT_EQ(inventory_generators_dir, config_.paths.GetInventoryScriptsDir());
 			if (recorder_ == 2) {
 				loop.Stop();

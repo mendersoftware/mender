@@ -166,17 +166,8 @@ void SubmitInventoryState::HandlePollingError(Context &ctx, sm::EventPoster<Stat
 void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Submitting inventory");
 
-	auto handler = [this, &ctx, &poster](error::Error err) {
-		if (err != error::NoError) {
-			log::Error("Failed to submit inventory: " + err.String());
-			// Replace the inventory poll timer with a backoff
-			HandlePollingError(ctx, poster);
-			poster.PostEvent(StateEvent::Failure);
-			return;
-		}
-		backoff_.Reset();
-		ctx.inventory_client->has_submitted_inventory = true;
-		poster.PostEvent(StateEvent::Success);
+	auto handler = [this, &ctx, &poster](inventory::APIResponse resp) {
+		this->PushDataHandler(ctx, poster, resp);
 	};
 
 	auto err = ctx.inventory_client->PushData(
@@ -188,12 +179,26 @@ void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	if (err != error::NoError) {
 		// This is the only case the handler won't be called for us by
 		// PushData() (see inventory::PushInventoryData()).
-		handler(err);
+		PushDataHandler(ctx, poster, inventory::APIResponse {nullopt, nullopt, err});
 	}
 }
 
 PollForDeploymentState::PollForDeploymentState(int retry_interval_seconds, int retry_count) :
 	backoff_ {chrono::seconds(retry_interval_seconds), retry_count} {
+}
+
+void SubmitInventoryState::PushDataHandler(
+	Context &ctx, sm::EventPoster<StateEvent> &poster, inventory::APIResponse resp) {
+	if (resp.error != error::NoError) {
+		log::Error("Failed to submit inventory: " + resp.error.String());
+		// Replace the inventory poll timer with a backoff
+		HandlePollingError(ctx, poster);
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+	backoff_.Reset();
+	ctx.inventory_client->has_submitted_inventory = true;
+	poster.PostEvent(StateEvent::Success);
 }
 
 void PollForDeploymentState::HandlePollingError(

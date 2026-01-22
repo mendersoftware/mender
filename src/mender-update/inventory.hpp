@@ -25,6 +25,8 @@
 #include <common/json.hpp>
 #include <common/optional.hpp>
 
+// For friend declaration below, used in tests.
+class InventoryAPITests;
 namespace mender {
 namespace update {
 namespace inventory {
@@ -35,6 +37,7 @@ namespace api = mender::api;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
+namespace http = mender::common::http;
 namespace json = mender::common::json;
 
 enum InventoryErrorCode {
@@ -50,15 +53,14 @@ extern const InventoryErrorCategoryClass InventoryErrorCategory;
 
 error::Error MakeError(InventoryErrorCode code, const string &msg);
 
-using APIResponse = error::Error;
-using APIResponseHandler = function<void(APIResponse)>;
+struct APIResponse {
+	optional<unsigned> http_code;
+	optional<http::Transaction::HeaderMap> http_headers;
+	error::Error error;
+};
 
-error::Error PushInventoryData(
-	const string &inventory_generators_dir,
-	events::EventLoop &loop,
-	api::Client &client,
-	size_t &last_data_hash,
-	APIResponseHandler api_handler);
+using APIResponse = struct APIResponse;
+using APIResponseHandler = function<void(APIResponse)>;
 
 class InventoryAPI {
 public:
@@ -92,6 +94,18 @@ public:
 	}
 
 private:
+	friend class ::InventoryAPITests;
+	error::Error PushInventoryData(
+		const string &inventory_generators_dir,
+		events::EventLoop &loop,
+		api::Client &client,
+		size_t &last_data_hash,
+		APIResponseHandler api_handler);
+	void HeaderHandler(
+		shared_ptr<vector<uint8_t>> received_body,
+		APIResponseHandler api_handler,
+		http::ExpectedIncomingResponsePtr exp_resp);
+
 	size_t last_data_hash_ {0};
 };
 

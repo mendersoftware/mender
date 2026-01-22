@@ -71,7 +71,7 @@ error::Error MakeError(InventoryErrorCode code, const string &msg) {
 
 const string uri = "/api/devices/v1/inventory/device/attributes";
 
-error::Error PushInventoryData(
+error::Error InventoryClient::PushInventoryData(
 	const string &inventory_generators_dir,
 	events::EventLoop &loop,
 	api::Client &client,
@@ -127,7 +127,7 @@ error::Error PushInventoryData(
 	size_t payload_hash = std::hash<string> {}(payload);
 	if (payload_hash == last_data_hash) {
 		log::Info("Inventory data unchanged, not submitting");
-		loop.Post([api_handler]() { api_handler(error::NoError); });
+		loop.Post([api_handler]() { api_handler(APIResponse {nullopt, nullopt, error::NoError}); });
 		return error::NoError;
 	}
 
@@ -146,30 +146,14 @@ error::Error PushInventoryData(
 	auto received_body = make_shared<vector<uint8_t>>();
 	return client.AsyncCall(
 		req,
-		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
-			if (!exp_resp) {
-				log::Error("Request to push inventory data failed: " + exp_resp.error().message);
-				api_handler(exp_resp.error());
-				return;
-			}
-
-			auto body_writer = make_shared<io::ByteWriter>(received_body);
-			auto resp = exp_resp.value();
-			auto content_length = resp->GetHeader("Content-Length");
-			auto ex_len = common::StringTo<size_t>(content_length.value());
-			if (!ex_len) {
-				log::Error("Failed to get content length from the inventory API response headers");
-				body_writer->SetUnlimited(true);
-			} else {
-				received_body->resize(ex_len.value());
-			}
-			resp->SetBodyWriter(body_writer);
+		[this, received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
+			this->HeaderHandler(received_body, api_handler, exp_resp);
 		},
 		[received_body, api_handler, payload_hash, &last_data_hash](
 			http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
 				log::Error("Request to push inventory data failed: " + exp_resp.error().message);
-				api_handler(exp_resp.error());
+				api_handler(APIResponse {nullopt, nullopt, exp_resp.error()});
 				return;
 			}
 
@@ -178,7 +162,7 @@ error::Error PushInventoryData(
 			if (status == http::StatusOK) {
 				log::Info("Inventory data submitted successfully");
 				last_data_hash = payload_hash;
-				api_handler(error::NoError);
+				api_handler(APIResponse {status, nullopt, error::NoError});
 			} else {
 				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
 				string err_str;
@@ -187,12 +171,38 @@ error::Error PushInventoryData(
 				} else {
 					err_str = resp->GetStatusMessage();
 				}
-				api_handler(MakeError(
-					BadResponseError,
-					"Got unexpected response " + to_string(status)
-						+ " from inventory API: " + err_str));
+				api_handler(APIResponse {
+					status,
+					nullopt,
+					MakeError(
+						BadResponseError,
+						"Got unexpected response " + to_string(status)
+							+ " from inventory API: " + err_str)});
 			}
 		});
+}
+
+void InventoryClient::HeaderHandler(
+	shared_ptr<vector<uint8_t>> received_body,
+	APIResponseHandler api_handler,
+	http::ExpectedIncomingResponsePtr exp_resp) {
+	if (!exp_resp) {
+		log::Error("Request to push inventory data failed: " + exp_resp.error().message);
+		api_handler(APIResponse {nullopt, nullopt, exp_resp.error()});
+		return;
+	}
+
+	auto body_writer = make_shared<io::ByteWriter>(received_body);
+	auto resp = exp_resp.value();
+	auto content_length = resp->GetHeader("Content-Length");
+	auto ex_len = common::StringTo<size_t>(content_length.value());
+	if (!ex_len) {
+		log::Error("Failed to get content length from the inventory API response headers");
+		body_writer->SetUnlimited(true);
+	} else {
+		received_body->resize(ex_len.value());
+	}
+	resp->SetBodyWriter(body_writer);
 }
 
 } // namespace inventory

@@ -97,6 +97,8 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
 private:
+	void PushDataHandler(
+		Context &ctx, sm::EventPoster<StateEvent> &poster, inventory::APIResponse response);
 	void HandlePollingError(Context &ctx, sm::EventPoster<StateEvent> &poster);
 	http::ExponentialBackoff backoff_;
 };

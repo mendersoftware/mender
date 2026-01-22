@@ -76,6 +76,16 @@ protected:
 		int ret = chmod(test_script_path.c_str(), S_IRUSR | S_IWUSR | S_IXUSR);
 		return ret == 0;
 	}
+
+	error::Error CallPushInventoryData(
+		const string &inventory_generators_dir,
+		events::EventLoop &loop,
+		api::Client &client,
+		size_t &last_data_hash,
+		inv::APIResponseHandler api_handler) {
+		return inv::InventoryClient().PushInventoryData(
+			inventory_generators_dir, loop, client, last_data_hash, api_handler);
+	}
 };
 
 TEST_F(InventoryAPITests, PushInventoryDataTestVersionExternal) {
@@ -137,14 +147,14 @@ exit 0
 
 	bool handler_called = false;
 	size_t last_hash = 0;
-	auto err = inv::PushInventoryData(
+	auto err = CallPushInventoryData(
 		test_scripts_dir.Path(),
 		loop,
 		client,
 		last_hash,
-		[&handler_called, &loop](error::Error err) {
+		[&handler_called, &loop](inv::APIResponse resp) {
 			handler_called = true;
-			ASSERT_EQ(err, error::NoError);
+			ASSERT_EQ(resp.error, error::NoError);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -220,14 +230,14 @@ exit 0
 
 	bool handler_called = false;
 	size_t last_hash = 0;
-	auto err = inv::PushInventoryData(
+	auto err = CallPushInventoryData(
 		test_scripts_dir.Path(),
 		loop,
 		client,
 		last_hash,
-		[&handler_called, &loop](error::Error err) {
+		[&handler_called, &loop](inv::APIResponse resp) {
 			handler_called = true;
-			ASSERT_EQ(err, error::NoError);
+			ASSERT_EQ(resp.error, error::NoError);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -292,14 +302,14 @@ exit 0
 
 	bool handler_called = false;
 	size_t last_hash = 0;
-	auto err = inv::PushInventoryData(
+	auto err = CallPushInventoryData(
 		test_scripts_dir.Path(),
 		loop,
 		client,
 		last_hash,
-		[&handler_called, &loop](error::Error err) {
+		[&handler_called, &loop](inv::APIResponse resp) {
 			handler_called = true;
-			ASSERT_EQ(err, error::NoError);
+			ASSERT_EQ(resp.error, error::NoError);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -374,18 +384,18 @@ exit 0
 
 	bool handler_called = false;
 	size_t last_hash = 0;
-	auto err = inv::PushInventoryData(
+	auto err = CallPushInventoryData(
 		test_scripts_dir.Path(),
 		loop,
 		client,
 		last_hash,
-		[&handler_called, &loop](error::Error err) {
+		[&handler_called, &loop](inv::APIResponse resp) {
 			handler_called = true;
-			ASSERT_NE(err, error::NoError);
+			ASSERT_NE(resp.error, error::NoError);
 
-			EXPECT_THAT(err.message, testing::HasSubstr("Got unexpected response"));
-			EXPECT_THAT(err.message, testing::HasSubstr("500"));
-			EXPECT_THAT(err.message, testing::HasSubstr("container failed to open"));
+			EXPECT_THAT(resp.error.message, testing::HasSubstr("Got unexpected response"));
+			EXPECT_THAT(resp.error.message, testing::HasSubstr("500"));
+			EXPECT_THAT(resp.error.message, testing::HasSubstr("container failed to open"));
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -430,14 +440,14 @@ exit 0
 		+ conf::kMenderVersion
 		+ R"("},{"name":"mender_client_version_provider","value":"internal"}])");
 	size_t last_hash_orig = last_hash;
-	auto err = inv::PushInventoryData(
+	auto err = CallPushInventoryData(
 		test_scripts_dir.Path(),
 		loop,
 		client,
 		last_hash,
-		[&handler_called, &loop](error::Error err) {
+		[&handler_called, &loop](inv::APIResponse resp) {
 			handler_called = true;
-			ASSERT_EQ(err, error::NoError);
+			ASSERT_EQ(resp.error, error::NoError);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
