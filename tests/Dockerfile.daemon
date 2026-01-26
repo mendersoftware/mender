@@ -36,8 +36,7 @@ RUN mender-artifact write bootstrap-artifact \
 FROM ubuntu:24.04
 
 RUN mkdir -p /run/dbus
-RUN apt update && apt install -y libboost-log1.83.0 liblmdb0 libarchive13 dbus iproute2
-
+RUN apt update && apt install -y libboost-log1.83.0 liblmdb0 libarchive13 dbus iproute2 ca-certificates
 COPY --from=build /mender-install/usr/bin/mender-update /usr/bin/mender-update
 COPY --from=build /mender-install/usr/bin/mender-auth /usr/bin/mender-auth
 COPY --from=build /mender-install/etc/mender /etc/mender
@@ -46,6 +45,7 @@ COPY --from=build /mender-install/usr/share/doc/mender-auth /usr/share/doc/mende
 COPY --from=build /mender-install/lib/systemd/system/mender-updated.service /lib/systemd/system/mender-updated.service
 COPY --from=build /mender-install/lib/systemd/system/mender-authd.service /lib/systemd/system/mender-authd.service
 COPY --from=build /mender-install/usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf /usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf
+COPY --from=build /mender-install/usr/share/dbus-1/system-services/io.mender.AuthenticationManager.service /usr/share/dbus-1/system-services/io.mender.AuthenticationManager.service
 COPY --from=build /bootstrap.mender /var/lib/mender/bootstrap.mender
 RUN mkdir -p /var/lib/mender && echo device_type=docker-client > /var/lib/mender/device_type
 
