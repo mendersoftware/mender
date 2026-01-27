@@ -78,6 +78,25 @@ private:
 class DeploymentsTests : public testing::Test {
 protected:
 	mtesting::TemporaryDirectory test_state_dir;
+
+	shared_ptr<http::IncomingResponse> CreateIncomingResponse(
+		http::ClientInterface &client, shared_ptr<bool> cancelled, optional<string> retry_after) {
+		auto resp =
+			shared_ptr<http::IncomingResponse>(new http::IncomingResponse(client, cancelled));
+		resp->status_code_ = http::StatusTooManyRequests;
+		resp->status_message_ = "Too Many Requests";
+		if (retry_after.has_value()) {
+			resp->headers_.insert({"Retry-After", retry_after.value()});
+		}
+		return resp;
+	}
+
+	void DeploymentClientHeaderHandler(
+		deps::CheckUpdatesAPIResponseHandler api_handler,
+		http::ExpectedIncomingResponsePtr exp_resp) {
+		deps::DeploymentClient().HeaderHandler(
+			make_shared<vector<uint8_t>>(), api_handler, exp_resp);
+	}
 };
 
 TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
@@ -326,9 +345,9 @@ TEST_F(DeploymentsTests, TestV2APIError) {
 			handler_called = true;
 			ASSERT_FALSE(resp);
 
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("Got unexpected response"));
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("403"));
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("JWT token expired"));
+			EXPECT_THAT(resp.error().error.message, testing::HasSubstr("Got unexpected response"));
+			EXPECT_THAT(resp.error().error.message, testing::HasSubstr("403"));
+			EXPECT_THAT(resp.error().error.message, testing::HasSubstr("JWT token expired"));
 
 			loop.Stop();
 		});
@@ -655,9 +674,9 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithError) {
 
 			ASSERT_FALSE(resp);
 
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("Got unexpected response"));
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("403"));
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("Forbidden"));
+			EXPECT_THAT(resp.error().error.message, testing::HasSubstr("Got unexpected response"));
+			EXPECT_THAT(resp.error().error.message, testing::HasSubstr("403"));
+			EXPECT_THAT(resp.error().error.message, testing::HasSubstr("Forbidden"));
 
 			loop.Stop();
 		});
@@ -1544,4 +1563,55 @@ TEST_F(DeploymentsTests, DeploymentLogRenameAndCleanPreviousLogsTest) {
 	EXPECT_EQ(
 		GetFileContent(path::Join(test_state_dir.Path(), "deployments.3.log")),
 		"Test content in malformed file name 3\n");
+}
+
+TEST_F(DeploymentsTests, TestTooManyRequestsWithRetryAfterHeader) {
+	TestEventLoop loop;
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+	auto cancelled = make_shared<bool>(false);
+
+	vector<string> retry_after_cases {"100", "Fri, 31 Dec 1999 23:59:59 GMT"};
+
+	for (auto retry_after : retry_after_cases) {
+		auto resp = CreateIncomingResponse(client, cancelled, retry_after);
+		http::ExpectedIncomingResponsePtr exp_resp = resp;
+		bool handler_called {false};
+
+		auto api_handler = [&handler_called, retry_after](deps::CheckUpdatesAPIResponse resp) {
+			handler_called = true;
+			ASSERT_FALSE(resp.has_value());
+			EXPECT_EQ(resp.error().http_code, http::StatusTooManyRequests);
+			ASSERT_TRUE(resp.error().http_headers.has_value());
+			auto retry_from_header = resp.error().http_headers.value().find("Retry-After");
+			EXPECT_NE(retry_from_header, resp.error().http_headers.value().end());
+			EXPECT_EQ(retry_from_header->second, retry_after);
+		};
+
+		DeploymentClientHeaderHandler(api_handler, exp_resp);
+		EXPECT_TRUE(handler_called);
+	}
+}
+
+TEST_F(DeploymentsTests, TestTooManyRequestsWithoutRetryAfterHeader) {
+	TestEventLoop loop;
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+	auto cancelled = make_shared<bool>(false);
+
+	auto resp = CreateIncomingResponse(client, cancelled, nullopt);
+	http::ExpectedIncomingResponsePtr exp_resp = resp;
+	bool handler_called {false};
+
+	auto api_handler = [&handler_called](deps::CheckUpdatesAPIResponse resp) {
+		handler_called = true;
+		ASSERT_FALSE(resp.has_value());
+		EXPECT_EQ(resp.error().http_code, http::StatusTooManyRequests);
+		EXPECT_TRUE(resp.error().http_headers.has_value());
+		auto retry_from_header = resp.error().http_headers.value().find("Retry-After");
+		EXPECT_EQ(retry_from_header, resp.error().http_headers.value().end());
+	};
+
+	DeploymentClientHeaderHandler(api_handler, exp_resp);
+	EXPECT_TRUE(handler_called);
 }

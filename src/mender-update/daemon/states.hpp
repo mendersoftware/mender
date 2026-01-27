@@ -26,6 +26,8 @@
 
 #include <artifact/v3/scripts/executor.hpp>
 
+// For friend declaration below, used in tests.
+class PollForDeploymentStateTests;
 namespace mender {
 namespace update {
 namespace daemon {
@@ -77,7 +79,15 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
 private:
-	void HandlePollingError(Context &ctx, sm::EventPoster<StateEvent> &poster);
+	friend class PollForDeploymentStateTests;
+	void CheckNewDeploymentsHandler(
+		Context &ctx,
+		sm::EventPoster<StateEvent> &poster,
+		mender::update::deployments::CheckUpdatesAPIResponse response);
+	void HandlePollingError(
+		Context &ctx,
+		sm::EventPoster<StateEvent> &poster,
+		mender::update::deployments::CheckUpdatesAPIResponseError error);
 	http::ExponentialBackoff backoff_;
 };
 

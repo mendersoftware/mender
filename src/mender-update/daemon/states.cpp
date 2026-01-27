@@ -196,7 +196,10 @@ PollForDeploymentState::PollForDeploymentState(int retry_interval_seconds, int r
 	backoff_ {chrono::seconds(retry_interval_seconds), retry_count} {
 }
 
-void PollForDeploymentState::HandlePollingError(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void PollForDeploymentState::HandlePollingError(
+	Context &ctx,
+	sm::EventPoster<StateEvent> &poster,
+	mender::update::deployments::CheckUpdatesAPIResponseError error) {
 	// When using short polling intervals, we should adjust the backoff to ensure
 	// that the intervals do not exceed the maximum retry polling interval, which
 	// converts the backoff to a fixed interval.
@@ -206,19 +209,42 @@ void PollForDeploymentState::HandlePollingError(Context &ctx, sm::EventPoster<St
 		backoff_.SetSmallestInterval(max_interval);
 		backoff_.SetMaxInterval(max_interval);
 	}
-	auto exp_interval = backoff_.NextInterval();
-	if (!exp_interval) {
-		log::Debug(
-			"Not retrying with backoff, retrying with UpdatePollIntervalSeconds: "
-			+ exp_interval.error().String());
-		return;
+
+	chrono::milliseconds interval;
+	bool retry_after_defined {false};
+
+	if (error.http_code.has_value() && error.http_code.value() == http::StatusTooManyRequests
+		&& error.http_headers.has_value()) {
+		auto retry_after_header = error.http_headers.value().find("Retry-After");
+		if (retry_after_header != error.http_headers.value().end()) {
+			auto exp_interval = http::GetRemainingTime(retry_after_header->second);
+			if (exp_interval) {
+				interval = exp_interval.value();
+				retry_after_defined = true;
+			} else {
+				log::Debug("Could not get the Retry-After value from HTTP response");
+			}
+		} else {
+			log::Debug("Got status code TooManyRequests but no Retry-After HTTP header");
+		}
+	}
+
+	if (!retry_after_defined) {
+		auto exp_interval = backoff_.NextInterval();
+		if (!exp_interval) {
+			log::Debug(
+				"Not retrying with backoff, retrying with UpdatePollIntervalSeconds: "
+				+ exp_interval.error().String());
+			return;
+		}
+		interval = exp_interval.value();
 	}
 	log::Info(
 		"Retrying deployment polling in "
-		+ to_string(chrono::duration_cast<chrono::seconds>(*exp_interval).count()) + " seconds");
+		+ to_string(chrono::duration_cast<chrono::seconds>(interval).count()) + " seconds");
 
 	ctx.deployment_timer.Cancel();
-	ctx.deployment_timer.AsyncWait(*exp_interval, [&poster](error::Error err) {
+	ctx.deployment_timer.AsyncWait(interval, [&poster](error::Error err) {
 		if (err != error::NoError) {
 			if (err.code != make_error_condition(errc::operation_canceled)) {
 				log::Error("Retry poll timer caused error: " + err.String());
@@ -229,6 +255,58 @@ void PollForDeploymentState::HandlePollingError(Context &ctx, sm::EventPoster<St
 	});
 }
 
+void PollForDeploymentState::CheckNewDeploymentsHandler(
+	Context &ctx,
+	sm::EventPoster<StateEvent> &poster,
+	mender::update::deployments::CheckUpdatesAPIResponse response) {
+	if (!response) {
+		log::Error("Error while polling for deployment: " + response.error().error.String());
+		// Replace the update poll timer with:
+		// - a backoff, or
+		// - if HTTP 429 Too Many Requests with  Retry-After header is provided - appropriate time
+		// based on it
+		HandlePollingError(ctx, poster, response.error());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	} else if (!response.value()) {
+		log::Info("No update available");
+		poster.PostEvent(StateEvent::NothingToDo);
+		if (not ctx.inventory_client->has_submitted_inventory) {
+			// If we have not submitted inventory successfully at least
+			// once, schedule this after receiving a successful response
+			// with no update. This enables inventory to be submitted
+			// immediately after the device has been accepted. If there
+			// is an update available, an inventory update will be
+			// scheduled at the end of it unconditionally.
+			poster.PostEvent(StateEvent::InventoryPollingTriggered);
+		}
+
+		backoff_.Reset();
+		return;
+	}
+	backoff_.Reset();
+
+	auto exp_data = ApiResponseJsonToStateData(response.value().value());
+	if (!exp_data) {
+		log::Error("Error in API response: " + exp_data.error().String());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+
+	// Make a new set of update data.
+	ctx.deployment.state_data.reset(new StateData(std::move(exp_data.value())));
+
+	ctx.BeginDeploymentLogging();
+
+	// This is a duplicate message to one logged when mender-update
+	// starts, but this one goes into the deployment log.
+	log::Info("Running mender-update " + conf::kMenderVersion);
+	log::Info("Deployment with ID " + ctx.deployment.state_data->update_info.id + " started.");
+
+	poster.PostEvent(StateEvent::DeploymentStarted);
+	poster.PostEvent(StateEvent::Success);
+}
+
 void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Polling for update");
 
@@ -236,50 +314,7 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 		ctx.mender_context,
 		ctx.http_client,
 		[this, &ctx, &poster](mender::update::deployments::CheckUpdatesAPIResponse response) {
-			if (!response) {
-				log::Error("Error while polling for deployment: " + response.error().String());
-				// Replace the update poll timer with a backoff
-				HandlePollingError(ctx, poster);
-				poster.PostEvent(StateEvent::Failure);
-				return;
-			} else if (!response.value()) {
-				log::Info("No update available");
-				poster.PostEvent(StateEvent::NothingToDo);
-				if (not ctx.inventory_client->has_submitted_inventory) {
-					// If we have not submitted inventory successfully at least
-					// once, schedule this after receiving a successful response
-					// with no update. This enables inventory to be submitted
-					// immediately after the device has been accepted. If there
-					// is an update available, an inventory update will be
-					// scheduled at the end of it unconditionally.
-					poster.PostEvent(StateEvent::InventoryPollingTriggered);
-				}
-
-				backoff_.Reset();
-				return;
-			}
-			backoff_.Reset();
-
-			auto exp_data = ApiResponseJsonToStateData(response.value().value());
-			if (!exp_data) {
-				log::Error("Error in API response: " + exp_data.error().String());
-				poster.PostEvent(StateEvent::Failure);
-				return;
-			}
-
-			// Make a new set of update data.
-			ctx.deployment.state_data.reset(new StateData(std::move(exp_data.value())));
-
-			ctx.BeginDeploymentLogging();
-
-			// This is a duplicate message to one logged when mender-update
-			// starts, but this one goes into the deployment log.
-			log::Info("Running mender-update " + conf::kMenderVersion);
-			log::Info(
-				"Deployment with ID " + ctx.deployment.state_data->update_info.id + " started.");
-
-			poster.PostEvent(StateEvent::DeploymentStarted);
-			poster.PostEvent(StateEvent::Success);
+			this->CheckNewDeploymentsHandler(ctx, poster, response);
 		});
 
 	if (err != error::NoError) {

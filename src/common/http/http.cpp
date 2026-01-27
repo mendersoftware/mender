@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <ctime>
 #include <iomanip>
 #include <string>
 
@@ -58,6 +59,8 @@ string HttpErrorCategoryClass::message(int code) const {
 		return "Resume download error";
 	case ProxyError:
 		return "Proxy error";
+	case InvalidDateFormatError:
+		return "Invalid date format error";
 	}
 	// Don't use "default" case. This should generate a warning if we ever add any enums. But
 	// still assert here for safety.
@@ -225,6 +228,26 @@ string JoinOneUrl(const string &prefix, const string &suffix) {
 	}
 
 	return string(prefix.cbegin(), prefix_end) + "/" + string(suffix_start, suffix.cend());
+}
+
+expected::Expected<chrono::seconds> GetRemainingTime(const string &date) {
+	if (!date.empty() && all_of(date.begin(), date.end(), ::isdigit)) {
+		return chrono::seconds(stoi(date));
+	}
+
+	struct tm tm_struct = {};
+	if (strptime(date.c_str(), "%a, %d %b %Y %H:%M:%S GMT", &tm_struct) == nullptr) {
+		return expected::unexpected(MakeError(InvalidDateFormatError, "Invalid date format"));
+	}
+
+	time_t expiry_time = timegm(&tm_struct);
+	time_t now = time(nullptr);
+
+	if (expiry_time < now) {
+		return chrono::seconds(0);
+	}
+
+	return chrono::seconds(expiry_time - now);
 }
 
 size_t CaseInsensitiveHasher::operator()(const string &str) const {

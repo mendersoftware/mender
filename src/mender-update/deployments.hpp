@@ -36,6 +36,8 @@
 #include <common/optional.hpp>
 #include <mender-update/context.hpp>
 
+// For friend declaration below, used in tests.
+class DeploymentsTests;
 namespace mender {
 namespace update {
 namespace deployments {
@@ -51,6 +53,7 @@ namespace context = mender::update::context;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
+namespace http = mender::common::http;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
 
@@ -59,6 +62,7 @@ enum DeploymentsErrorCode {
 	InvalidDataError,
 	BadResponseError,
 	DeploymentAbortedError,
+	TooManyRequestsError,
 };
 
 class DeploymentsErrorCategoryClass : public std::error_category {
@@ -70,7 +74,15 @@ extern const DeploymentsErrorCategoryClass DeploymentsErrorCategory;
 
 error::Error MakeError(DeploymentsErrorCode code, const string &msg);
 
-using CheckUpdatesAPIResponse = expected::expected<optional<json::Json>, error::Error>;
+struct CheckUpdatesAPIResponseError {
+	optional<unsigned> http_code;
+	optional<http::Transaction::HeaderMap> http_headers;
+	error::Error error;
+};
+
+using CheckUpdatesAPIResponseData = optional<json::Json>;
+using CheckUpdatesAPIResponse =
+	expected::expected<CheckUpdatesAPIResponseData, CheckUpdatesAPIResponseError>;
 using CheckUpdatesAPIResponseHandler = function<void(CheckUpdatesAPIResponse)>;
 
 enum class DeploymentStatus {
@@ -136,6 +148,13 @@ public:
 		const string &log_file_path,
 		api::Client &client,
 		LogsAPIResponseHandler api_handler) override;
+
+private:
+	friend class ::DeploymentsTests;
+	void HeaderHandler(
+		shared_ptr<vector<uint8_t>> received_body,
+		CheckUpdatesAPIResponseHandler api_handler,
+		http::ExpectedIncomingResponsePtr exp_resp);
 };
 
 /**
