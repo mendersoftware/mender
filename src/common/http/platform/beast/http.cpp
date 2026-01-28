@@ -526,6 +526,10 @@ error::Error Client::HandleProxySetup() {
 			request_->address_.port = proxy_address.port;
 			request_->address_.protocol = proxy_address.protocol;
 
+			// Set Host header for CONNECT request - required by some proxies (RFC 7230)
+			const string header_url = CreateHOSTAddress(request_);
+			request_->SetHeader("HOST", header_url);
+
 			err = AddProxyAuthHeader(*request_, proxy_address);
 			if (err != error::NoError) {
 				return err;
