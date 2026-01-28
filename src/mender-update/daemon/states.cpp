@@ -324,7 +324,10 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 		// Posting Failure correctly exits the PollForDeploymentState, but does not schedule the
 		// next poll. Thus, we need to also call HandlePollingError that adds a timer that will
 		// cause DeploymentPollingTriggered to be posted to the state machine after a defined time.
-		HandlePollingError(ctx, poster);
+		HandlePollingError(
+			ctx,
+			poster,
+			mender::update::deployments::CheckUpdatesAPIResponseError {nullopt, nullopt, err});
 		poster.PostEvent(StateEvent::Failure);
 	}
 }
