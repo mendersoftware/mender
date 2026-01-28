@@ -316,48 +316,29 @@ error::Error DeploymentClient::PushStatus(
 	auto received_body = make_shared<vector<uint8_t>>();
 	return client.AsyncCall(
 		req,
-		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
-			if (!exp_resp) {
-				log::Error("Request to push status data failed: " + exp_resp.error().message);
-				api_handler(exp_resp.error());
-				return;
-			}
-
-			auto body_writer = make_shared<io::ByteWriter>(received_body);
-			auto resp = exp_resp.value();
-			auto content_length = resp->GetHeader("Content-Length");
-			if (!content_length) {
-				log::Debug(
-					"Failed to get content length from the status API response headers: "
-					+ content_length.error().String());
-				body_writer->SetUnlimited(true);
-			} else {
-				auto ex_len = common::StringTo<size_t>(content_length.value());
-				if (!ex_len) {
-					log::Error(
-						"Failed to convert the content length from the status API response headers to an integer: "
-						+ ex_len.error().String());
-					body_writer->SetUnlimited(true);
-				} else {
-					received_body->resize(ex_len.value());
-				}
-			}
-			resp->SetBodyWriter(body_writer);
+		[this, received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
+			this->PushStatusHeaderHandler(received_body, api_handler, exp_resp);
 		},
 		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
 				log::Error("Request to push status data failed: " + exp_resp.error().message);
-				api_handler(exp_resp.error());
+				api_handler(StatusAPIResponse {nullopt, nullopt, exp_resp.error()});
 				return;
 			}
 
 			auto resp = exp_resp.value();
 			auto status = resp->GetStatusCode();
+
+			// StatusTooManyRequests must have been handled in PushStatusHeaderHandler already
+			assert(status != http::StatusTooManyRequests);
+
 			if (status == http::StatusNoContent) {
-				api_handler(error::NoError);
+				api_handler(StatusAPIResponse {status, nullopt, error::NoError});
 			} else if (status == http::StatusConflict) {
-				api_handler(
-					MakeError(DeploymentAbortedError, "Could not send status update to server"));
+				api_handler(StatusAPIResponse {
+					status,
+					nullopt,
+					MakeError(DeploymentAbortedError, "Could not send status update to server")});
 			} else {
 				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
 				string err_str;
@@ -366,12 +347,54 @@ error::Error DeploymentClient::PushStatus(
 				} else {
 					err_str = resp->GetStatusMessage();
 				}
-				api_handler(MakeError(
-					BadResponseError,
-					"Got unexpected response " + to_string(status)
-						+ " from status API: " + err_str));
+				api_handler(StatusAPIResponse {
+					status,
+					nullopt,
+					MakeError(
+						BadResponseError,
+						"Got unexpected response " + to_string(status)
+							+ " from status API: " + err_str)});
 			}
 		});
+}
+
+void DeploymentClient::PushStatusHeaderHandler(
+	shared_ptr<vector<uint8_t>> received_body,
+	StatusAPIResponseHandler api_handler,
+	http::ExpectedIncomingResponsePtr exp_resp) {
+	if (!exp_resp) {
+		log::Error("Request to push status data failed: " + exp_resp.error().message);
+		api_handler(StatusAPIResponse {nullopt, nullopt, exp_resp.error()});
+		return;
+	}
+
+	auto body_writer = make_shared<io::ByteWriter>(received_body);
+	auto resp = exp_resp.value();
+	auto status = resp->GetStatusCode();
+	if (status == http::StatusTooManyRequests) {
+		StatusAPIResponse response = {
+			status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")};
+		api_handler(response);
+		return;
+	}
+	auto content_length = resp->GetHeader("Content-Length");
+	if (!content_length) {
+		log::Debug(
+			"Failed to get content length from the status API response headers: "
+			+ content_length.error().String());
+		body_writer->SetUnlimited(true);
+	} else {
+		auto ex_len = common::StringTo<size_t>(content_length.value());
+		if (!ex_len) {
+			log::Error(
+				"Failed to convert the content length from the status API response headers to an integer: "
+				+ ex_len.error().String());
+			body_writer->SetUnlimited(true);
+		} else {
+			received_body->resize(ex_len.value());
+		}
+	}
+	resp->SetBodyWriter(body_writer);
 }
 
 using mender::common::expected::ExpectedSize;
@@ -481,45 +504,24 @@ error::Error DeploymentClient::PushLogs(
 	auto received_body = make_shared<vector<uint8_t>>();
 	return client.AsyncCall(
 		req,
-		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
-			if (!exp_resp) {
-				log::Error("Request to push logs data failed: " + exp_resp.error().message);
-				api_handler(exp_resp.error());
-				return;
-			}
-
-			auto body_writer = make_shared<io::ByteWriter>(received_body);
-			auto resp = exp_resp.value();
-			auto content_length = resp->GetHeader("Content-Length");
-			if (!content_length) {
-				log::Debug(
-					"Failed to get content length from the status API response headers: "
-					+ content_length.error().String());
-				body_writer->SetUnlimited(true);
-			} else {
-				auto ex_len = common::StringTo<size_t>(content_length.value());
-				if (!ex_len) {
-					log::Error(
-						"Failed to convert the content length from the status API response headers to an integer: "
-						+ ex_len.error().String());
-					body_writer->SetUnlimited(true);
-				} else {
-					received_body->resize(ex_len.value());
-				}
-			}
-			resp->SetBodyWriter(body_writer);
+		[this, received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
+			this->PushLogsHeaderHandler(received_body, api_handler, exp_resp);
 		},
 		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
 				log::Error("Request to push logs data failed: " + exp_resp.error().message);
-				api_handler(exp_resp.error());
+				api_handler(LogsAPIResponse {nullopt, nullopt, exp_resp.error()});
 				return;
 			}
 
 			auto resp = exp_resp.value();
 			auto status = resp->GetStatusCode();
+
+			// StatusTooManyRequests must have been handled in PushLogsHeaderHandler already
+			assert(status != http::StatusTooManyRequests);
+
 			if (status == http::StatusNoContent) {
-				api_handler(error::NoError);
+				api_handler(LogsAPIResponse {status, nullopt, error::NoError});
 			} else {
 				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
 				string err_str;
@@ -528,11 +530,54 @@ error::Error DeploymentClient::PushLogs(
 				} else {
 					err_str = resp->GetStatusMessage();
 				}
-				api_handler(MakeError(
-					BadResponseError,
-					"Got unexpected response " + to_string(status) + " from logs API: " + err_str));
+				api_handler(LogsAPIResponse {
+					status,
+					nullopt,
+					MakeError(
+						BadResponseError,
+						"Got unexpected response " + to_string(status)
+							+ " from logs API: " + err_str)});
 			}
 		});
+}
+
+void DeploymentClient::PushLogsHeaderHandler(
+	shared_ptr<vector<uint8_t>> received_body,
+	LogsAPIResponseHandler api_handler,
+	http::ExpectedIncomingResponsePtr exp_resp) {
+	if (!exp_resp) {
+		log::Error("Request to push logs data failed: " + exp_resp.error().message);
+		api_handler(LogsAPIResponse {nullopt, nullopt, exp_resp.error()});
+		return;
+	}
+
+	auto body_writer = make_shared<io::ByteWriter>(received_body);
+	auto resp = exp_resp.value();
+	auto status = resp->GetStatusCode();
+	if (status == http::StatusTooManyRequests) {
+		LogsAPIResponse response = {
+			status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")};
+		api_handler(response);
+		return;
+	}
+	auto content_length = resp->GetHeader("Content-Length");
+	if (!content_length) {
+		log::Debug(
+			"Failed to get content length from the status API response headers: "
+			+ content_length.error().String());
+		body_writer->SetUnlimited(true);
+	} else {
+		auto ex_len = common::StringTo<size_t>(content_length.value());
+		if (!ex_len) {
+			log::Error(
+				"Failed to convert the content length from the status API response headers to an integer: "
+				+ ex_len.error().String());
+			body_writer->SetUnlimited(true);
+		} else {
+			received_body->resize(ex_len.value());
+		}
+	}
+	resp->SetBodyWriter(body_writer);
 }
 
 } // namespace deployments

@@ -74,15 +74,15 @@ extern const DeploymentsErrorCategoryClass DeploymentsErrorCategory;
 
 error::Error MakeError(DeploymentsErrorCode code, const string &msg);
 
-struct CheckUpdatesAPIResponseError {
+struct APIResponseError {
 	optional<unsigned> http_code;
 	optional<http::Transaction::HeaderMap> http_headers;
 	error::Error error;
 };
 
 using CheckUpdatesAPIResponseData = optional<json::Json>;
-using CheckUpdatesAPIResponse =
-	expected::expected<CheckUpdatesAPIResponseData, CheckUpdatesAPIResponseError>;
+using CheckUpdatesAPIResponseError = struct APIResponseError;
+using CheckUpdatesAPIResponse = expected::expected<CheckUpdatesAPIResponseData, APIResponseError>;
 using CheckUpdatesAPIResponseHandler = function<void(CheckUpdatesAPIResponse)>;
 
 enum class DeploymentStatus {
@@ -103,10 +103,10 @@ enum class DeploymentStatus {
 
 string DeploymentStatusString(DeploymentStatus status);
 
-using StatusAPIResponse = error::Error;
+using StatusAPIResponse = struct APIResponseError; // there's no data, we care only about errors
 using StatusAPIResponseHandler = function<void(StatusAPIResponse)>;
 
-using LogsAPIResponse = error::Error;
+using LogsAPIResponse = struct APIResponseError; // there's no data, we care only about errors
 using LogsAPIResponseHandler = function<void(LogsAPIResponse)>;
 
 class DeploymentAPI {
@@ -154,6 +154,14 @@ private:
 	void HeaderHandler(
 		shared_ptr<vector<uint8_t>> received_body,
 		CheckUpdatesAPIResponseHandler api_handler,
+		http::ExpectedIncomingResponsePtr exp_resp);
+	void PushStatusHeaderHandler(
+		shared_ptr<vector<uint8_t>> received_body,
+		StatusAPIResponseHandler api_handler,
+		http::ExpectedIncomingResponsePtr exp_resp);
+	void PushLogsHeaderHandler(
+		shared_ptr<vector<uint8_t>> received_body,
+		LogsAPIResponseHandler api_handler,
 		http::ExpectedIncomingResponsePtr exp_resp);
 };
 

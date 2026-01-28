@@ -28,6 +28,9 @@
 
 // For friend declaration below, used in tests.
 class PollForDeploymentStateTests;
+class SubmitInventoryStateTests;
+class SendStatusUpdateStateTests;
+
 namespace mender {
 namespace update {
 namespace daemon {
@@ -83,11 +86,11 @@ private:
 	void CheckNewDeploymentsHandler(
 		Context &ctx,
 		sm::EventPoster<StateEvent> &poster,
-		mender::update::deployments::CheckUpdatesAPIResponse response);
+		deployments::CheckUpdatesAPIResponse response);
 	void HandlePollingError(
 		Context &ctx,
 		sm::EventPoster<StateEvent> &poster,
-		mender::update::deployments::CheckUpdatesAPIResponseError error);
+		deployments::CheckUpdatesAPIResponseError error);
 	http::ExponentialBackoff backoff_;
 };
 
@@ -97,7 +100,11 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
 private:
-	void HandlePollingError(Context &ctx, sm::EventPoster<StateEvent> &poster);
+	friend class SubmitInventoryStateTests;
+	void PushDataHandler(
+		Context &ctx, sm::EventPoster<StateEvent> &poster, inventory::APIResponse response);
+	void HandlePollingError(
+		Context &ctx, sm::EventPoster<StateEvent> &poster, inventory::APIResponse response);
 	http::ExponentialBackoff backoff_;
 };
 
@@ -146,7 +153,10 @@ public:
 	void SetSmallestWaitInterval(chrono::milliseconds interval);
 
 private:
+	friend class SendStatusUpdateStateTests;
 	void DoStatusUpdate(Context &ctx, sm::EventPoster<StateEvent> &poster);
+	void DoStatusUpdateHandler(
+		Context &ctx, sm::EventPoster<StateEvent> &poster, deployments::APIResponseError error);
 
 	enum class FailureMode {
 		Ignore,

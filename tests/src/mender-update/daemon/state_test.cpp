@@ -79,6 +79,11 @@ std::string ProvideFileSizesToString(ProvideFileSizes sizes) {
 	return ProvideFileSizesString[static_cast<int>(sizes)];
 }
 
+class MockPoster : virtual public mender::common::state_machine::EventPoster<StateEvent> {
+public:
+	MOCK_METHOD(void, PostEvent, (StateEvent event), (override));
+};
+
 struct StateTransitionsTestCase {
 	string case_name;
 	vector<string> state_chain;
@@ -3481,7 +3486,7 @@ class NoopInventoryClient : virtual public inventory::InventoryAPI {
 		events::EventLoop &loop,
 		api::Client &client,
 		inventory::APIResponseHandler api_handler) override {
-		api_handler(error::NoError);
+		api_handler(inventory::APIResponse {nullopt, nullopt, error::NoError});
 		return error::NoError;
 	}
 	void ClearDataCache() override {
@@ -3504,7 +3509,7 @@ public:
 		const string &substate,
 		api::Client &client,
 		deployments::StatusAPIResponseHandler api_handler) override {
-		api_handler(error::NoError);
+		api_handler(deployments::StatusAPIResponse {nullopt, nullopt, error::NoError});
 		return error::NoError;
 	}
 
@@ -3513,7 +3518,7 @@ public:
 		const string &log_file_path,
 		api::Client &client,
 		deployments::LogsAPIResponseHandler api_handler) override {
-		api_handler(error::NoError);
+		api_handler(deployments::LogsAPIResponse {nullopt, nullopt, error::NoError});
 		return error::NoError;
 	}
 };
@@ -3568,11 +3573,17 @@ public:
 			if (fail_status_report_status_ == status && fail_status_report_count_ > 0) {
 				fail_status_report_count_--;
 				if (fail_status_aborted_) {
-					api_handler(deployments::MakeError(
-						deployments::DeploymentAbortedError, "Cannot send status"));
+					api_handler(deployments::StatusAPIResponse {
+						nullopt,
+						nullopt,
+						deployments::MakeError(
+							deployments::DeploymentAbortedError, "Cannot send status")});
 				} else {
-					api_handler(error::Error(
-						make_error_condition(errc::host_unreachable), "Cannot send status"));
+					api_handler(deployments::StatusAPIResponse {
+						nullopt,
+						nullopt,
+						error::Error(
+							make_error_condition(errc::host_unreachable), "Cannot send status")});
 				}
 				return;
 			}
@@ -3581,13 +3592,16 @@ public:
 				ofstream f(status_log_path_, ios::out | ios::app);
 				f << deployments::DeploymentStatusString(status) << endl;
 				if (!f) {
-					api_handler(error::Error(
-						generic_category().default_error_condition(errno),
-						"Could not do PushStatus"));
+					api_handler(deployments::StatusAPIResponse {
+						nullopt,
+						nullopt,
+						error::Error(
+							generic_category().default_error_condition(errno),
+							"Could not do PushStatus")});
 				}
 			}
 
-			api_handler(error::NoError);
+			api_handler(deployments::StatusAPIResponse {nullopt, nullopt, error::NoError});
 		});
 		return error::NoError;
 	}
@@ -3599,7 +3613,9 @@ public:
 		deployments::LogsAPIResponseHandler api_handler) override {
 		// Just save the log file name so they can be checked later.
 		log_files.push_back(log_file_path);
-		event_loop_.Post([api_handler]() { api_handler(error::NoError); });
+		event_loop_.Post([api_handler]() {
+			api_handler(deployments::StatusAPIResponse {nullopt, nullopt, error::NoError});
+		});
 		return error::NoError;
 	}
 
@@ -3982,15 +3998,9 @@ TEST_F(StateTestWithArtifact, DeploymentLogging) {
 		path::Join(tmpdir.Path(), "deployments.0002." DEPLOYMENT_ID ".log");
 	EXPECT_FALSE(mtesting::FileContains(no_such_deployment_log, "Running mender-update"));
 }
-
-class MockPoster : virtual public mender::common::state_machine::EventPoster<StateEvent> {
+class StateTests : public testing::Test {
 public:
-	MOCK_METHOD(void, PostEvent, (StateEvent event), (override));
-};
-class PollForDeploymentStateTests : public testing::Test {
-public:
-	PollForDeploymentStateTests() :
-		state_(3600, 0),
+	StateTests() :
 		event_loop_ {chrono::seconds {3}} {
 	}
 
@@ -4004,12 +4014,6 @@ public:
 	}
 
 protected:
-	void callPollForDeploymentStateHandler(
-		mender::update::deployments::CheckUpdatesAPIResponse response) {
-		state_.CheckNewDeploymentsHandler(*ctx_, poster_, response);
-		ctx_->deployment_timer.Cancel();
-	}
-
 	void ExpectLogsInOrder(
 		const std::string &output, const std::vector<std::string> &logs_in_order) {
 		size_t last_pos = 0;
@@ -4024,13 +4028,27 @@ protected:
 		}
 	}
 
-	PollForDeploymentState state_;
 	mtesting::TemporaryDirectory tmpdir_;
 	conf::MenderConfig config_;
 	unique_ptr<context::MenderContext> main_context_;
 	mtesting::TestEventLoop event_loop_;
 	unique_ptr<Context> ctx_;
 	testing::StrictMock<MockPoster> poster_;
+};
+class PollForDeploymentStateTests : public StateTests {
+public:
+	PollForDeploymentStateTests() :
+		state_(3600, 0) {
+	}
+
+protected:
+	void callPollForDeploymentStateHandler(
+		mender::update::deployments::CheckUpdatesAPIResponse response) {
+		state_.CheckNewDeploymentsHandler(*ctx_, poster_, response);
+		ctx_->deployment_timer.Cancel();
+	}
+
+	PollForDeploymentState state_;
 };
 
 TEST_F(PollForDeploymentStateTests, TooManyRequests_SecondsInRetryAfterHeader) {
@@ -4191,7 +4209,7 @@ TEST(SubmitInventoryTests, SubmitInventoryStateTest) {
 			api::Client &client,
 			inventory::APIResponseHandler api_handler) override {
 			recorder_++;
-			api_handler(error::NoError);
+			api_handler(inventory::APIResponse {nullopt, nullopt, error::NoError});
 			EXPECT_EQ(inventory_generators_dir, config_.paths.GetInventoryScriptsDir());
 			if (recorder_ == 2) {
 				loop.Stop();
@@ -4304,6 +4322,241 @@ TEST(DBSchemaMigrationTest, TestFromVersion1To2) {
 	EXPECT_EQ(migrated_data.update_info.artifact.compatible_devices[0], "qemux86-64");
 	EXPECT_EQ(migrated_data.update_info.artifact.artifact_name, "mender-98415760");
 }
+
+class SubmitInventoryStateTests : public StateTests {
+public:
+	SubmitInventoryStateTests() :
+		state_(3600, 0) {
+	}
+
+protected:
+	void callPushDataHandler(inventory::APIResponse response) {
+		state_.PushDataHandler(*ctx_, poster_, response);
+		ctx_->deployment_timer.Cancel();
+	}
+
+	SubmitInventoryState state_;
+};
+
+TEST_F(SubmitInventoryStateTests, TooManyRequests_SecondsInRetryAfterHeader) {
+	http::Transaction::HeaderMap headers;
+	headers.insert({"Retry-After", "3600"});
+
+	inventory::APIResponse resp = {
+		http::StatusTooManyRequests,
+		headers,
+		MakeError(inventory::TooManyRequestsError, "Too many requests")};
+
+	inventory::APIResponse resp_unauthorized = {
+		http::StatusUnauthorized,
+		headers,
+		MakeError(inventory::BadResponseError, "doesn't matter")};
+
+	EXPECT_CALL(poster_, PostEvent(StateEvent::Failure)).Times(6);
+	testing::internal::CaptureStderr();
+
+	callPushDataHandler(resp_unauthorized);
+	callPushDataHandler(resp);
+	callPushDataHandler(resp_unauthorized);
+	callPushDataHandler(resp_unauthorized);
+	callPushDataHandler(resp_unauthorized);
+	callPushDataHandler(resp);
+
+	auto output = testing::internal::GetCapturedStderr();
+	// make sure that retrying with Retry-After does not modify normal
+	// exponential backoff behavior
+	ExpectLogsInOrder(
+		output,
+		{
+			"Retrying inventory polling in 60 second",
+			"Retrying inventory polling in 3600 second",
+			"Retrying inventory polling in 60 second",
+			"Retrying inventory polling in 60 second",
+			"Retrying inventory polling in 120 second",
+			"Retrying inventory polling in 3600 second",
+		});
+}
+
+TEST_F(SubmitInventoryStateTests, TooManyRequests_DateInRetryAfterHeader) {
+	time_t now = time(nullptr);
+	time_t futureTime = now + 1298;
+	struct tm *tm_ptr = gmtime(&futureTime);
+	char buffer[100];
+	// HTTP Format, e.g. "Wed, 21 Oct 2015 07:28:00 GMT", 1298 seconds from now
+	strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S GMT", tm_ptr);
+	string httpDate(buffer);
+
+	http::Transaction::HeaderMap headers;
+	headers.insert({"Retry-After", httpDate});
+
+	inventory::APIResponse resp = {
+		http::StatusTooManyRequests,
+		headers,
+		MakeError(mender::update::deployments::TooManyRequestsError, "Too many requests")};
+
+	EXPECT_CALL(poster_, PostEvent(StateEvent::Failure)).Times(1);
+	testing::internal::CaptureStderr();
+
+	callPushDataHandler(resp);
+
+	auto output = testing::internal::GetCapturedStderr();
+	// make sure that retrying with Retry-After does not modify normal
+	// exponential backoff behavior
+	ExpectLogsInOrder(
+		output,
+		{
+			"Retrying inventory polling in 1298 second",
+		});
+}
+
+TEST_F(SubmitInventoryStateTests, TooManyRequests_NoRetryAfterHeader) {
+	http::Transaction::HeaderMap headers;
+
+	inventory::APIResponse resp = {
+		http::StatusTooManyRequests,
+		headers,
+		MakeError(mender::update::deployments::TooManyRequestsError, "Too many requests")};
+
+	int iterations = 7;
+	EXPECT_CALL(poster_, PostEvent(StateEvent::Failure)).Times(iterations);
+	testing::internal::CaptureStderr();
+
+	for (int i = 0; i < iterations; i++) {
+		callPushDataHandler(resp);
+	}
+
+	auto output = testing::internal::GetCapturedStderr();
+
+	// Make sure that normal exponential backoff is used
+	ExpectLogsInOrder(
+		output,
+		{
+			"Retrying inventory polling in 60 second",
+			"Retrying inventory polling in 60 second",
+			"Retrying inventory polling in 60 second",
+			"Retrying inventory polling in 120 second",
+			"Retrying inventory polling in 120 second",
+			"Retrying inventory polling in 120 second",
+			"Retrying inventory polling in 240 second",
+		});
+}
+
+class SendStatusUpdateStateTests : public StateTests {
+public:
+	SendStatusUpdateStateTests() :
+		state_(nullopt, event_loop_, 3600, 0) {
+	}
+
+protected:
+	void callDoStatusUpdateHandler(deployments::APIResponseError error) {
+		state_.DoStatusUpdateHandler(*ctx_, poster_, error);
+		ASSERT_TRUE(state_.retry_.has_value());
+		state_.retry_.value().wait_timer.Cancel();
+	}
+
+	SendStatusUpdateState state_;
+};
+
+TEST_F(SendStatusUpdateStateTests, TooManyRequests_SecondsInRetryAfterHeader) {
+	http::Transaction::HeaderMap headers;
+	headers.insert({"Retry-After", "3600"});
+
+	deployments::APIResponseError resp = {
+		http::StatusTooManyRequests,
+		headers,
+		MakeError(inventory::TooManyRequestsError, "Too many requests")};
+
+	deployments::APIResponseError resp_unauthorized = {
+		http::StatusUnauthorized,
+		headers,
+		MakeError(inventory::BadResponseError, "doesn't matter")};
+
+	testing::internal::CaptureStderr();
+
+	callDoStatusUpdateHandler(resp_unauthorized);
+	callDoStatusUpdateHandler(resp);
+	callDoStatusUpdateHandler(resp_unauthorized);
+	callDoStatusUpdateHandler(resp_unauthorized);
+	callDoStatusUpdateHandler(resp_unauthorized);
+	callDoStatusUpdateHandler(resp);
+
+	auto output = testing::internal::GetCapturedStderr();
+	// make sure that retrying with Retry-After does not modify normal
+	// exponential backoff behavior
+	ExpectLogsInOrder(
+		output,
+		{
+			"Retrying status update after 60 second",
+			"Retrying status update after 3600 second",
+			"Retrying status update after 60 second",
+			"Retrying status update after 60 second",
+			"Retrying status update after 120 second",
+			"Retrying status update after 3600 second",
+		});
+}
+
+TEST_F(SendStatusUpdateStateTests, TooManyRequests_DateInRetryAfterHeader) {
+	time_t now = time(nullptr);
+	time_t futureTime = now + 1298;
+	struct tm *tm_ptr = gmtime(&futureTime);
+	char buffer[100];
+	// HTTP Format, e.g. "Wed, 21 Oct 2015 07:28:00 GMT", 1298 seconds from now
+	strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S GMT", tm_ptr);
+	string httpDate(buffer);
+
+	http::Transaction::HeaderMap headers;
+	headers.insert({"Retry-After", httpDate});
+
+	deployments::APIResponseError resp = {
+		http::StatusTooManyRequests,
+		headers,
+		MakeError(mender::update::deployments::TooManyRequestsError, "Too many requests")};
+
+	testing::internal::CaptureStderr();
+
+	callDoStatusUpdateHandler(resp);
+
+	auto output = testing::internal::GetCapturedStderr();
+	// make sure that retrying with Retry-After does not modify normal
+	// exponential backoff behavior
+	ExpectLogsInOrder(
+		output,
+		{
+			"Retrying status update after 1298 second",
+		});
+}
+
+TEST_F(SendStatusUpdateStateTests, TooManyRequests_NoRetryAfterHeader) {
+	http::Transaction::HeaderMap headers;
+
+	deployments::APIResponseError resp = {
+		http::StatusTooManyRequests,
+		headers,
+		MakeError(mender::update::deployments::TooManyRequestsError, "Too many requests")};
+
+	int iterations = 7;
+	testing::internal::CaptureStderr();
+
+	for (int i = 0; i < iterations; i++) {
+		callDoStatusUpdateHandler(resp);
+	}
+
+	auto output = testing::internal::GetCapturedStderr();
+
+	// Make sure that normal exponential backoff is used
+	ExpectLogsInOrder(
+		output,
+		{
+			"Retrying status update after 60 second",
+			"Retrying status update after 60 second",
+			"Retrying status update after 60 second",
+			"Retrying status update after 120 second",
+			"Retrying status update after 120 second",
+			"Retrying status update after 120 second",
+			"Retrying status update after 240 second",
+		});
+}
+
 
 } // namespace daemon
 } // namespace update

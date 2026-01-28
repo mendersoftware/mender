@@ -43,6 +43,10 @@ namespace io = mender::common::io;
 namespace inv = mender::update::inventory;
 namespace mtesting = mender::common::testing;
 
+using mender::nullopt;
+using mender::optional;
+using TestEventLoop = mtesting::TestEventLoop;
+
 class NoAuthHTTPClient : public api::Client {
 public:
 	NoAuthHTTPClient(const http::ClientConfig &config, events::EventLoop &event_loop) :
@@ -75,6 +79,34 @@ protected:
 
 		int ret = chmod(test_script_path.c_str(), S_IRUSR | S_IWUSR | S_IXUSR);
 		return ret == 0;
+	}
+
+	error::Error CallPushInventoryData(
+		const string &inventory_generators_dir,
+		events::EventLoop &loop,
+		api::Client &client,
+		size_t &last_data_hash,
+		inv::APIResponseHandler api_handler) {
+		return inv::InventoryClient().PushInventoryData(
+			inventory_generators_dir, loop, client, last_data_hash, api_handler);
+	}
+
+
+	shared_ptr<http::IncomingResponse> CreateIncomingResponse(
+		http::ClientInterface &client, shared_ptr<bool> cancelled, optional<string> retry_after) {
+		auto resp =
+			shared_ptr<http::IncomingResponse>(new http::IncomingResponse(client, cancelled));
+		resp->status_code_ = http::StatusTooManyRequests;
+		resp->status_message_ = "Too Many Requests";
+		if (retry_after.has_value()) {
+			resp->headers_.insert({"Retry-After", retry_after.value()});
+		}
+		return resp;
+	}
+
+	void InventoryClientHeaderHandler(
+		inv::APIResponseHandler api_handler, http::ExpectedIncomingResponsePtr exp_resp) {
+		inv::InventoryClient().HeaderHandler(make_shared<vector<uint8_t>>(), api_handler, exp_resp);
 	}
 };
 
@@ -137,14 +169,14 @@ exit 0
 
 	bool handler_called = false;
 	size_t last_hash = 0;
-	auto err = inv::PushInventoryData(
+	auto err = CallPushInventoryData(
 		test_scripts_dir.Path(),
 		loop,
 		client,
 		last_hash,
-		[&handler_called, &loop](error::Error err) {
+		[&handler_called, &loop](inv::APIResponse resp) {
 			handler_called = true;
-			ASSERT_EQ(err, error::NoError);
+			ASSERT_EQ(resp.error, error::NoError);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -220,14 +252,14 @@ exit 0
 
 	bool handler_called = false;
 	size_t last_hash = 0;
-	auto err = inv::PushInventoryData(
+	auto err = CallPushInventoryData(
 		test_scripts_dir.Path(),
 		loop,
 		client,
 		last_hash,
-		[&handler_called, &loop](error::Error err) {
+		[&handler_called, &loop](inv::APIResponse resp) {
 			handler_called = true;
-			ASSERT_EQ(err, error::NoError);
+			ASSERT_EQ(resp.error, error::NoError);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -292,14 +324,14 @@ exit 0
 
 	bool handler_called = false;
 	size_t last_hash = 0;
-	auto err = inv::PushInventoryData(
+	auto err = CallPushInventoryData(
 		test_scripts_dir.Path(),
 		loop,
 		client,
 		last_hash,
-		[&handler_called, &loop](error::Error err) {
+		[&handler_called, &loop](inv::APIResponse resp) {
 			handler_called = true;
-			ASSERT_EQ(err, error::NoError);
+			ASSERT_EQ(resp.error, error::NoError);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -374,18 +406,18 @@ exit 0
 
 	bool handler_called = false;
 	size_t last_hash = 0;
-	auto err = inv::PushInventoryData(
+	auto err = CallPushInventoryData(
 		test_scripts_dir.Path(),
 		loop,
 		client,
 		last_hash,
-		[&handler_called, &loop](error::Error err) {
+		[&handler_called, &loop](inv::APIResponse resp) {
 			handler_called = true;
-			ASSERT_NE(err, error::NoError);
+			ASSERT_NE(resp.error, error::NoError);
 
-			EXPECT_THAT(err.message, testing::HasSubstr("Got unexpected response"));
-			EXPECT_THAT(err.message, testing::HasSubstr("500"));
-			EXPECT_THAT(err.message, testing::HasSubstr("container failed to open"));
+			EXPECT_THAT(resp.error.message, testing::HasSubstr("Got unexpected response"));
+			EXPECT_THAT(resp.error.message, testing::HasSubstr("500"));
+			EXPECT_THAT(resp.error.message, testing::HasSubstr("container failed to open"));
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -430,14 +462,14 @@ exit 0
 		+ conf::kMenderVersion
 		+ R"("},{"name":"mender_client_version_provider","value":"internal"}])");
 	size_t last_hash_orig = last_hash;
-	auto err = inv::PushInventoryData(
+	auto err = CallPushInventoryData(
 		test_scripts_dir.Path(),
 		loop,
 		client,
 		last_hash,
-		[&handler_called, &loop](error::Error err) {
+		[&handler_called, &loop](inv::APIResponse resp) {
 			handler_called = true;
-			ASSERT_EQ(err, error::NoError);
+			ASSERT_EQ(resp.error, error::NoError);
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
@@ -445,4 +477,53 @@ exit 0
 	loop.Run();
 	EXPECT_TRUE(handler_called);
 	EXPECT_EQ(last_hash, last_hash_orig);
+}
+
+TEST_F(InventoryAPITests, TestTooManyRequestsWithRetryAfterHeader) {
+	TestEventLoop loop;
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+	auto cancelled = make_shared<bool>(false);
+
+	vector<string> retry_after_cases {"100", "Fri, 31 Dec 1999 23:59:59 GMT"};
+
+	for (auto retry_after : retry_after_cases) {
+		auto resp = CreateIncomingResponse(client, cancelled, retry_after);
+		http::ExpectedIncomingResponsePtr exp_resp = resp;
+		bool handler_called {false};
+
+		auto api_handler = [&handler_called, retry_after](inv::APIResponse resp) {
+			handler_called = true;
+			EXPECT_EQ(resp.http_code, http::StatusTooManyRequests);
+			ASSERT_TRUE(resp.http_headers.has_value());
+			auto retry_from_header = resp.http_headers.value().find("Retry-After");
+			EXPECT_NE(retry_from_header, resp.http_headers.value().end());
+			EXPECT_EQ(retry_from_header->second, retry_after);
+		};
+
+		InventoryClientHeaderHandler(api_handler, exp_resp);
+		EXPECT_TRUE(handler_called);
+	}
+}
+
+TEST_F(InventoryAPITests, TestTooManyRequestsWithoutRetryAfterHeader) {
+	TestEventLoop loop;
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+	auto cancelled = make_shared<bool>(false);
+
+	auto resp = CreateIncomingResponse(client, cancelled, nullopt);
+	http::ExpectedIncomingResponsePtr exp_resp = resp;
+	bool handler_called {false};
+
+	auto api_handler = [&handler_called](inv::APIResponse resp) {
+		handler_called = true;
+		EXPECT_EQ(resp.http_code, http::StatusTooManyRequests);
+		EXPECT_TRUE(resp.http_headers.has_value());
+		auto retry_from_header = resp.http_headers.value().find("Retry-After");
+		EXPECT_EQ(retry_from_header, resp.http_headers.value().end());
+	};
+
+	InventoryClientHeaderHandler(api_handler, exp_resp);
+	EXPECT_TRUE(handler_called);
 }
