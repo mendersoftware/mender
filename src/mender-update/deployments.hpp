@@ -147,33 +147,38 @@ public:
 	/**
 	 * @see GetLogFileDataSize() for details about #data_size
 	 */
-	JsonLogMessagesReader(shared_ptr<io::FileReader> raw_data_reader, int64_t data_size) :
-		reader_ {raw_data_reader},
-		raw_data_size_ {data_size},
-		rem_raw_data_size_ {data_size} {};
+	JsonLogMessagesReader(const string &log_fpath) :
+		log_fpath_ {log_fpath},
+		bad_data_msg_ {common::ByteVectorFromString(bad_data_msg_tmpl_)},
+		bad_data_msg_rem_ {bad_data_msg_.size()} {};
+
+	~JsonLogMessagesReader();
+
+	// Must be called before any other methods/member functions below.
+	error::Error SanitizeLogs();
 
 	expected::ExpectedSize Read(
 		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
 
-	error::Error Rewind() {
-		header_rem_ = header_.size();
-		closing_rem_ = closing_.size();
-		rem_raw_data_size_ = raw_data_size_;
-		return reader_->Rewind();
-	}
+	error::Error Rewind();
 
-	static int64_t TotalDataSize(int64_t raw_data_size) {
-		return raw_data_size + header_.size() + closing_.size();
-	}
+	int64_t TotalDataSize();
 
 private:
-	shared_ptr<io::FileReader> reader_;
+	const string log_fpath_;
+	string sanitized_fpath_;
+	unique_ptr<io::FileReader> reader_;
 	int64_t raw_data_size_;
 	int64_t rem_raw_data_size_;
 	static const vector<uint8_t> header_;
 	static const vector<uint8_t> closing_;
+	static const string default_tstamp_;
+	static const string bad_data_msg_tmpl_;
 	io::Vsize header_rem_ = header_.size();
 	io::Vsize closing_rem_ = closing_.size();
+	vector<uint8_t> bad_data_msg_;
+	io::Vsize bad_data_msg_rem_;
+	bool clean_logs_;
 };
 
 class DeploymentLog {
