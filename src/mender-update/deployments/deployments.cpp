@@ -29,6 +29,7 @@
 #include <common/json.hpp>
 #include <common/log.hpp>
 #include <common/optional.hpp>
+#include <common/path.hpp>
 #include <mender-update/context.hpp>
 
 namespace mender {
@@ -47,6 +48,7 @@ namespace http = mender::common::http;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace log = mender::common::log;
+namespace path = mender::common::path;
 
 const DeploymentsErrorCategoryClass DeploymentsErrorCategory;
 
@@ -289,14 +291,14 @@ error::Error DeploymentClient::PushStatus(
 			auto content_length = resp->GetHeader("Content-Length");
 			if (!content_length) {
 				log::Debug(
-					"Failed to get content length from the status API response headers: "
+					"Failed to get content length from the deployment status API response headers: "
 					+ content_length.error().String());
 				body_writer->SetUnlimited(true);
 			} else {
 				auto ex_len = common::StringTo<size_t>(content_length.value());
 				if (!ex_len) {
 					log::Error(
-						"Failed to convert the content length from the status API response headers to an integer: "
+						"Failed to convert the content length from the deployment status API response headers to an integer: "
 						+ ex_len.error().String());
 					body_writer->SetUnlimited(true);
 				} else {
@@ -345,11 +347,11 @@ static ExpectedSize GetLogFileDataSize(const string &path) {
 	auto istr = std::move(ex_istr.value());
 
 	// We want the size of the actual data without a potential trailing
-	// newline. So let's seek one byte before the end of file, check if the last
-	// byte is a newline and return the appropriate number.
+	// comma. So let's seek one byte before the end of file, check if the last
+	// byte is a comma and return the appropriate number.
 	istr.seekg(-1, ios_base::end);
 	int c = istr.get();
-	if (c == '\n') {
+	if (c == ',') {
 		return istr.tellg() - static_cast<ifstream::off_type>(1);
 	} else {
 		return istr.tellg();
@@ -359,15 +361,169 @@ static ExpectedSize GetLogFileDataSize(const string &path) {
 const vector<uint8_t> JsonLogMessagesReader::header_ = {
 	'{', '"', 'm', 'e', 's', 's', 'a', 'g', 'e', 's', '"', ':', '['};
 const vector<uint8_t> JsonLogMessagesReader::closing_ = {']', '}'};
+const string JsonLogMessagesReader::default_tstamp_ = "1970-01-01T00:00:00.000000000Z";
+const string JsonLogMessagesReader::bad_data_msg_tmpl_ =
+	R"d({"timestamp": "1970-01-01T00:00:00.000000000Z", "level": "ERROR", "message": "(THE ORIGINAL LOGS CONTAINED INVALID ENTRIES)"},)d";
+
+JsonLogMessagesReader::~JsonLogMessagesReader() {
+	reader_.reset();
+	if (!sanitized_fpath_.empty() && path::FileExists(sanitized_fpath_)) {
+		auto del_err = path::FileDelete(sanitized_fpath_);
+		if (del_err != error::NoError) {
+			log::Error("Failed to delete auxiliary logs file: " + del_err.String());
+		}
+	}
+	sanitized_fpath_.erase();
+}
+
+static error::Error DoSanitizeLogs(
+	const string &orig_path, const string &new_path, bool &all_valid, string &first_tstamp) {
+	auto ex_ifs = io::OpenIfstream(orig_path);
+	if (!ex_ifs) {
+		return ex_ifs.error();
+	}
+	auto ex_ofs = io::OpenOfstream(new_path);
+	if (!ex_ofs) {
+		return ex_ofs.error();
+	}
+	auto &ifs = ex_ifs.value();
+	auto &ofs = ex_ofs.value();
+
+	string last_known_tstamp = first_tstamp;
+	const string tstamp_prefix_data = R"d({"timestamp": ")d";
+	const string corrupt_msg_suffix_data =
+		R"d(", "level": "ERROR", "message": "(CORRUPTED LOG DATA)"},)d";
+
+	string line;
+	first_tstamp.erase();
+	all_valid = true;
+	error::Error err;
+	while (!ifs.eof()) {
+		getline(ifs, line);
+		if (!ifs.eof() && !ifs) {
+			int io_errno = errno;
+			return error::Error(
+				generic_category().default_error_condition(io_errno),
+				"Failed to get line from deployment logs file '" + orig_path
+					+ "': " + strerror(io_errno));
+		}
+		if (line.empty()) {
+			// skip empty lines
+			continue;
+		}
+		auto ex_json = json::Load(line);
+		if (ex_json) {
+			// valid JSON log line, just replace the newline after it with a comma and save the
+			// timestamp for later
+			auto ex_tstamp = ex_json.value().Get("timestamp").and_then(json::ToString);
+			if (ex_tstamp) {
+				if (first_tstamp.empty()) {
+					first_tstamp = ex_tstamp.value();
+				}
+				last_known_tstamp = std::move(ex_tstamp.value());
+			}
+			line.append(1, ',');
+			err = io::WriteStringIntoOfstream(ofs, line);
+			if (err != error::NoError) {
+				return err.WithContext("Failed to write pre-processed deployment logs data");
+			}
+		} else {
+			all_valid = false;
+			if (first_tstamp.empty()) {
+				// If we still don't have the first valid tstamp, we need to
+				// save the last known one (potentially pre-set) as the first
+				// one.
+				first_tstamp = last_known_tstamp;
+			}
+			err = io::WriteStringIntoOfstream(
+				ofs, tstamp_prefix_data + last_known_tstamp + corrupt_msg_suffix_data);
+			if (err != error::NoError) {
+				return err.WithContext("Failed to write pre-processed deployment logs data");
+			}
+		}
+	}
+	return error::NoError;
+}
+
+error::Error JsonLogMessagesReader::SanitizeLogs() {
+	if (!sanitized_fpath_.empty()) {
+		return error::NoError;
+	}
+
+	string prep_fpath = log_fpath_ + ".sanitized";
+	string first_tstamp = default_tstamp_;
+	auto err = DoSanitizeLogs(log_fpath_, prep_fpath, clean_logs_, first_tstamp);
+	if (err != error::NoError) {
+		if (path::FileExists(prep_fpath)) {
+			auto del_err = path::FileDelete(prep_fpath);
+			if (del_err != error::NoError) {
+				log::Error("Failed to delete auxiliary logs file: " + del_err.String());
+			}
+		}
+	} else {
+		sanitized_fpath_ = std::move(prep_fpath);
+		reader_ = make_unique<io::FileReader>(sanitized_fpath_);
+		auto ex_sz = GetLogFileDataSize(sanitized_fpath_);
+		if (!ex_sz) {
+			return ex_sz.error().WithContext("Failed to determine deployment logs size");
+		}
+		raw_data_size_ = ex_sz.value();
+		rem_raw_data_size_ = raw_data_size_;
+		if (!clean_logs_) {
+			auto bad_data_msg_tstamp_start =
+				bad_data_msg_.begin() + 15; // len(R"({"timestamp": ")")
+			copy_n(first_tstamp.cbegin(), first_tstamp.size(), bad_data_msg_tstamp_start);
+		}
+	}
+	return err;
+}
+
+error::Error JsonLogMessagesReader::Rewind() {
+	AssertOrReturnError(!sanitized_fpath_.empty());
+	header_rem_ = header_.size();
+	closing_rem_ = closing_.size();
+	bad_data_msg_rem_ = bad_data_msg_.size();
+
+	// release/close the file first so that the FileDelete() below can actually
+	// delete it and free space up
+	reader_.reset();
+	auto del_err = path::FileDelete(sanitized_fpath_);
+	if (del_err != error::NoError) {
+		log::Error("Failed to delete auxiliary logs file: " + del_err.String());
+	}
+	sanitized_fpath_.erase();
+	return SanitizeLogs();
+}
+
+int64_t JsonLogMessagesReader::TotalDataSize() {
+	assert(!sanitized_fpath_.empty());
+
+	auto ret = raw_data_size_ + header_.size() + closing_.size();
+	if (!clean_logs_) {
+		ret += bad_data_msg_.size();
+	}
+	return ret;
+}
 
 ExpectedSize JsonLogMessagesReader::Read(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
+	AssertOrReturnUnexpected(!sanitized_fpath_.empty());
+
 	if (header_rem_ > 0) {
 		io::Vsize target_size = end - start;
 		auto copy_end = copy_n(
 			header_.begin() + (header_.size() - header_rem_), min(header_rem_, target_size), start);
 		auto n_copied = copy_end - start;
 		header_rem_ -= n_copied;
+		return static_cast<size_t>(n_copied);
+	} else if (!clean_logs_ && (bad_data_msg_rem_ > 0)) {
+		io::Vsize target_size = end - start;
+		auto copy_end = copy_n(
+			bad_data_msg_.begin() + (bad_data_msg_.size() - bad_data_msg_rem_),
+			min(bad_data_msg_rem_, target_size),
+			start);
+		auto n_copied = copy_end - start;
+		bad_data_msg_rem_ -= n_copied;
 		return static_cast<size_t>(n_copied);
 	} else if (rem_raw_data_size_ > 0) {
 		if (end - start > rem_raw_data_size_) {
@@ -387,14 +543,6 @@ ExpectedSize JsonLogMessagesReader::Read(
 		if (n_read == 0) {
 			return expected::unexpected(
 				MakeError(InvalidDataError, "Unexpected EOF when reading logs file"));
-		}
-
-		// Replace all newlines with commas
-		const auto read_end = start + n_read;
-		for (auto it = start; it < read_end; it++) {
-			if (it[0] == '\n') {
-				it[0] = ',';
-			}
 		}
 		return n_read;
 	} else if (closing_rem_ > 0) {
@@ -418,21 +566,17 @@ error::Error DeploymentClient::PushLogs(
 	const string &log_file_path,
 	api::Client &client,
 	LogsAPIResponseHandler api_handler) {
-	auto ex_size = GetLogFileDataSize(log_file_path);
-	if (!ex_size) {
-		// api_handler(ex_size.error()) ???
-		return ex_size.error();
+	auto logs_reader = make_shared<JsonLogMessagesReader>(log_file_path);
+	auto err = logs_reader->SanitizeLogs();
+	if (err != error::NoError) {
+		return err;
 	}
-	auto data_size = ex_size.value();
-
-	auto file_reader = make_shared<io::FileReader>(log_file_path);
-	auto logs_reader = make_shared<JsonLogMessagesReader>(file_reader, data_size);
 
 	auto req = make_shared<api::APIRequest>();
 	req->SetPath(http::JoinUrl(deployments_uri_prefix, deployment_id, logs_uri_suffix));
 	req->SetMethod(http::Method::PUT);
 	req->SetHeader("Content-Type", "application/json");
-	req->SetHeader("Content-Length", to_string(JsonLogMessagesReader::TotalDataSize(data_size)));
+	req->SetHeader("Content-Length", to_string(logs_reader->TotalDataSize()));
 	req->SetHeader("Accept", "application/json");
 	req->SetBodyGenerator([logs_reader]() {
 		logs_reader->Rewind();
@@ -454,14 +598,14 @@ error::Error DeploymentClient::PushLogs(
 			auto content_length = resp->GetHeader("Content-Length");
 			if (!content_length) {
 				log::Debug(
-					"Failed to get content length from the status API response headers: "
+					"Failed to get content length from the deployment log API response headers: "
 					+ content_length.error().String());
 				body_writer->SetUnlimited(true);
 			} else {
 				auto ex_len = common::StringTo<size_t>(content_length.value());
 				if (!ex_len) {
 					log::Error(
-						"Failed to convert the content length from the status API response headers to an integer: "
+						"Failed to convert the content length from the deployment log API response headers to an integer: "
 						+ ex_len.error().String());
 					body_writer->SetUnlimited(true);
 				} else {
