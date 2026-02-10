@@ -137,10 +137,11 @@ error::Error HTTPClient::AsyncCall(
 					}
 					auto resp = ex_resp.value();
 					auto status = resp->GetStatusCode();
-					if (status != http::StatusUnauthorized) {
+					// 401 and 429 handled by the header handler. Don't call the body handler.
+					if (status != http::StatusUnauthorized
+						&& status != http::StatusTooManyRequests) {
 						body_handler(ex_resp);
 					}
-					// 401 handled by the header handler
 				});
 			if (err != error::NoError) {
 				log::Error("Failed to schedule an HTTP request with an existing new token");

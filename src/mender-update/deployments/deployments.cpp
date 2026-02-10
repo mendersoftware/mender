@@ -263,7 +263,6 @@ void DeploymentClient::HeaderHandler(
 		CheckUpdatesAPIResponse response = expected::unexpected(CheckUpdatesAPIResponseError {
 			status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")});
 		api_handler(response);
-		return;
 	}
 	received_body->clear();
 	auto body_writer = make_shared<io::ByteWriter>(received_body);
@@ -377,7 +376,6 @@ void DeploymentClient::PushStatusHeaderHandler(
 		StatusAPIResponse response = {
 			status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")};
 		api_handler(response);
-		return;
 	}
 	auto content_length = resp->GetHeader("Content-Length");
 	if (!content_length) {
@@ -702,7 +700,6 @@ void DeploymentClient::PushLogsHeaderHandler(
 		LogsAPIResponse response = {
 			status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")};
 		api_handler(response);
-		return;
 	}
 	auto content_length = resp->GetHeader("Content-Length");
 	if (!content_length) {
