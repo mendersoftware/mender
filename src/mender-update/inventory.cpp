@@ -204,15 +204,21 @@ void InventoryClient::HeaderHandler(
 	if (status == http::StatusTooManyRequests) {
 		api_handler(APIResponse {
 			status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")});
-		return;
 	}
 	auto content_length = resp->GetHeader("Content-Length");
-	auto ex_len = common::StringTo<size_t>(content_length.value());
-	if (!ex_len) {
-		log::Error("Failed to get content length from the inventory API response headers");
+	if (!content_length) {
+		log::Debug(
+			"Failed to get content length from the inventory status API response headers: "
+			+ content_length.error().String());
 		body_writer->SetUnlimited(true);
 	} else {
-		received_body->resize(ex_len.value());
+		auto ex_len = common::StringTo<size_t>(content_length.value());
+		if (!ex_len) {
+			log::Error("Failed to get content length from the inventory API response headers");
+			body_writer->SetUnlimited(true);
+		} else {
+			received_body->resize(ex_len.value());
+		}
 	}
 	resp->SetBodyWriter(body_writer);
 }
