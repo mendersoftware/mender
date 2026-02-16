@@ -94,7 +94,7 @@ class TestModulesArtifactGen:
                 "name": "extra device type",
                 "append_args": " -t other-device-type",
                 "extra_output_asserts": [
-                    "Compatible devices: [device-type, other-device-type]",
+                    "Compatible types: [device-type, other-device-type]",
                 ],
             },
             {
@@ -165,7 +165,7 @@ class TestModulesArtifactGen:
             # Check output
             if not "skip_output_asserts" in tc or not tc["skip_output_asserts"]:
                 assert "Name: artifact-name" in output, output
-                assert "Compatible devices: [device-type" in output, output
+                assert "Compatible types: [device-type" in output, output
                 assert "Type: single-file" in output, output
                 assert (
                     """Provides:
@@ -245,7 +245,7 @@ class TestModulesArtifactGen:
             assert "name: my-file1" in output, output
 
             # all device types, incl. the one with output override attempt
-            assert "Compatible devices: [device-type1, device-type2, device-type3 -o my_output.mender]" in output, output
+            assert "Compatible types: [device-type1, device-type2, device-type3 -o my_output.mender]" in output, output
 
             # weird software-name from the file injection attempt
             assert (
@@ -302,7 +302,7 @@ class TestModulesArtifactGen:
             assert "name: my-file1" in output, output
 
             # all device types, incl. the one with output override attempt
-            assert "Compatible devices: [device-type1, device-type2, device-type3 -o my_output.mender]" in output, output
+            assert "Compatible types: [device-type1, device-type2, device-type3 -o my_output.mender]" in output, output
 
             # weird software-name from the file injection attempt
             assert (
