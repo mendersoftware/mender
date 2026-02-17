@@ -1,7 +1,6 @@
 stages:
   - test
   - publish
-  - trigger
 
 variables:
   LICENSE_HEADERS_IGNORE_FILES_REGEXP: "./ltmain.sh"
@@ -184,16 +183,3 @@ publish:tests:
       --repo-token ${COVERALLS_TOKEN}
       --no-gcov
       --lcov-file coverage.lcov
-
-trigger:integration:
-  stage: trigger
-  inherit:
-    variables: false
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "master"'
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: never
-  trigger:
-    project: Northern.tech/Mender/integration
-    branch: master
-    strategy: depend
