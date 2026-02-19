@@ -36,7 +36,7 @@ namespace mlog = mender::common::log;
 namespace expected = mender::common::expected;
 
 error::Error AuthenticatorDBus::StartWatchingTokenSignal() {
-	if (watching_token_signal_) {
+	if (dbus_client_.WatchingSignal("io.mender.Authentication1", "JwtTokenStateChange")) {
 		return error::NoError;
 	}
 
@@ -47,7 +47,6 @@ error::Error AuthenticatorDBus::StartWatchingTokenSignal() {
 			HandleReceivedToken(ex_auth_dbus_data, NoTokenAction::Finish);
 		});
 
-	watching_token_signal_ = (err == error::NoError);
 	return err;
 }
 
