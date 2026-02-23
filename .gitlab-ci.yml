@@ -26,6 +26,9 @@ include:
     file: '.gitlab-ci-check-license.yml'
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-c++.yml'
+  - project: "Northern.tech/Mender/mendertesting"
+    file: "qa-common/send-results-to-mantra.yml"
+    ref: "master"
 
 default:
   tags:
@@ -147,6 +150,7 @@ test:modules-artifact-gen:
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
     - apt update && apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
+    - apt install -yy jq
     # mender-artifact
     - curl -fsSL https://downloads.mender.io/repos/debian/gpg | tee /etc/apt/trusted.gpg.d/mender.asc
     - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/workstation-tools ubuntu/jammy/stable main" | tee /etc/apt/sources.list.d/mender.list
@@ -154,7 +158,10 @@ test:modules-artifact-gen:
     # Test dependencies
     - pip install -r support/modules-artifact-gen/tests/requirements.txt
   script:
-    - python3 -m pytest support/modules-artifact-gen/tests
+    - python3 -m pytest --verbose --junitxml=results.xml support/modules-artifact-gen/tests
+  after_script:
+    - export MANTRA_PROJECT_NAME="client_general"
+    - !reference [.mantra-push-results]
 
 test:docker:
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker:${DOCKER_VERSION}
