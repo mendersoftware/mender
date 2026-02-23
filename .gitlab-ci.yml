@@ -27,6 +27,9 @@ include:
     file: '.gitlab-ci-check-license.yml'
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-c++.yml'
+  - project: "Northern.tech/Mender/mendertesting"
+    file: "qa-common/send-results-to-mantra.yml"
+    ref: "master"
 
 default:
   tags:
@@ -155,7 +158,17 @@ test:modules-artifact-gen:
     # Test dependencies
     - pip install -r support/modules-artifact-gen/tests/requirements.txt
   script:
-    - python3 -m pytest support/modules-artifact-gen/tests
+    - python3 -m pytest --verbose --junitxml=results.xml support/modules-artifact-gen/tests
+  after_script:
+    - MANTRA_PROJECT_NAME: "full_integration"
+    - !reference [.mantra-push-results]
+  artifacts:
+  expire_in: 2w
+  when: always
+  ￼ paths:
+      - support/modules-artifact-gen/tests/results.xml
+  ￼ reports:
+      junit: support/modules-artifact-gen/tests/results.xm
 
 test:docker:
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker:${DOCKER_VERSION}
