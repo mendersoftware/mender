@@ -169,6 +169,7 @@ test:docker:
 
 publish:tests:
   stage: publish
+  allow_failure: true
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/python:3.11
   dependencies:
     - test:unit
