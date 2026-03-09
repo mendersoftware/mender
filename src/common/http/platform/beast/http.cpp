@@ -679,11 +679,6 @@ void Client::ResolveHandler(
 
 	auto &cancelled = cancelled_;
 
-	// Set timeout to 5 minutes to ensure we don't hang during async connect
-	// `next_layer().next_layer()` accesses the `beast::tcp_stream` from
-	// `ssl::stream<ssl::stream<beast::tcp_stream>>`
-	stream_->next_layer().next_layer().expires_after(chrono::minutes(5));
-
 	asio::async_connect(
 		stream_->lowest_layer(),
 		resolver_results_,
@@ -814,11 +809,6 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 			WriteHeaderHandler(ec, num_written);
 		}
 	};
-
-	// Set timeout to 5 minutes to ensure we don't hang during async write
-	// `next_layer().next_layer()` accesses the `beast::tcp_stream` from
-	// `ssl::stream<ssl::stream<beast::tcp_stream>>`
-	stream_->next_layer().next_layer().expires_after(chrono::minutes(5));
 
 	switch (socket_mode_) {
 	case SocketMode::TlsTls:
@@ -957,11 +947,6 @@ void Client::WriteBody() {
 		}
 	};
 
-	// Set timeout to 5 minutes to ensure we don't hang during async write
-	// `next_layer().next_layer()` accesses the `beast::tcp_stream` from
-	// `ssl::stream<ssl::stream<beast::tcp_stream>>`
-	stream_->next_layer().next_layer().expires_after(chrono::minutes(5));
-
 	switch (socket_mode_) {
 	case SocketMode::TlsTls:
 		http::async_write_some(*stream_, *request_data_.http_request_serializer_, handler);
@@ -986,11 +971,6 @@ void Client::ReadHeader() {
 			ReadHeaderHandler(ec, num_read);
 		}
 	};
-
-	// Set timeout to 5 minutes to ensure we don't hang during async read
-	// `next_layer().next_layer()` accesses the `beast::tcp_stream` from
-	// `ssl::stream<ssl::stream<beast::tcp_stream>>`
-	stream_->next_layer().next_layer().expires_after(chrono::minutes(5));
 
 	switch (socket_mode_) {
 	case SocketMode::TlsTls:
