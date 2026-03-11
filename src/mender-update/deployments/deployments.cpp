@@ -68,6 +68,8 @@ string DeploymentsErrorCategoryClass::message(int code) const {
 		return "Deployment was aborted on the server";
 	case TooManyRequestsError:
 		return "Too many requests";
+	case RequestBodyTooLargeError:
+		return "Request body too large";
 	}
 	assert(false);
 	return "Unknown";
@@ -661,6 +663,8 @@ error::Error DeploymentClient::PushLogs(
 
 			// StatusTooManyRequests must have been handled in PushLogsHeaderHandler already
 			assert(status != http::StatusTooManyRequests);
+			// StatusRequestBodyTooLarge must have been handled in PushLogsHeaderHandler already
+			assert(status != http::StatusRequestBodyTooLarge);
 
 			if (status == http::StatusNoContent) {
 				api_handler(LogsAPIResponse {status, nullopt, error::NoError});
@@ -699,6 +703,12 @@ void DeploymentClient::PushLogsHeaderHandler(
 	if (status == http::StatusTooManyRequests) {
 		LogsAPIResponse response = {
 			status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")};
+		api_handler(response);
+	} else if (status == http::StatusRequestBodyTooLarge) {
+		LogsAPIResponse response = {
+			status,
+			resp->GetHeaders(),
+			MakeError(RequestBodyTooLargeError, "Could not send logs to server")};
 		api_handler(response);
 	}
 	auto content_length = resp->GetHeader("Content-Length");
