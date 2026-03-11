@@ -63,6 +63,7 @@ enum DeploymentsErrorCode {
 	BadResponseError,
 	DeploymentAbortedError,
 	TooManyRequestsError,
+	RequestBodyTooLargeError,
 };
 
 class DeploymentsErrorCategoryClass : public std::error_category {
