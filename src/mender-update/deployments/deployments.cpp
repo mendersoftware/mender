@@ -66,6 +66,10 @@ string DeploymentsErrorCategoryClass::message(int code) const {
 		return "Bad response error";
 	case DeploymentAbortedError:
 		return "Deployment was aborted on the server";
+	case TooManyRequestsError:
+		return "Too many requests";
+	case RequestBodyTooLargeError:
+		return "Request body too large";
 	}
 	assert(false);
 	return "Unknown";
@@ -646,8 +650,14 @@ error::Error DeploymentClient::PushLogs(
 
 			auto resp = exp_resp.value();
 			auto status = resp->GetStatusCode();
+
 			if (status == http::StatusNoContent) {
 				api_handler(error::NoError);
+			} else if (status == http::StatusRequestBodyTooLarge) {
+				// Don't retry if the request body is too large
+				api_handler(MakeError(
+					RequestBodyTooLargeError,
+					"Could not send logs to server: request body too large"));
 			} else {
 				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
 				string err_str;
@@ -662,7 +672,6 @@ error::Error DeploymentClient::PushLogs(
 			}
 		});
 }
-
 } // namespace deployments
 } // namespace update
 } // namespace mender

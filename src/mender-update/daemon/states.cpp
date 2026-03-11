@@ -570,6 +570,12 @@ void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEv
 				// failure, even if retry is enabled.
 				poster.PostEvent(StateEvent::DeploymentAborted);
 				return;
+			} else if (
+				err.code
+				== deployments::MakeError(deployments::RequestBodyTooLargeError, "").code) {
+				// There is no need to retry if the request body is too large
+				poster.PostEvent(StateEvent::Failure);
+				return;
 			}
 
 			switch (mode_) {
