@@ -1115,6 +1115,83 @@ ed"}
 	EXPECT_EQ(ss.str(), expected_data);
 }
 
+TEST_F(DeploymentsTests, JsonLogMessageReaderMalformedJsonShortFirstTstampTest) {
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.063493Z", "level": "INFO", "message": "OK"}
+{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appear
+ed"}
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	// Corrupted line should be replaced with timestamp from previous valid line
+	// (2016-03-11...), the first extra message should use the first timestamp
+	// in a valid format, even when the timestamp is shorter than expected due
+	// to lower time resolution.
+	string expected_data =
+		R"delim({"messages":[{"timestamp": "2016-03-11T13:03:17.063493Z"   , "level": "ERROR", "message": "(THE ORIGINAL LOGS CONTAINED INVALID ENTRIES)"},{"timestamp": "2016-03-11T13:03:17.063493Z", "level": "INFO", "message": "OK"},{"timestamp": "2016-03-11T13:03:17.063493Z", "level": "ERROR", "message": "(CORRUPTED LOG DATA)"},{"timestamp": "2016-03-11T13:03:17.063493Z", "level": "ERROR", "message": "(CORRUPTED LOG DATA)"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})delim";
+
+	deps::JsonLogMessagesReader logs_reader {test_log_file_path};
+	EXPECT_EQ(logs_reader.SanitizeLogs(), error::NoError);
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_data.length());
+
+	stringstream ss;
+	vector<uint8_t> buf(1024);
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str(), expected_data);
+}
+
+TEST_F(DeploymentsTests, JsonLogMessageReaderMalformedJsonLongFirstTstampTest) {
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.06349344355Z", "level": "INFO", "message": "OK"}
+{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appear
+ed"}
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	// Corrupted line should be replaced with timestamp from previous valid line
+	// (2016-03-11...), the first extra message should use the first timestamp
+	// in a valid format, even when the timestamp is longer than expected due to
+	// lower time resolution (the other lines can use the full timestamps, they
+	// don't rely on a template that needs to be filled-in).
+	string expected_data =
+		R"delim({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "ERROR", "message": "(THE ORIGINAL LOGS CONTAINED INVALID ENTRIES)"},{"timestamp": "2016-03-11T13:03:17.06349344355Z", "level": "INFO", "message": "OK"},{"timestamp": "2016-03-11T13:03:17.06349344355Z", "level": "ERROR", "message": "(CORRUPTED LOG DATA)"},{"timestamp": "2016-03-11T13:03:17.06349344355Z", "level": "ERROR", "message": "(CORRUPTED LOG DATA)"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})delim";
+
+	deps::JsonLogMessagesReader logs_reader {test_log_file_path};
+	EXPECT_EQ(logs_reader.SanitizeLogs(), error::NoError);
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_data.length());
+
+	stringstream ss;
+	vector<uint8_t> buf(1024);
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str(), expected_data);
+}
+
 TEST_F(DeploymentsTests, JsonLogMessageReaderBinaryDataTest) {
 	// Create file with binary data directly
 	const string test_log_file_path = test_state_dir.Path() + "/test.log";
