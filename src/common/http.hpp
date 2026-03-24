@@ -120,6 +120,7 @@ enum StatusCode {
 	StatusUnauthorized = 401,
 	StatusNotFound = 404,
 	StatusConflict = 409,
+	StatusRequestBodyTooLarge = 413,
 	StatusTooManyRequests = 429,
 
 	StatusInternalServerError = 500,
