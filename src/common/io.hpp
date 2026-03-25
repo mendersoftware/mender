@@ -214,9 +214,13 @@ ExpectedSharedOfstream OpenSharedOfstream(const string &path, bool append = fals
 
 class FileReader : virtual public StreamReader {
 public:
-	FileReader(const string &path) :
+	FileReader(const string &path, ifstream::pos_type start_offset) :
 		StreamReader(shared_ptr<std::istream>()),
-		path_ {path} {};
+		path_ {path},
+		start_offset_ {start_offset} {};
+
+	FileReader(const string &path) :
+		FileReader(path, 0) {};
 
 	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
 		// We cannot open the stream in the constructor because it can fail and
@@ -229,6 +233,15 @@ public:
 				return expected::unexpected(ex_is.error());
 			}
 			is_ = ex_is.value();
+			if (start_offset_ != 0) {
+				is_->seekg(start_offset_);
+				int io_errno = errno;
+				if (!(*is_)) {
+					return expected::unexpected(Error(
+						generic_category().default_error_condition(io_errno),
+						"Failed to seek to the read start of '" + path_ + "'"));
+				}
+			}
 		}
 		return StreamReader::Read(start, end);
 	}
@@ -237,6 +250,7 @@ public:
 
 private:
 	string path_;
+	ifstream::pos_type start_offset_;
 };
 
 /* Discards all data written to it */
