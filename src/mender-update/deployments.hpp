@@ -36,6 +36,8 @@
 #include <common/optional.hpp>
 #include <mender-update/context.hpp>
 
+// For friend declaration below, used in tests.
+class DeploymentsTests;
 namespace mender {
 namespace update {
 namespace deployments {
@@ -150,7 +152,9 @@ public:
 	JsonLogMessagesReader(const string &log_fpath) :
 		log_fpath_ {log_fpath},
 		bad_data_msg_ {common::ByteVectorFromString(bad_data_msg_tmpl_)},
-		bad_data_msg_rem_ {bad_data_msg_.size()} {};
+		bad_data_msg_rem_ {bad_data_msg_.size()},
+		too_much_data_msg_ {common::ByteVectorFromString(too_much_data_msg_tmpl_)},
+		too_much_data_msg_rem_ {too_much_data_msg_.size()} {};
 
 	~JsonLogMessagesReader();
 
@@ -174,11 +178,18 @@ private:
 	static const vector<uint8_t> closing_;
 	static const string default_tstamp_;
 	static const string bad_data_msg_tmpl_;
+	static const string too_much_data_msg_tmpl_;
 	io::Vsize header_rem_ = header_.size();
 	io::Vsize closing_rem_ = closing_.size();
 	vector<uint8_t> bad_data_msg_;
 	io::Vsize bad_data_msg_rem_;
+	vector<uint8_t> too_much_data_msg_;
+	io::Vsize too_much_data_msg_rem_;
 	bool clean_logs_;
+	const int32_t maximum_log_size_ = 1000 * 1000 - 256; // 1MB - some room for request headers etc.
+	bool large_logs_ = false;
+
+	friend class ::DeploymentsTests;
 };
 
 class DeploymentLog {

@@ -50,6 +50,8 @@ namespace json = mender::common::json;
 namespace log = mender::common::log;
 namespace path = mender::common::path;
 
+using ExpectedOffset = expected::expected<ifstream::off_type, error::Error>;
+
 const DeploymentsErrorCategoryClass DeploymentsErrorCategory;
 
 const char *DeploymentsErrorCategoryClass::name() const noexcept {
@@ -358,12 +360,65 @@ static ExpectedSize GetLogFileDataSize(const string &path) {
 	}
 }
 
+// Find the beginning of the next log message JSON after offset
+static ExpectedOffset FindNextMsgAfter(const string &path, ifstream::off_type offset) {
+	auto ex_is = io::OpenIfstream(path);
+	if (!ex_is) {
+		return expected::unexpected(ex_is.error());
+	}
+	auto is = std::move(ex_is.value());
+	is.seekg(offset);
+	int io_errno = errno;
+	if (!is) {
+		return expected::unexpected(error::Error(
+			generic_category().default_error_condition(io_errno),
+			"Failed to seek to truncated logs offset in '" + path + "'"));
+	}
+
+	// Now that we have seeked to the starting offset, we need to find the next
+	// boundary between JSON log entries.
+	const string pattern = R"(},{"timestamp")";
+	string buf(1024, '\0');
+	while (is.read(buf.data(), 1024)) {
+		// make sure we don't work with some stale data from the previous read()
+		buf.resize(is.gcount());
+
+		// XXX: This is not perfect as it can fail to find the next boundary if
+		//      it's split between the end of the current buffer contents and
+		//      the start of the next chunk read from the file. However, with a
+		//      1K buffer, this is very unlikely to happen and even if it does
+		//      happen, the logs will just be trimmed a bit more than
+		//      necessary. For the sake of incomparably simpler code that is
+		//      easy to test.
+		auto pos = buf.find(pattern);
+		if (pos != string::npos) {
+			offset += pos + 2; // skip "},"
+			break;
+		}
+		offset += buf.size();
+	}
+	io_errno = errno;
+	if (!is && !is.eof()) {
+		return expected::unexpected(error::Error(
+			generic_category().default_error_condition(io_errno),
+			"Failed to read logs from '" + path + "'"));
+	}
+
+	// In case we read the whole rest of the file not finding the next JSON log
+	// entry, there must be something really wrong with the log and it should be
+	// fully skipped. The user will still get the information that the log was
+	// truncated and they will still have the full log on the device.
+	return offset;
+}
+
 const vector<uint8_t> JsonLogMessagesReader::header_ = {
 	'{', '"', 'm', 'e', 's', 's', 'a', 'g', 'e', 's', '"', ':', '['};
 const vector<uint8_t> JsonLogMessagesReader::closing_ = {']', '}'};
 const string JsonLogMessagesReader::default_tstamp_ = "1970-01-01T00:00:00.000000000Z";
 const string JsonLogMessagesReader::bad_data_msg_tmpl_ =
 	R"d({"timestamp": "1970-01-01T00:00:00.000000000Z", "level": "ERROR", "message": "(THE ORIGINAL LOGS CONTAINED INVALID ENTRIES)"},)d";
+const string JsonLogMessagesReader::too_much_data_msg_tmpl_ =
+	R"d({"timestamp": "1970-01-01T00:00:00.000000000Z", "level": "WARNING", "message": "(THE ORIGINAL LOGS WERE TOO BIG, THIS LOG IS TRUNCATED. The full log can be found on the device)"},)d";
 
 JsonLogMessagesReader::~JsonLogMessagesReader() {
 	reader_.reset();
@@ -445,6 +500,35 @@ static error::Error DoSanitizeLogs(
 	return error::NoError;
 }
 
+static void ReplaceTimestampInMsgData(
+	vector<uint8_t> &msg_data, string &timestamp, size_t default_tstamp_size) {
+	auto msg_data_tstamp_start = msg_data.begin() + 15; // len(R"({"timestamp": ")")
+
+	// The actual timestamp from logs can potentially have a different
+	// (likely lower) time resolution and thus length than our default.
+	const auto timestamp_size = timestamp.size();
+	if (timestamp_size > default_tstamp_size) {
+		// In case the time resolution is higher and the timestamp
+		// longer (unlikely to happen)
+		if (timestamp[timestamp_size - 1] == 'Z') {
+			timestamp[default_tstamp_size - 1] = 'Z';
+		}
+		timestamp.resize(default_tstamp_size);
+	}
+	copy_n(timestamp.cbegin(), timestamp.size(), msg_data_tstamp_start);
+	if (timestamp.size() < default_tstamp_size) {
+		// Add a closing '"' right after the timestamp and fill in the
+		// rest of the space in the template with spaces that have no
+		// effect in JSON.
+		msg_data_tstamp_start[timestamp.size()] = '"';
+		for (auto it = msg_data_tstamp_start + timestamp.size() + 1;
+			 it < msg_data_tstamp_start + default_tstamp_size + 1;
+			 it++) {
+			*it = ' ';
+		}
+	}
+}
+
 error::Error JsonLogMessagesReader::SanitizeLogs() {
 	if (!sanitized_fpath_.empty()) {
 		return error::NoError;
@@ -467,35 +551,30 @@ error::Error JsonLogMessagesReader::SanitizeLogs() {
 		if (!ex_sz) {
 			return ex_sz.error().WithContext("Failed to determine deployment logs size");
 		}
+
 		raw_data_size_ = ex_sz.value();
+		if (raw_data_size_ > maximum_log_size_) {
+			large_logs_ = true;
+			// Make sure we end up with less data than the limit with all the
+			// potential extra messages added in JsonLogMessagesReader::Read()
+			// below.
+			auto ex_off = FindNextMsgAfter(
+				sanitized_fpath_,
+				(raw_data_size_ + too_much_data_msg_tmpl_.size() + bad_data_msg_tmpl_.size()
+				 - maximum_log_size_));
+			if (!ex_off) {
+				return ex_off.error().WithContext(
+					"Failed to determine start offset in too large deployment logs");
+			}
+			reader_ = make_unique<io::FileReader>(sanitized_fpath_, ex_off.value());
+			raw_data_size_ -= ex_off.value();
+		}
 		rem_raw_data_size_ = raw_data_size_;
 		if (!clean_logs_) {
-			auto bad_data_msg_tstamp_start =
-				bad_data_msg_.begin() + 15; // len(R"({"timestamp": ")")
-
-			// The actual timestamp from logs can potential have a different
-			// (likely lower) time resolution and thus length than our default.
-			const auto first_tstamp_size = first_tstamp.size();
-			if (first_tstamp_size > default_tstamp_.size()) {
-				// In case the time resolution is higher and the timestamp
-				// longer (unlikely to happen)
-				if (first_tstamp[first_tstamp_size - 1] == 'Z') {
-					first_tstamp[default_tstamp_.size() - 1] = 'Z';
-				}
-				first_tstamp.resize(default_tstamp_.size());
-			}
-			copy_n(first_tstamp.cbegin(), first_tstamp.size(), bad_data_msg_tstamp_start);
-			if (first_tstamp.size() < default_tstamp_.size()) {
-				// Add a closing '"' right after the timestamp and fill in the
-				// rest of the space in the template with spaces that have no
-				// effect in JSON.
-				bad_data_msg_tstamp_start[first_tstamp.size()] = '"';
-				for (auto it = bad_data_msg_tstamp_start + first_tstamp.size() + 1;
-					 it < bad_data_msg_tstamp_start + default_tstamp_.size() + 1;
-					 it++) {
-					*it = ' ';
-				}
-			}
+			ReplaceTimestampInMsgData(bad_data_msg_, first_tstamp, default_tstamp_.size());
+		}
+		if (large_logs_) {
+			ReplaceTimestampInMsgData(too_much_data_msg_, first_tstamp, default_tstamp_.size());
 		}
 	}
 	return err;
@@ -506,6 +585,7 @@ error::Error JsonLogMessagesReader::Rewind() {
 	header_rem_ = header_.size();
 	closing_rem_ = closing_.size();
 	bad_data_msg_rem_ = bad_data_msg_.size();
+	too_much_data_msg_rem_ = too_much_data_msg_.size();
 
 	// release/close the file first so that the FileDelete() below can actually
 	// delete it and free space up
@@ -525,6 +605,9 @@ int64_t JsonLogMessagesReader::TotalDataSize() {
 	if (!clean_logs_) {
 		ret += bad_data_msg_.size();
 	}
+	if (large_logs_) {
+		ret += too_much_data_msg_.size();
+	}
 	return ret;
 }
 
@@ -538,6 +621,15 @@ ExpectedSize JsonLogMessagesReader::Read(
 			header_.begin() + (header_.size() - header_rem_), min(header_rem_, target_size), start);
 		auto n_copied = copy_end - start;
 		header_rem_ -= n_copied;
+		return static_cast<size_t>(n_copied);
+	} else if (large_logs_ && (too_much_data_msg_rem_ > 0)) {
+		io::Vsize target_size = end - start;
+		auto copy_end = copy_n(
+			too_much_data_msg_.begin() + (too_much_data_msg_.size() - too_much_data_msg_rem_),
+			min(too_much_data_msg_rem_, target_size),
+			start);
+		auto n_copied = copy_end - start;
+		too_much_data_msg_rem_ -= n_copied;
 		return static_cast<size_t>(n_copied);
 	} else if (!clean_logs_ && (bad_data_msg_rem_ > 0)) {
 		io::Vsize target_size = end - start;
