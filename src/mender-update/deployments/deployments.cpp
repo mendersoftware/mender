@@ -472,7 +472,30 @@ error::Error JsonLogMessagesReader::SanitizeLogs() {
 		if (!clean_logs_) {
 			auto bad_data_msg_tstamp_start =
 				bad_data_msg_.begin() + 15; // len(R"({"timestamp": ")")
+
+			// The actual timestamp from logs can potential have a different
+			// (likely lower) time resolution and thus length than our default.
+			const auto first_tstamp_size = first_tstamp.size();
+			if (first_tstamp_size > default_tstamp_.size()) {
+				// In case the time resolution is higher and the timestamp
+				// longer (unlikely to happen)
+				if (first_tstamp[first_tstamp_size - 1] == 'Z') {
+					first_tstamp[default_tstamp_.size() - 1] = 'Z';
+				}
+				first_tstamp.resize(default_tstamp_.size());
+			}
 			copy_n(first_tstamp.cbegin(), first_tstamp.size(), bad_data_msg_tstamp_start);
+			if (first_tstamp.size() < default_tstamp_.size()) {
+				// Add a closing '"' right after the timestamp and fill in the
+				// rest of the space in the template with spaces that have no
+				// effect in JSON.
+				bad_data_msg_tstamp_start[first_tstamp.size()] = '"';
+				for (auto it = bad_data_msg_tstamp_start + first_tstamp.size() + 1;
+					 it < bad_data_msg_tstamp_start + default_tstamp_.size() + 1;
+					 it++) {
+					*it = ' ';
+				}
+			}
 		}
 	}
 	return err;
