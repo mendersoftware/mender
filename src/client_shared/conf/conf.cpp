@@ -34,6 +34,7 @@ namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace log = mender::common::log;
 namespace json = mender::common::json;
+namespace config_parser = mender::client_shared::config_parser;
 
 const string kMenderVersion = MENDER_VERSION;
 
@@ -308,6 +309,13 @@ error::Error MenderConfig::LoadConfigFile_(const string &path, bool required) {
 			log::Debug("Failed to load config from '" + path + "': " + ret.error().message);
 			return error::NoError;
 		} else {
+			// Incorrect DeviceTier shall lead to the daemon failure
+			auto device_tier_error = config_parser::MakeError(
+				config_parser::ConfigParserErrorCode::DeviceTierError, "Invalid DeviceTier");
+			if (ret.error().code == device_tier_error.code) {
+				log::Error("Failed to get DeviceTier from '" + path + "': " + ret.error().message);
+				return ret.error();
+			}
 			// other errors (parsing errors,...) for default paths should produce warnings
 			log::Warning("Failed to load config from '" + path + "': " + ret.error().message);
 			return error::NoError;

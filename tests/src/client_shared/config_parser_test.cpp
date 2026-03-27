@@ -623,3 +623,75 @@ TEST_F(ConfigParserTests, CaseInsensitiveCollision) {
 	ASSERT_EQ(mc.servers.size(), 1);
 	EXPECT_EQ(mc.servers[0], "ServerURL_value_4");
 }
+
+TEST_F(ConfigParserTests, DeviceTierMicroConfiguration) {
+	ofstream os(test_config_fname);
+	os << R"({
+  "DeviceTier": "micro"
+})";
+	os.close();
+
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_TRUE(ret) << ret.error().String();
+	EXPECT_TRUE(ret.value());
+
+	EXPECT_EQ(mc.device_tier, device_tier::kMicro);
+}
+
+TEST_F(ConfigParserTests, DeviceTierStandardConfiguration) {
+	ofstream os(test_config_fname);
+	os << R"({
+  "DeviceTier": "standard"
+})";
+	os.close();
+
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_TRUE(ret) << ret.error().String();
+	EXPECT_TRUE(ret.value());
+
+	EXPECT_EQ(mc.device_tier, device_tier::kStandard);
+}
+
+TEST_F(ConfigParserTests, DeviceTierSystemConfiguration) {
+	ofstream os(test_config_fname);
+	os << R"({
+  "DeviceTier": "system"
+})";
+	os.close();
+
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_TRUE(ret) << ret.error().String();
+	EXPECT_TRUE(ret.value());
+
+	EXPECT_EQ(mc.device_tier, device_tier::kSystem);
+}
+
+TEST_F(ConfigParserTests, DeviceTierAbsentConfiguration) {
+	ofstream os(test_config_fname);
+	os << R"({})";
+	os.close();
+
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_TRUE(ret) << ret.error().String();
+	EXPECT_FALSE(ret.value());
+
+	EXPECT_EQ(mc.device_tier, device_tier::kStandard);
+}
+
+TEST_F(ConfigParserTests, DeviceTierInvalidConfiguration) {
+	ofstream os(test_config_fname);
+	os << R"({
+  "DeviceTier": "foobar"
+})";
+	os.close();
+
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_FALSE(ret);
+	EXPECT_EQ(ret.error().code, config_parser::MakeError(config_parser::DeviceTierError, "").code);
+	EXPECT_THAT(ret.error().String(), testing::HasSubstr("Invalid DeviceTier: foobar"));
+}

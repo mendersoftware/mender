@@ -56,6 +56,7 @@ struct ClientSecurity {
 enum ConfigParserErrorCode {
 	NoError = 0,
 	ValidationError,
+	DeviceTierError,
 };
 
 class ConfigParserErrorCategoryClass : public std::error_category {
