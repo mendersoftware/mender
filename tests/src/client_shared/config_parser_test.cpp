@@ -725,6 +725,6 @@ TEST_F(ConfigParserTests, DeviceTierInvalidConfiguration) {
 	config_parser::MenderConfigFromFile mc;
 	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
 	ASSERT_FALSE(ret);
-	EXPECT_EQ(ret.error().code, config_parser::MakeError(config_parser::ValidationError, "").code);
+	EXPECT_EQ(ret.error().code, config_parser::MakeError(config_parser::DeviceTierError, "").code);
 	EXPECT_THAT(ret.error().String(), testing::HasSubstr("Invalid DeviceTier: foobar"));
 }
