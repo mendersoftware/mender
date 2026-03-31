@@ -109,6 +109,10 @@ protected:
 		deps::DeploymentClient().PushLogsHeaderHandler(
 			make_shared<vector<uint8_t>>(), api_handler, exp_resp);
 	}
+
+	int32_t JsonLogMessagesReaderGetMaxLogSize(deps::JsonLogMessagesReader &reader) {
+		return reader.maximum_log_size_;
+	}
 };
 
 TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
@@ -1437,6 +1441,48 @@ not valid json
 		}
 	} while (n_read > 0);
 	EXPECT_EQ(ss.str(), expected_data);
+}
+
+TEST_F(DeploymentsTests, JsonLogMessageReaderLargeLogsTest) {
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
+{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"}
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	for (int i = 0; i < 20000; i++) {
+		os << R"({"timestamp": "2016-03-11T13:05:17.063493443Z", "level": "INFO", "message": "excessive log data"})"
+		   << endl;
+	}
+	os.close();
+
+	string expected_data_start =
+		R"d({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "(THE ORIGINAL LOGS WERE TOO BIG, THIS LOG IS TRUNCATED. The full log can be found on the device)"},{"timestamp": "2016-03-11T13:05:17.063493443Z", "level": "INFO", "message": "excessive log data"})d";
+	string expected_data_end =
+		R"d({"timestamp": "2016-03-11T13:05:17.063493443Z", "level": "INFO", "message": "excessive log data"}]})d";
+
+	deps::JsonLogMessagesReader logs_reader {test_log_file_path};
+	EXPECT_EQ(logs_reader.SanitizeLogs(), error::NoError);
+	auto total_size = logs_reader.TotalDataSize();
+	EXPECT_LT(total_size, JsonLogMessagesReaderGetMaxLogSize(logs_reader));
+
+	stringstream ss;
+	vector<uint8_t> buf(1024);
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str().substr(0, expected_data_start.size()), expected_data_start);
+	EXPECT_EQ(ss.str().substr(ss.str().size() - expected_data_end.size()), expected_data_end);
+	EXPECT_EQ(ss.str().size(), total_size);
 }
 
 TEST_F(DeploymentsTests, PushLogsTest) {
