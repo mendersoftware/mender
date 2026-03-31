@@ -1583,6 +1583,8 @@ TEST_F(DeploymentsTests, PushLogsFailureTest) {
 
 	const string response_data = R"({"error": "Access denied", "response-id": "some id here"})";
 
+	bool request_body_too_large = false;
+
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
 		TEST_SERVER,
@@ -1600,8 +1602,11 @@ TEST_F(DeploymentsTests, PushLogsFailureTest) {
 			received_body.resize(ex_len.value());
 			req->SetBodyWriter(body_writer);
 		},
-		[&received_body, &expected_request_data, &response_data, deployment_id](
-			http::ExpectedIncomingRequestPtr exp_req) {
+		[&received_body,
+		 &expected_request_data,
+		 &response_data,
+		 deployment_id,
+		 &request_body_too_large](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 
 			auto req = exp_req.value();
@@ -1617,7 +1622,11 @@ TEST_F(DeploymentsTests, PushLogsFailureTest) {
 
 			resp->SetHeader("Content-Length", to_string(response_data.size()));
 			resp->SetBodyReader(make_shared<io::StringReader>(response_data));
-			resp->SetStatusCodeAndMessage(403, "Forbidden");
+			if (request_body_too_large) {
+				resp->SetStatusCodeAndMessage(413, "Request Body Too Large");
+			} else {
+				resp->SetStatusCodeAndMessage(403, "Forbidden");
+			}
 			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
@@ -1632,6 +1641,26 @@ TEST_F(DeploymentsTests, PushLogsFailureTest) {
 			EXPECT_THAT(resp.message, testing::HasSubstr("Got unexpected response"));
 			EXPECT_THAT(resp.message, testing::HasSubstr("403"));
 			EXPECT_THAT(resp.message, testing::HasSubstr("Access denied"));
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(handler_called);
+
+	// Redo with 413 Request Body Too Large
+	handler_called = false;
+	request_body_too_large = true;
+
+	err = deps::DeploymentClient().PushLogs(
+		deployment_id,
+		test_log_file_path,
+		client,
+		[&handler_called, &loop](deps::StatusAPIResponse resp) {
+			handler_called = true;
+			EXPECT_NE(resp, error::NoError);
+			EXPECT_EQ(resp.code, deps::MakeError(deps::RequestBodyTooLargeError, "").code);
+			EXPECT_THAT(resp.message, testing::HasSubstr("Could not send logs to server"));
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
