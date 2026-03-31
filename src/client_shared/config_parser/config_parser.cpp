@@ -389,6 +389,41 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		}
 	}
 
+	e_cfg_value = cfg_json.Get("WeatherAwareUpdates");
+	if (e_cfg_value) {
+		const json::Json value_json = e_cfg_value.value();
+
+		json::ExpectedJson e_cfg_subval = value_json.Get("Enabled");
+		if (e_cfg_subval) {
+			const json::Json subval_json = e_cfg_subval.value();
+			const json::ExpectedBool e_cfg_bool = subval_json.GetBool();
+			if (e_cfg_bool) {
+				this->weather_aware_updates.enabled = e_cfg_bool.value();
+				applied = true;
+			}
+		}
+
+		e_cfg_subval = value_json.Get("APIKey");
+		if (e_cfg_subval) {
+			const json::Json subval_json = e_cfg_subval.value();
+			const json::ExpectedString e_cfg_string = subval_json.GetString();
+			if (e_cfg_string) {
+				this->weather_aware_updates.api_key = e_cfg_string.value();
+				applied = true;
+			}
+		}
+
+		e_cfg_subval = value_json.Get("Location");
+		if (e_cfg_subval) {
+			const json::Json subval_json = e_cfg_subval.value();
+			const json::ExpectedString e_cfg_string = subval_json.GetString();
+			if (e_cfg_string) {
+				this->weather_aware_updates.location = e_cfg_string.value();
+				applied = true;
+			}
+		}
+	}
+
 	return applied;
 }
 

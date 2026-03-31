@@ -32,6 +32,7 @@
 #include <mender-update/cli/cli.hpp>
 #include <mender-update/daemon.hpp>
 #include <mender-update/standalone.hpp>
+#include <mender-update/weather/weather.hpp>
 
 #ifdef MENDER_EMBED_MENDER_AUTH
 #include <mender-auth/cli/actions.hpp>
@@ -54,6 +55,7 @@ namespace kv_db = mender::common::key_value_database;
 namespace log = mender::common::log;
 namespace path = mender::common::path;
 namespace standalone = mender::update::standalone;
+namespace weather = mender::update::weather;
 
 static error::Error DoMaybeInstallBootstrapArtifact(context::MenderContext &main_context) {
 	const string bootstrap_artifact_path {
@@ -413,6 +415,76 @@ error::Error CheckUpdateAction::Execute(context::MenderContext &main_context) {
 		return pid.error().WithContext("Failed to force an update check");
 	}
 	return SendSignal("SIGUSR1", pid.value()).WithContext("Failed to force an update check");
+}
+
+error::Error CheckWeatherAction::Execute(context::MenderContext &main_context) {
+	// Load configuration
+	auto config = main_context.GetConfig();
+
+	if (!config.weather_aware_updates.enabled) {
+		log::Info("Weather-aware updates not enabled in configuration");
+		log::Info("");
+		log::Info("To enable, add this to /etc/mender/mender.conf:");
+		log::Info("  \"WeatherAwareUpdates\": {");
+		log::Info("    \"Enabled\": true,");
+		log::Info("    \"APIKey\": \"your-openweathermap-api-key\",");
+		log::Info("    \"Location\": \"auto\"");
+		log::Info("  }");
+		return error::NoError;
+	}
+
+	// Validate configuration
+	if (config.weather_aware_updates.api_key.empty()) {
+		return error::MakeError(
+			error::GenericError,
+			"WeatherAwareUpdates.APIKey not set in configuration. "
+			"Get a free API key from https://openweathermap.org/api");
+	}
+
+	// Create event loop and weather checker
+	events::EventLoop event_loop;
+	weather::WeatherChecker checker(
+		config.weather_aware_updates.api_key,
+		config.weather_aware_updates.location,
+		event_loop);
+
+	// Perform async weather check with blocking wait
+	error::Error weather_result = error::NoError;
+	bool check_complete = false;
+
+	checker.AsyncCheckUpdateConditions([&](expected::ExpectedBool result) {
+		check_complete = true;
+		if (!result) {
+			weather_result = result.error();
+			log::Error("Weather conditions are unfavorable - update check deferred");
+			log::Error("Try again later when conditions improve");
+		} else {
+			log::Info("Weather conditions are favorable - triggering update check...");
+		}
+		event_loop.Stop();
+	});
+
+	event_loop.Run();
+
+	// If weather was bad, return error
+	if (weather_result != error::NoError) {
+		return weather_result;
+	}
+
+	// Weather is good! Send signal to daemon (same as CheckUpdateAction)
+	auto pid = GetPID();
+	if (!pid) {
+		return pid.error().WithContext(
+			"Failed to get daemon PID - is mender-update daemon running?");
+	}
+
+	auto signal_err = SendSignal("SIGUSR1", pid.value());
+	if (signal_err != error::NoError) {
+		return signal_err.WithContext("Failed to send update check signal to daemon");
+	}
+
+	log::Info("Successfully sent SIGUSR1 to mender-update daemon (PID " + pid.value() + ")");
+	return error::NoError;
 }
 
 } // namespace cli

@@ -104,6 +104,7 @@ target_link_libraries(mender_update_cli PUBLIC
   mender_context
   mender_update_daemon
   mender_update_standalone
+  mender_weather
 )
 
 add_executable(mender-update main.cpp)
@@ -129,3 +130,16 @@ add_custom_target(uninstall-mender-update
 )
 
 add_subdirectory(progress_reader)
+
+# Weather-aware update scheduling (APRIL FOOLS)
+add_library(mender_weather STATIC
+  weather/weather.cpp
+)
+target_link_libraries(mender_weather PUBLIC
+  common_error
+  common_events
+  common_http
+  common_io
+  common_json
+  common_log
+)

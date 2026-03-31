@@ -180,6 +180,13 @@ public:
 	static constexpr int kRetry_download_count_max = 10000;
 	int retry_download_count = kRetry_download_count_default;
 
+	/** Weather-aware updates configuration */
+	struct WeatherAwareUpdates {
+		bool enabled = true;
+		string api_key;
+		string location = "auto";
+	} weather_aware_updates;
+
 	/**
 	 * Loads values from the given file and overrides the current values of the
 	 * respective above fields with them.

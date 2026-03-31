@@ -47,6 +47,11 @@ const conf::CliCommand cmd_check_update {
 	.description = "Force update check",
 };
 
+const conf::CliCommand cmd_check_weather {
+	.name = "check-weather",
+	.description = "Check weather conditions and trigger update if favorable",
+};
+
 const conf::CliOption opt_stop_before {
 	.long_option = "stop-before",
 	.description =
@@ -146,6 +151,7 @@ const conf::CliApp cli_mender_update = {
 			cmd_auth,
 #endif
 			cmd_check_update,
+			cmd_check_weather,
 			cmd_commit,
 			cmd_daemon,
 			cmd_install,
@@ -308,6 +314,14 @@ ExpectedActionPtr ParseUpdateArguments(
 		}
 
 		return make_shared<CheckUpdateAction>();
+	} else if (start[0] == "check-weather") {
+		conf::CmdlineOptionsIterator iter(start + 1, end, cmd_check_weather.options);
+		auto arg = iter.Next();
+		if (!arg) {
+			return expected::unexpected(arg.error());
+		}
+
+		return make_shared<CheckWeatherAction>();
 	}
 #ifdef MENDER_EMBED_MENDER_AUTH
 	// We do not test for this here, because mender-auth has its own Main() function and

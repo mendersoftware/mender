@@ -3,5 +3,10 @@
   "RetryPollIntervalSeconds": 30,
   "ServerURL": "https://hosted.mender.io/",
   "TenantToken": "Paste your Mender Professional token here",
-  "UpdatePollIntervalSeconds": 5
+  "UpdatePollIntervalSeconds": 5,
+  "WeatherAwareUpdates": {
+    "Enabled": true,
+    "APIKey": "Paste your OpenWeatherMap API key here",
+    "Location": "Oslo,NO"
+  }
 }
