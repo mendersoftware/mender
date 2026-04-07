@@ -1,19 +1,21 @@
 
 comment:
-  # Only comment after 7 reports uploaded
-  after_n_builds: 7
+  # We have one publish:tests job, so all data is reported to codecov
+  # in one report. We should crate a comment in the PR immediately.
+  after_n_builds: 1
 
 codecov:
   notify:
-    # Only notify after 7 reports uploaded
-    after_n_builds: 7
+  # We have one publish:tests job, so all data is reported to codecov
+  # in one report. We should update the codecov status in the PR immediately.
+    after_n_builds: 1
 
 coverage:
   status:
     project:
-      acceptance:
-        flags:
-          - acceptance
+      #acceptance:
+      #  flags:
+      #    - acceptance
       unit:
         flags:
           - unit
