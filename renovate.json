@@ -1,0 +1,38 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":gitSignOff",
+    ":rebaseStalePrs"
+  ],
+  "reviewers": ["team:client-dependabot-reviewers"],
+
+  "packageRules": [
+    {
+      // TODO: remove some of these when we ditch dependabot
+      "matchCategories": ["python", "docker", "ci"],
+      "enabled": false
+    },
+    {
+      // TODO: remove  when we ditch dependabot
+      "matchManagers": ["git-submodules"],
+      "enabled": false
+    },
+  ],
+
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/.gitlab-ci.yml/"],
+      "matchStrings": [
+        "MENDER_ARTIFACT_VERSION:\\s*[\"']?(?<currentValue>[\\d\\.]+)[\"']?"
+      ],
+      "depNameTemplate": "mendersoftware/mender-artifact",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v?(?<version>.*)$",
+      "versioningTemplate": "semver"
+    },
+  ],
+
+  "prHourlyLimit": 0
+}
