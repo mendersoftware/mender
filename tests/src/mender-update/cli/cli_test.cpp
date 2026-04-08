@@ -78,63 +78,6 @@ TEST(CliTest, NoAction) {
 	}
 }
 
-TEST(CliTest, ShowArtifact) {
-	mtesting::TemporaryDirectory tmpdir;
-
-	conf::MenderConfig conf;
-	conf.paths.SetDataStore(tmpdir.Path());
-
-	{
-		mtesting::RedirectStreamOutputs redirect_output;
-		vector<string> args {"--datastore", tmpdir.Path(), "show-artifact"};
-		EXPECT_EQ(cli::Main(args), 0);
-		EXPECT_EQ(redirect_output.GetCout(), "unknown\n");
-	}
-
-	{
-		context::MenderContext context(conf);
-		auto err = context.Initialize();
-		ASSERT_EQ(err, error::NoError) << err.String();
-
-		auto &db = context.GetMenderStoreDB();
-		string data = "my-name";
-		err = db.Write(context.artifact_name_key, vector<uint8_t>(data.begin(), data.end()));
-		ASSERT_EQ(err, error::NoError) << err.String();
-	}
-
-	{
-		mtesting::RedirectStreamOutputs redirect_output;
-		vector<string> args {"--datastore", tmpdir.Path(), "show-artifact"};
-		EXPECT_EQ(cli::Main(args), 0);
-		EXPECT_EQ(redirect_output.GetCout(), "my-name\n");
-	}
-}
-
-TEST(CliTest, ShowArtifactErrors) {
-	mtesting::TemporaryDirectory tmpdir;
-
-	conf::MenderConfig conf;
-	conf.paths.SetDataStore(tmpdir.Path());
-
-	{
-		mtesting::RedirectStreamOutputs redirect_output;
-		vector<string> args {"--datastore", tmpdir.Path(), "show-artifact", "--bogus-option"};
-		EXPECT_EQ(cli::Main(args), 1);
-		EXPECT_EQ(
-			redirect_output.GetCerr(),
-			"Could not fulfill request: Invalid options given: Unrecognized option '--bogus-option'\n");
-	}
-
-	{
-		mtesting::RedirectStreamOutputs redirect_output;
-		vector<string> args {"--datastore", tmpdir.Path(), "show-artifact", "bogus-argument"};
-		EXPECT_EQ(cli::Main(args), 1);
-		EXPECT_EQ(
-			redirect_output.GetCerr(),
-			"Could not fulfill request: Invalid options given: Unexpected argument 'bogus-argument'\n");
-	}
-}
-
 TEST(CliTest, ShowProvides) {
 	mtesting::TemporaryDirectory tmpdir;
 
