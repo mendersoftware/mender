@@ -41,6 +41,35 @@ namespace mender {
 namespace common {
 namespace dbus {
 
+struct SignalSpec {
+	std::string iface_;
+	std::string signal_;
+
+	bool operator==(const SignalSpec &other) const {
+		return iface_ == other.iface_ && signal_ == other.signal_;
+	}
+
+	size_t hash() const {
+		return std::hash<std::string> {}(iface_ + signal_);
+	}
+};
+} // namespace dbus
+} // namespace common
+} // namespace mender
+
+namespace std {
+template <>
+struct hash<mender::common::dbus::SignalSpec> {
+	size_t operator()(const mender::common::dbus::SignalSpec &s) const {
+		return s.hash();
+	}
+};
+} // namespace std
+
+namespace mender {
+namespace common {
+namespace dbus {
+
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace events = mender::common::events;
@@ -70,10 +99,6 @@ using DBusCallReplyHandler = function<void(ReplyType)>;
 template <typename SignalValueType>
 using DBusSignalHandler = function<void(SignalValueType)>;
 
-// Might need something like
-//   struct {string iface; string signal;}
-// in the future.
-using SignalSpec = string;
 
 using StringPair = std::pair<string, string>;
 using ExpectedStringPair = expected::expected<StringPair, error::Error>;
@@ -131,13 +156,16 @@ public:
 	template <typename SignalValueType>
 	error::Error RegisterSignalHandler(
 		const string &iface, const string &signal, DBusSignalHandler<SignalValueType> handler);
-	void UnregisterSignalHandler(const string &iface, const string &signal);
+	error::Error UnregisterSignalHandler(const string &iface, const string &signal);
 
 #ifdef MENDER_USE_ASIO_LIBDBUS
 	// see DBusPeer's friends for some details
 	friend DBusHandlerResult MsgFilter(
 		DBusConnection *connection, DBusMessage *message, void *data);
 #endif // MENDER_USE_ASIO_LIBDBUS
+
+	bool WatchingSignal(const string &iface, const string &signal) const;
+	void CleanUp();
 
 private:
 	unordered_map<SignalSpec, DBusSignalHandler<expected::ExpectedString>> signal_handlers_string_;
@@ -146,7 +174,7 @@ private:
 	error::Error InitializeConnection() override;
 
 	template <typename SignalValueType>
-	void AddSignalHandler(const string &spec, DBusSignalHandler<SignalValueType> handler);
+	void AddSignalHandler(const SignalSpec &spec, DBusSignalHandler<SignalValueType> handler);
 
 	template <typename SignalValueType>
 	optional<DBusSignalHandler<SignalValueType>> GetSignalHandler(const SignalSpec &spec);
@@ -213,10 +241,10 @@ public:
 		DBusConnection *connection, DBusMessage *message, void *data);
 
 private:
+	error::Error RegisterDBusName();
+
 	string service_name_;
 	vector<DBusObjectPtr> objects_;
-
-	error::Error InitializeConnection() override;
 };
 
 } // namespace dbus

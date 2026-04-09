@@ -125,7 +125,6 @@ protected:
 	error::Error FetchJwtToken() override;
 
 	dbus::DBusClient dbus_client_;
-	bool watching_token_signal_ {false};
 };
 #endif
 
