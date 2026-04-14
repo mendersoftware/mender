@@ -86,6 +86,18 @@ test:unit:
   script:
     - cmake -D COVERAGE=ON .
     - make --jobs=$(nproc --all) --keep-going coverage
+    # Clean things up for another round of coverage data gathering
+    - mv coverage.lcov coverage_base.lcov
+    - make clean
+    - find . \( -name '*.gcda' -o -name '*.gcno' \) -exec rm '{}' \;
+    # Now run key-value DB tests without LMDB (thus testing BlobDB)
+    - cmake -D COVERAGE=ON -D MENDER_USE_LMDB=OFF .
+    - make key_value_database_test
+    - tests/src/common/key_value_database_test
+    - make coverage_no_tests
+    - mv coverage.lcov coverage_no_lmdb.lcov
+    # And combine the coverage data
+    - lcov -a 'coverage_*.lcov' -o coverage.lcov --ignore-errors inconsistent
   artifacts:
     expire_in: 2w
     reports:
