@@ -48,6 +48,7 @@ add_custom_target(coverage_no_tests
                --exclude '*_test.*'
                --exclude '*/googlemock/*'
                --exclude '*/vendor/*'
+               --ignore-errors unused
 )
 
 # CMake is not clever enough to build the tests before running them so we use
