@@ -50,6 +50,9 @@ enum ErrorCode {
 
 	// LMDB can apparently return this, but it should not happen.
 	AlreadyExistsError,
+
+	// When a read transaction is attempted to be used for writing.
+	TransactionError,
 };
 using Error = mender::common::error::Error;
 
@@ -70,6 +73,10 @@ class KeyValueDatabase : virtual public Transaction {
 public:
 	virtual Error WriteTransaction(function<Error(Transaction &)> txnFunc) = 0;
 	virtual Error ReadTransaction(function<Error(Transaction &)> txnFunc) = 0;
+
+	expected::ExpectedBytes Read(const string &key) override;
+	error::Error Write(const string &key, const vector<uint8_t> &value) override;
+	error::Error Remove(const string &key) override;
 };
 
 Error MakeError(ErrorCode code, const string &msg);

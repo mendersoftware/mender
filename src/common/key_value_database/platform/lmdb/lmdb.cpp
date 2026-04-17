@@ -150,33 +150,6 @@ void KeyValueDatabaseLmdb::Close() {
 	env_.reset();
 }
 
-expected::ExpectedBytes KeyValueDatabaseLmdb::Read(const string &key) {
-	vector<uint8_t> ret;
-	auto err = ReadTransaction([&key, &ret](Transaction &txn) -> error::Error {
-		auto result = txn.Read(key);
-		if (result) {
-			ret = std::move(result.value());
-			return error::NoError;
-		} else {
-			return result.error();
-		}
-	});
-	if (mender::common::error::NoError != err) {
-		return expected::unexpected(err);
-	} else {
-		return ret;
-	}
-}
-
-error::Error KeyValueDatabaseLmdb::Write(const string &key, const vector<uint8_t> &value) {
-	return WriteTransaction(
-		[&key, &value](Transaction &txn) -> error::Error { return txn.Write(key, value); });
-}
-
-error::Error KeyValueDatabaseLmdb::Remove(const string &key) {
-	return WriteTransaction([&key](Transaction &txn) -> error::Error { return txn.Remove(key); });
-}
-
 error::Error KeyValueDatabaseLmdb::WriteTransaction(function<error::Error(Transaction &)> txnFunc) {
 	AssertOrReturnError(env_);
 
