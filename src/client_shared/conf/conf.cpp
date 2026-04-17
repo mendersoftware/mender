@@ -311,8 +311,8 @@ error::Error MenderConfig::LoadConfigFile_(const string &path, bool required) {
 			return error::NoError;
 		} else {
 			// other errors (parsing errors,...) for default paths should produce warnings
-			log::Warning("Failed to load config from '" + path + "': " + ret.error().message);
-			return error::NoError;
+			log::Error("Failed to load config from '" + path + "': " + ret.error().message);
+			return ret.error();
 		}
 	}
 	// else
