@@ -32,6 +32,91 @@ namespace path = mender::common::path;
 namespace processes = mender::common::processes;
 namespace progress = mender::update::progress;
 
+/* A note on how streams tree works in the download process:
+
+According to Update Module protocol documentation, Update Modules need to do one full read of the
+stream-next pipe, then a full read of a file that is mentioned in this pipe (payload pipe), and so
+on, until they get a zero-length read from stream-next. This raises the question: is is possible
+that stream-next pipe or the payload pipe are not  ready or even not exist when an Update Module
+tries to read from it? How do we design against that?
+
+The answer is: with current implementation it is not possible for such race conditions to occur.
+The full download flow is as follows:
+
+----------------------------------------------------------------------------------------------------
+1. Before calling an Update Module with Download command, mender (meaning mender-orchestrator) first
+creates a named pipe "stream-next", but doesn't open it for writing,
+(UpdateModule::PrepareStreamNextPipe).
+
+2. Now we have two possibilities:
+
+2a. Mender is faster
+
+mender opens the pipe for writing (UpdateModule::OpenStreamNextPipe), but there's no reader yet
+(Update Module did not connect to the pipe): mender blocks until it can write to the pipe. As soon
+as the Update Module connects, mender writes data to the pipe.
+
+2b. Update Module is faster
+
+Update Module tries to read from the pipe, but mender did not connect to the pipe for writing yet.
+Because named pipes are blocking by default, Update Module will block, waiting for data to come from
+the pipe. As soon as mender connects to the pipe, it will immediately start writing to it
+(UpdateModule::OpenStreamNextPipe) and Update Module will begin reading from it.
+
+There's no possibility of an Update Module getting an error saying that the pipe does not exist
+instead, as it was created before the Update Module was called with a Download command. The Update
+Module will always block on a pipe that exists but does not have a writer yet.
+
+3. Update Module has read stream-next, receiving the name of the payload pipe.
+
+When mender has written everything to stream-next, it does not close the pipe for writing yet. This
+causes the Update Module to wait for additional data from the pipe indefinitely. Instead, mender
+first calls UpdateModule::PrepareAndOpenStreamPipe where it creates the payload pipe and connects to
+it.
+
+Only after the payload pipe exists, mender closes the stream-next pipe, causing the Update Module to
+unblock. Notice that thanks to this, there is no possibility of the Update Module being so fast that
+it tries to read from the payload pipe before mender has a chance to create it - there's no
+possibility of "file does not exist" happening. Mender is now free to start writing to the payload
+pipe anytime
+- it doesn't matter if the Update Module tries to read from it before mender is ready, as it will
+just block on the pipe, waiting for mender to connect to it.
+
+4. Update Module finished reading from the payload pipe. Tries to read again from stream-next.
+
+Mender closes the payload pipe.
+Because mender only closed stream-next pipe, but did not delete it, the Update Module won't get
+"file does not exist" under any circumstances. Instead, it blocks on stream-next until mender is
+ready to write to it. Mender is now free to open the stream-next for writing anytime, and the Update
+Module will wait for it. As soon as mender connects to the pipe for writing, the Update Module
+ublocks and starts reading from it.
+
+5. Steps 2 - 4 repeat as many times as there are payloads and thus payload pipes.
+Mender marks the download as completed internally (UpdateModule::StreamNextOpenHandler).
+
+6. As soon as the Update Module tries to read from the stream-next pipe again, mender does not write
+anything to it, and instead just connects to the pipe and immediately closes its connection. This
+causes the Update Module to unblock and get a zero-length read from stream-next.
+
+Update Module knows that there are no more payloads. Mender closes the stream-next pipe
+(UpdateModule::StreamNextOpenHandler) and is free to continue to the next command.
+----------------------------------------------------------------------------------------------------
+Summary:
+There are no places where it is possible for a race condition to occur. If the Update Module is
+faster, it will wait for mender. If mender is faster, it will wait for the Update Module. As the
+named pipes are created beforehand, there's no possibility of the Update Module getting "file does
+not exist" error. This all assumes that a given Update Module implements the API correctly. If one
+were to use non-blocking reads from the pipes in an Update Module, then it could break. API
+explicitly says that "full reads" are required so if an Update Module doesn't block while there's a
+writer on the other end of the pipe - it does not implement the API correctly.
+
+Note:
+What happens if an Update Module is broken, for example it does not read from stream-next the last
+time, where it would receive a zero-length read? As soon as the Update Module returns after being
+called with Download command, mender calls UpdateModule::ProcessEndedHandler where, if it sees that
+not all reads were completed, it marks the download process as failed and closes all pipes
+unblocking itself.
+*/
 
 void UpdateModule::StartDownloadProcess() {
 	string download_command = "Download";
