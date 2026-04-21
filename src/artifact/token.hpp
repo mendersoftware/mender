@@ -50,7 +50,7 @@ enum class Type {
 	Payload,
 };
 
-const unordered_map<const Type, const string> type_map {
+const unordered_map<Type, string> type_map {
 	{Type::Uninitialized, "Uninitialized"},
 	{Type::EOFToken, "EOF"},
 	{Type::Unrecognized, "Unrecognized"},
