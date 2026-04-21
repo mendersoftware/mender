@@ -15,6 +15,7 @@
 #include <common/error.hpp>
 
 #include <cassert>
+#include <ostream>
 
 namespace mender {
 namespace common {
