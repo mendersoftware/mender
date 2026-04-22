@@ -67,7 +67,7 @@ command to generate bootstrap Artifacts:
 
 ```
 ./mender-artifact write bootstrap-artifact \
-  --device-type my-device \
+  --compatible-types my-device \
   --artifact-name my-bootstrap-artifact \
   --provides some-key:some-value
 ```
