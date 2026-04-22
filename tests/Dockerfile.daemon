@@ -25,7 +25,7 @@ RUN curl "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender
     rm /mender-artifact.deb
 RUN mender-artifact write bootstrap-artifact \
         --artifact-name original \
-        --device-type docker-client \
+        --compatible-types docker-client \
         --provides "rootfs-image.version:original" \
         --output-path /bootstrap.mender
 

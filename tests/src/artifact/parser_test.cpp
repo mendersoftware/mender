@@ -55,36 +55,36 @@ protected:
 		# Create small tar file
 		echo foobar > ${DIRNAME}/testdata
 		echo barbaz > ${DIRNAME}/testdata2
-		mender-artifact --compression none write rootfs-image --no-progress -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-no-compression.mender || exit 1
+		mender-artifact --compression none write rootfs-image --no-progress -c test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-no-compression.mender || exit 1
 
-		mender-artifact --compression gzip write rootfs-image --no-progress -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-gzip.mender || exit 1
+		mender-artifact --compression gzip write rootfs-image --no-progress -c test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-gzip.mender || exit 1
 
-		mender-artifact --compression lzma write rootfs-image --no-progress -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-lzma.mender || exit 1
+		mender-artifact --compression lzma write rootfs-image --no-progress -c test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-lzma.mender || exit 1
 
-		mender-artifact --compression zstd_better write rootfs-image --no-progress -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-zstd.mender || exit 1
+		mender-artifact --compression zstd_better write rootfs-image --no-progress -c test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-zstd.mender || exit 1
 
 		# Artifact with multiple files in the payload
-		mender-artifact --compression none write module-image -T test-um -t test-device -n test-artifact -f ${DIRNAME}/testdata -f ${DIRNAME}/testdata2 -o ${DIRNAME}/test-multiple-files-in-payload.mender || exit 1
+		mender-artifact --compression none write module-image -T test-um -c test-device -n test-artifact -f ${DIRNAME}/testdata -f ${DIRNAME}/testdata2 -o ${DIRNAME}/test-multiple-files-in-payload.mender || exit 1
 
 		# Create the bootstrap-artifact
-		mender-artifact --compression none write bootstrap-artifact -t test -n foo -o ${DIRNAME}/test-artifact-empty-payload.mender --no-progress
+		mender-artifact --compression none write bootstrap-artifact -c test -n foo -o ${DIRNAME}/test-artifact-empty-payload.mender --no-progress
 
 		# Create a signed artifact
 		openssl genpkey -algorithm RSA -out ${DIRNAME}/private.key -pkeyopt rsa_keygen_bits:3072
 		openssl rsa -in ${DIRNAME}/private.key -out ${DIRNAME}/public.key -pubout
-		mender-artifact --compression none write rootfs-image --no-progress -k ${DIRNAME}/private.key -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-signed.mender || exit 1
+		mender-artifact --compression none write rootfs-image --no-progress -k ${DIRNAME}/private.key -c test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-signed.mender || exit 1
 		# Verify the signature of the Artifact generated
 		mender-artifact validate ${DIRNAME}/test-artifact-signed.mender -k ${DIRNAME}/public.key
 
 		# Create a signed artifact (EC)
 		openssl ecparam -name prime256v1 -genkey -noout -out ${DIRNAME}/private.ec.key
 		openssl ec -in ${DIRNAME}/private.ec.key -pubout -out ${DIRNAME}/public.ec.key
-		mender-artifact --compression none write rootfs-image --no-progress -k ${DIRNAME}/private.ec.key -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-signed-ec.mender || exit 1
+		mender-artifact --compression none write rootfs-image --no-progress -k ${DIRNAME}/private.ec.key -c test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-signed-ec.mender || exit 1
 		# Verify the signature of the Artifact generated
 		mender-artifact validate ${DIRNAME}/test-artifact-signed-ec.mender -k ${DIRNAME}/public.ec.key
 
 		# Modified artifacts
-		mender-artifact --compression none write rootfs-image --no-progress -t test-device -n test-artifact \
+		mender-artifact --compression none write rootfs-image --no-progress -c test-device -n test-artifact \
 			-f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-integrity-base.mender || exit 1
 
 		# Artifacts with compromised manifest
@@ -143,7 +143,7 @@ protected:
 		cd ${DIRNAME}
 
 		# Modified bootstrap artifacts
-		mender-artifact --compression none write bootstrap-artifact -t test-device -n test-artifact \
+		mender-artifact --compression none write bootstrap-artifact -c test-device -n test-artifact \
 		-o ${DIRNAME}/test-artifact-bootstrap-base.mender || exit 1
 		
 		# Bootstrap artifact with missing type-info in the header

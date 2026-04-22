@@ -124,7 +124,7 @@ public:
 			file,
 			"-n",
 			"test",
-			"-t",
+			"-c",
 			"test",
 			"-f",
 			rootfs};
@@ -1504,7 +1504,7 @@ protected:
 			echo "legal file content" > legal_file
 			echo "malicious file content" > malicious_file
 			tar -cf test.tar.${COMPRESSION_EXTENSION} ${COMPRESSION_FLAG} legal_file
-			mender-artifact write module-image --device-type test-device -T single-file -o test-artifact-${NAME}.mender -n ${NAME} \
+			mender-artifact write module-image --compatible-types test-device -T single-file -o test-artifact-${NAME}.mender -n ${NAME} \
 			-f dest_dir -f filename -f permissions -f test.tar.${COMPRESSION_EXTENSION}
 			tar -xf  ${DIRNAME}/test-artifact-${NAME}.mender -C  ${DIRNAME}/${NAME}/
 			cd ${DIRNAME}/${NAME}/data
@@ -1566,7 +1566,7 @@ protected:
 			echo "malicious file content" > malicious_file
 			tar -cf test.tar${COMPRESSION1_EXTENSION} ${COMPRESSION1_FLAG} legal_file
 			tar -cf test.tar${COMPRESSION2_EXTENSION} ${COMPRESSION2_FLAG} legal_file
-			mender-artifact write module-image --device-type qemux86-64 -T single-file -o test-artifact-${NAME}.mender -n ${NAME} \
+			mender-artifact write module-image --compatible-types qemux86-64 -T single-file -o test-artifact-${NAME}.mender -n ${NAME} \
 			-f dest_dir -f filename -f permissions -f test.tar${COMPRESSION1_EXTENSION} -f test.tar${COMPRESSION2_EXTENSION}
 			cd ${DIRNAME}
 		}

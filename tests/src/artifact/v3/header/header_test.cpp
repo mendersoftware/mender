@@ -83,7 +83,7 @@ mender-artifact write)";
 
 		script += R"(\
     --compression=none    \
-    --device-type header-test-device \
+    --compatible-types header-test-device \
     -artifact-name header-tester-name \
     --file ${DIRNAME}/testdata )";
 
