@@ -57,7 +57,7 @@ while [ -n "$1" ]; do
       if [ -z "$2" ]; then
         show_help_and_exit_error
       fi
-      device_types+=("$1" "$2")
+      device_types+=("--compatible-types" "$2")
       shift 2
       ;;
     --artifact-name | -n)
