@@ -502,7 +502,7 @@ TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 	    "rootfs_image_checksum",
 	    "rootfs-image.*"
 	  ],
-	  "type": ""
+	  "type": "rootfs-image"
 	})";
 	EXPECT_TRUE(FileJsonEquals(path::Join(tree_path, "header", "type-info"), expected_type_info));
 
