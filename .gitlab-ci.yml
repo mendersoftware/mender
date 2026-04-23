@@ -75,14 +75,9 @@ test:no-tests:
 
 test:unit:
   stage: test
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:13
+  image: registry.gitlab.com/northern.tech/mender/mender-test-containers:base-mender-cpp-master
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
-    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat-openbsd wget zstd xz-utils
-    # mender-artifact install
-    - wget "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bdebian%2btrixie_amd64.deb"
-      --output-document mender-artifact.deb
-    - apt install --assume-yes --quiet ./mender-artifact.deb
   script:
     - cmake -D COVERAGE=ON .
     - make --jobs=$(nproc --all) --keep-going coverage
@@ -130,17 +125,12 @@ test:dependencies-download:
 
 .test:static-template:
   stage: test
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
+  image: registry.gitlab.com/northern.tech/mender/mender-test-containers:base-mender-cpp-master
   tags:
     # QA-866: Ubuntu 24.04 image cannot properly run on sysbox-runc runners
     - hetzner-podman
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
-    - apt update && apt install -yyq ccache clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget zstd
-    # mender-artifact install
-    - wget "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bubuntu%2bjammy_amd64.deb"
-      --output-document mender-artifact.deb
-    - apt install --assume-yes --quiet ./mender-artifact.deb
     - export CC=$(which clang)
     - export CXX=$(which clang++)
   script:
