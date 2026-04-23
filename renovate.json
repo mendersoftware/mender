@@ -23,9 +23,9 @@
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": ["/.gitlab-ci.yml/"],
+      "managerFilePatterns": ["/tests/Dockerfile.daemon/"],
       "matchStrings": [
-        "MENDER_ARTIFACT_VERSION:\\s*[\"']?(?<currentValue>[\\d\\.]+)[\"']?"
+        "MENDER_ARTIFACT_VERSION=\\s*[\"']?(?<currentValue>[\\d\\.]+)[\"']?"
       ],
       "depNameTemplate": "mendersoftware/mender-artifact",
       "datasourceTemplate": "github-releases",

@@ -12,9 +12,6 @@ variables:
     value: "27.3"
     description: "Version of docker to use in pipelines"
 
-  # mender-artifact version for tests
-  MENDER_ARTIFACT_VERSION: 4.2.0
-
   # Renovate required variables
   RENOVATE_PLATFORM: github
   RENOVATE_ENDPOINT: "https://api.github.com"
