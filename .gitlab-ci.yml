@@ -110,10 +110,11 @@ test:backward-compat:
 
 test:dependencies-download:
   stage: test
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
+  image: registry.gitlab.com/northern.tech/mender/mender-test-containers:base-mender-cpp-master
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
-    - apt update && apt install -yyq ccache g++ git make lcov pkg-config liblmdb++-dev libssl-dev libdbus-1-dev curl dbus cmake
+    # Make sure system libboost and libarchive won't be used
+    - apt -yyq remove 'libboost*-dev' libarchive-dev
   script:
     - cmake -D MENDER_DOWNLOAD_BOOST=ON -D MENDER_DOWNLOAD_LIBARCHIVE=ON .
     - make --jobs=$(nproc --all) --keep-going
