@@ -214,7 +214,7 @@ exit 0
 	NoAuthHTTPClient client {client_config, loop};
 
 	const string expected_request_data =
-		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":["1.2.3","additional_version"]},{"name":"mender_client_version_provider","value":"external"}])";
+		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":["additional_version","1.2.3"]},{"name":"mender_client_version_provider","value":"external"}])";
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
