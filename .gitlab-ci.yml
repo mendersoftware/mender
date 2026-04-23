@@ -144,7 +144,7 @@ test:static:asan:
   tags:
     # hetzner podman fails with result: segmentation fault
     # falling back to gcp runners
-    - mender-qa-worker-generic-light
+    - mender-qa-worker-generic
 
 test:static:threadsan:
   extends: .test:static-template
