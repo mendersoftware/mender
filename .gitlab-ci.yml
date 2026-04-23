@@ -22,7 +22,7 @@ variables:
   RENOVATE_REQUIRE_CONFIG: "optional"
   RENOVATE_ONBOARDING: "false"
   RENOVATE_GIT_PRIVATE_KEY: $SSH_PRIVATE_KEY
-  RENOVATE_CONFIG_FILE: "$CI_PROJECT_DIR/renovate.json"
+  RENOVATE_CONFIG_FILE: "$CI_PROJECT_DIR/renovate.json5"
   FORCE_RENOVATE_RUN:
     description: "Force a renovate bot run"
     value: "false"
