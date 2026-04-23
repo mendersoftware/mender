@@ -49,8 +49,7 @@ include:
 
 default:
   tags:
-    # Don't run gitlab hosted runners by default
-    - hetzner-amd-beefy
+    - k8s
   retry: !reference [.qa-common-default-retry, retry]
 
 # Override rules
@@ -118,15 +117,10 @@ test:dependencies-download:
   script:
     - cmake -D MENDER_DOWNLOAD_BOOST=ON -D MENDER_DOWNLOAD_LIBARCHIVE=ON .
     - make --jobs=$(nproc --all) --keep-going
-  tags:
-    - mender-qa-worker-generic
 
 .test:static-template:
   stage: test
   image: registry.gitlab.com/northern.tech/mender/mender-test-containers:base-mender-cpp-master
-  tags:
-    # QA-866: Ubuntu 24.04 image cannot properly run on sysbox-runc runners
-    - hetzner-podman
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
     - export CC=$(which clang)
@@ -142,19 +136,11 @@ test:static:asan:
   variables:
     BUILD_TYPE: ASan
   extends: .test:static-template
-  tags:
-    # hetzner podman fails with result: segmentation fault
-    # falling back to gcp runners
-    - mender-qa-worker-generic
 
 test:static:threadsan:
   extends: .test:static-template
   variables:
     BUILD_TYPE: ThreadSan
-  tags:
-    # hetzner podman fails with result: segmentation fault
-    # falling back to gcp runners
-    - mender-qa-worker-generic-light
 
 test:static:undefinedsan:
   extends: .test:static-template
@@ -174,9 +160,6 @@ test:static:no-dbus:
 test:modules-artifact-gen:
   stage: test
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
-  tags:
-    # QA-866: Ubuntu 24.04 image cannot properly run on sysbox-runc runners
-    - hetzner-podman
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
     - apt update && apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
@@ -196,6 +179,8 @@ test:modules-artifact-gen:
 test:docker:
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker:${DOCKER_VERSION}
   needs: []
+  tags:
+    - hetzner-amd-beefy
   services:
     - name: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker:${DOCKER_VERSION}-dind
       alias: docker
