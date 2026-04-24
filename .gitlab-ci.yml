@@ -12,9 +12,6 @@ variables:
     value: "27.3"
     description: "Version of docker to use in pipelines"
 
-  # mender-artifact version for tests
-  MENDER_ARTIFACT_VERSION: 4.2.0
-
   # Renovate required variables
   RENOVATE_PLATFORM: github
   RENOVATE_ENDPOINT: "https://api.github.com"
@@ -25,7 +22,7 @@ variables:
   RENOVATE_REQUIRE_CONFIG: "optional"
   RENOVATE_ONBOARDING: "false"
   RENOVATE_GIT_PRIVATE_KEY: $SSH_PRIVATE_KEY
-  RENOVATE_CONFIG_FILE: "$CI_PROJECT_DIR/renovate.json"
+  RENOVATE_CONFIG_FILE: "$CI_PROJECT_DIR/renovate.json5"
   FORCE_RENOVATE_RUN:
     description: "Force a renovate bot run"
     value: "false"
@@ -52,8 +49,7 @@ include:
 
 default:
   tags:
-    # Don't run gitlab hosted runners by default
-    - hetzner-amd-beefy
+    - k8s
   retry: !reference [.qa-common-default-retry, retry]
 
 # Override rules
@@ -75,14 +71,9 @@ test:no-tests:
 
 test:unit:
   stage: test
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:13
+  image: registry.gitlab.com/northern.tech/mender/mender-test-containers:base-mender-cpp-master
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
-    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat-openbsd wget zstd xz-utils
-    # mender-artifact install
-    - wget "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bdebian%2btrixie_amd64.deb"
-      --output-document mender-artifact.deb
-    - apt install --assume-yes --quiet ./mender-artifact.deb
   script:
     - cmake -D COVERAGE=ON .
     - make --jobs=$(nproc --all) --keep-going coverage
@@ -118,29 +109,20 @@ test:backward-compat:
 
 test:dependencies-download:
   stage: test
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
+  image: registry.gitlab.com/northern.tech/mender/mender-test-containers:base-mender-cpp-master
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
-    - apt update && apt install -yyq ccache g++ git make lcov pkg-config liblmdb++-dev libssl-dev libdbus-1-dev curl dbus cmake
+    # Make sure system libboost and libarchive won't be used
+    - apt -yyq remove 'libboost*-dev' libarchive-dev
   script:
     - cmake -D MENDER_DOWNLOAD_BOOST=ON -D MENDER_DOWNLOAD_LIBARCHIVE=ON .
     - make --jobs=$(nproc --all) --keep-going
-  tags:
-    - mender-qa-worker-generic
 
 .test:static-template:
   stage: test
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
-  tags:
-    # QA-866: Ubuntu 24.04 image cannot properly run on sysbox-runc runners
-    - hetzner-podman
+  image: registry.gitlab.com/northern.tech/mender/mender-test-containers:base-mender-cpp-master
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
-    - apt update && apt install -yyq ccache clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus stunnel4 tinyproxy-bin netcat wget zstd
-    # mender-artifact install
-    - wget "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1%2bubuntu%2bjammy_amd64.deb"
-      --output-document mender-artifact.deb
-    - apt install --assume-yes --quiet ./mender-artifact.deb
     - export CC=$(which clang)
     - export CXX=$(which clang++)
   script:
@@ -154,19 +136,11 @@ test:static:asan:
   variables:
     BUILD_TYPE: ASan
   extends: .test:static-template
-  tags:
-    # hetzner podman fails with result: segmentation fault
-    # falling back to gcp runners
-    - mender-qa-worker-generic-light
 
 test:static:threadsan:
   extends: .test:static-template
   variables:
     BUILD_TYPE: ThreadSan
-  tags:
-    # hetzner podman fails with result: segmentation fault
-    # falling back to gcp runners
-    - mender-qa-worker-generic-light
 
 test:static:undefinedsan:
   extends: .test:static-template
@@ -186,9 +160,6 @@ test:static:no-dbus:
 test:modules-artifact-gen:
   stage: test
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
-  tags:
-    # QA-866: Ubuntu 24.04 image cannot properly run on sysbox-runc runners
-    - hetzner-podman
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
     - apt update && apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
@@ -208,6 +179,8 @@ test:modules-artifact-gen:
 test:docker:
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker:${DOCKER_VERSION}
   needs: []
+  tags:
+    - hetzner-amd-beefy
   services:
     - name: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker:${DOCKER_VERSION}-dind
       alias: docker

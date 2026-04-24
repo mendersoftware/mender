@@ -502,7 +502,7 @@ TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 	    "rootfs_image_checksum",
 	    "rootfs-image.*"
 	  ],
-	  "type": ""
+	  "type": "rootfs-image"
 	})";
 	EXPECT_TRUE(FileJsonEquals(path::Join(tree_path, "header", "type-info"), expected_type_info));
 
@@ -1625,7 +1625,7 @@ public:
 			auto exp_update_module =
 				update_module::UpdateModule::Create(*ctx, payload_meta_data->header.payload_type);
 			ASSERT_TRUE(exp_update_module.has_value()) << exp_update_module.error();
-			update_module = move(exp_update_module.value());
+			update_module = std::move(exp_update_module.value());
 		}();
 	}
 

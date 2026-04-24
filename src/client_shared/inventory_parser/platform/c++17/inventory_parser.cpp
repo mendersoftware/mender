@@ -38,6 +38,7 @@ kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
 	bool any_failure = false;
 	kvp::KeyValuesMap data;
 
+	vector<string> scripts;
 	try {
 		fs::path dir_path(generators_dir);
 		if (!fs::exists(dir_path)) {
@@ -67,17 +68,22 @@ kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
 				log::Warning("'" + file_path_str + "' is not executable");
 				continue;
 			}
-			procs::Process proc({file_path_str});
+			scripts.emplace_back(std::move(file_path_str));
+		}
+		std::sort(scripts.begin(), scripts.end());
+
+		for (const auto &script_path : scripts) {
+			procs::Process proc({script_path});
 			auto ex_line_data = proc.GenerateLineData();
 			if (!ex_line_data) {
-				log::Error("'" + file_path_str + "' failed: " + ex_line_data.error().message);
+				log::Error("'" + script_path + "' failed: " + ex_line_data.error().message);
 				any_failure = true;
 				continue;
 			}
 
 			auto err = kvp::AddParseKeyValues(data, ex_line_data.value());
 			if (error::NoError != err) {
-				log::Error("Failed to parse data from '" + file_path_str + "': " + err.message);
+				log::Error("Failed to parse data from '" + script_path + "': " + err.message);
 				any_failure = true;
 			} else {
 				any_success = true;
