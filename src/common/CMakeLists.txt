@@ -232,6 +232,7 @@ endif()
 add_library(common_state_machine INTERFACE)
 
 if (MENDER_USE_YAML_CPP)
+  set(YAML_CPP_BUILD_TOOLS OFF)
   add_subdirectory(vendor/yaml-cpp)
   add_library(common_yaml STATIC yaml/yaml.cpp yaml/platform/yaml-cpp/yaml.cpp)
   target_link_libraries(common_yaml PUBLIC common common_io common_error yaml-cpp::yaml-cpp)
