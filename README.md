@@ -245,6 +245,7 @@ cmake --build build
 
 ```
 mkdir build && cd build
+source ~/qnx800/qnxsdp-env.sh
 QNX_TARGET_ARCH=aarch64le cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/qnx.cmake
 make
 ```
