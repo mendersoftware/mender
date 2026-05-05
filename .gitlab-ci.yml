@@ -159,17 +159,10 @@ test:static:no-dbus:
 
 test:modules-artifact-gen:
   stage: test
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
+  image: registry.gitlab.com/northern.tech/mender/mender-test-containers/mender-base-ubuntu:master
   before_script:
-    - !reference [.qa-common-network-apt-retry, before_script]
-    - apt update && apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
-    - apt install -yy jq
-    # mender-artifact
-    - curl -fsSL https://downloads.mender.io/repos/debian/gpg | tee /etc/apt/trusted.gpg.d/mender.asc
-    - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/workstation-tools ubuntu/jammy/stable main" | tee /etc/apt/sources.list.d/mender.list
-    - apt update && apt install -yy mender-artifact
     # Test dependencies
-    - pip install -r support/modules-artifact-gen/tests/requirements.txt
+    - pip install -r support/modules-artifact-gen/tests/requirements.txt --break-system-packages
   script:
     - python3 -m pytest --verbose --junitxml=results.xml support/modules-artifact-gen/tests
   after_script:
