@@ -243,9 +243,21 @@ cmake --build build
 
 **Note that QNX support is still experimental, and not supported.**
 
+Before building Mender you need to make sure its two dependencies -- *Boost* and
+*libarchive* -- are available in the QNX build environment (QNX SDP). Use
+instructions from https://github.com/qnx-ports/boost to install *Boost* into it
+(make sure to use `--prefix=/usr` as the instructions suggest) and
+https://github.com/libarchive/libarchive/ to install *libarchive* (with
+`--host=aarch64-unknown-nto-qnx8.0.0 CC="qcc -Vgcc_ntoaarch64le"` set for
+`./configure`).
+
+Then, with `~/qnx800` containing QNX SDP 8.0 with *Boost* and *libarchive*
+added, Mender can be configured and built with the following commands:
+
 ```
 mkdir build && cd build
-QNX_TARGET_ARCH=aarch64le cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/qnx.cmake
+source ~/qnx800/qnxsdp-env.sh
+QNX_TARGET_ARCH=aarch64le cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/qnx.cmake -DMENDER_USE_DBUS=OFF -DMENDER_EMBED_MENDER_AUTH=ON -DMENDER_USE_LMDB=OFF
 make
 ```
 
