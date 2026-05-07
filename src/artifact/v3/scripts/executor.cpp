@@ -41,7 +41,7 @@ namespace path = mender::common::path;
 
 const int state_script_retry_exit_code {21};
 
-unordered_map<const State, string> state_map {
+unordered_map<State, string> state_map {
 	{State::Idle, "Idle"},
 	{State::Sync, "Sync"},
 	{State::Download, "Download"},
@@ -53,7 +53,7 @@ unordered_map<const State, string> state_map {
 	{State::ArtifactFailure, "ArtifactFailure"},
 };
 
-unordered_map<const Action, string> action_map {
+unordered_map<Action, string> action_map {
 	{Action::Enter, "Enter"},
 	{Action::Leave, "Leave"},
 	{Action::Error, "Error"},

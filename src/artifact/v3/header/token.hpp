@@ -55,7 +55,7 @@ enum class Type {
 	ArtifactHeaderMetaData,
 };
 
-unordered_map<const Type, string> type_map {
+unordered_map<Type, string> type_map {
 	{Type::Uninitialized, "Uninitialized"},
 	{Type::EOFToken, "EOF"},
 	{Type::Unrecognized, "Unrecognized"},

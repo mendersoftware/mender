@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 #include <functional>
+#include <ostream>
 #include <string>
 #include <system_error>
 #include <type_traits>
