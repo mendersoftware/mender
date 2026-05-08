@@ -113,7 +113,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 			const string &tier = e_cfg_string.value();
 			if (!device_tier::IsValid(tier)) {
 				auto err = MakeError(
-					ConfigParserErrorCode::ValidationError, "Invalid DeviceTier: " + tier);
+					ConfigParserErrorCode::DeviceTierError, "Invalid DeviceTier: " + tier);
 				return expected::unexpected(err);
 			}
 			this->device_tier = tier;
