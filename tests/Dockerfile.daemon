@@ -1,7 +1,7 @@
 # Creates a container which acts as a bare bones non-VM based Mender
 # installation, for use in tests.
 FROM ubuntu:24.04 AS build
-ARG MENDER_ARTIFACT_VERSION=4.1.0
+ARG MENDER_ARTIFACT_VERSION=4.4.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install -y cmake make git build-essential jq curl pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev
@@ -21,7 +21,7 @@ RUN jq ".ServerCertificate=\"/usr/share/doc/mender-auth/examples/demo.crt\" | .S
 # Install mender-artifact taking the version from the CI manifest file
 RUN curl "https://downloads.mender.io/repos/workstation-tools/pool/main/m/mender-artifact/mender-artifact_${MENDER_ARTIFACT_VERSION}-1+ubuntu+noble_amd64.deb" \
         --output /mender-artifact.deb && \
-    dpkg --install /mender-artifact.deb && \
+    apt -q -y install /mender-artifact.deb && \
     rm /mender-artifact.deb
 RUN mender-artifact write bootstrap-artifact \
         --artifact-name original \
