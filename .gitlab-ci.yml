@@ -71,7 +71,7 @@ test:no-tests:
 
 test:unit:
   stage: test
-  image: registry.gitlab.com/northern.tech/mender/mender-test-containers:base-mender-cpp-master
+  image: registry.gitlab.com/northern.tech/mender/mender-test-containers/base-mender-cpp:master
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
   script:
@@ -109,7 +109,7 @@ test:backward-compat:
 
 test:dependencies-download:
   stage: test
-  image: registry.gitlab.com/northern.tech/mender/mender-test-containers:base-mender-cpp-master
+  image: registry.gitlab.com/northern.tech/mender/mender-test-containers/base-mender-cpp:master
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
     # Make sure system libboost and libarchive won't be used
@@ -120,7 +120,7 @@ test:dependencies-download:
 
 .test:static-template:
   stage: test
-  image: registry.gitlab.com/northern.tech/mender/mender-test-containers:base-mender-cpp-master
+  image: registry.gitlab.com/northern.tech/mender/mender-test-containers/base-mender-cpp:master
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
     - export CC=$(which clang)
