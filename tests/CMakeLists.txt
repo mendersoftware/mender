@@ -43,6 +43,7 @@ add_custom_target(coverage_no_tests
   DEPENDS coverage_enabled
   COMMAND lcov --capture --quiet --directory ${CMAKE_SOURCE_DIR}
                --output-file ${CMAKE_SOURCE_DIR}/coverage.lcov
+               --ignore-errors inconsistent,gcov
                --exclude '/usr/*'
                --exclude '*/googletest/*'
                --exclude '*_test.*'
