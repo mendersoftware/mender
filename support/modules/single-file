@@ -10,6 +10,17 @@ dest_dir_file="$FILES"/files/dest_dir
 filename_file="$FILES"/files/filename
 permissions_file="$FILES"/files/permissions
 
+case $(uname -s) in
+  QNX)
+    sync_cmd="$(which sync)"
+    sync() {
+      # QNX's sync command doesn't take any arguments, it's a global sync, so we
+      # just want to ignore the argument.
+      "$sync_cmd"
+    }
+    ;;
+esac
+
 safe_copy() {
     if [ $# -gt 2 ]; then
         echo "safe_copy can only handle one file copy at a time" >&2
