@@ -34,7 +34,16 @@ namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 
 // Note: Using one instance of KeyValueDatabaseLmdb in multiple threads is not
-// safe, but using separate instances to access the same database is safe.
+// safe, but using separate instances to access the same database should be safe.
+
+// However, LMDB versions 0.9.26 through 0.9.31 contain a bug (ITS#9278) where multiple
+// `MDB_env` instances pointing to the same database file within a single
+// process can fail. When one environment is closed, it destroys shared POSIX
+// mutexes, causing subsequent operations on other environments to fail with
+// "Invalid argument" errors.
+// See:
+// * https://github.com/LMDB/lmdb/commit/2fd44e325195ae81664eb5dc36e7d265927c5ebc
+// * https://github.com/LMDB/lmdb/commit/3dde6c46e6c55458eadaf7f81492c822414be2c7
 class KeyValueDatabaseLmdb : public KeyValueDatabase {
 public:
 	KeyValueDatabaseLmdb();
