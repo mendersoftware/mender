@@ -1,4 +1,4 @@
 {
   "ServerURL": "@MENDER_SERVER_URL@",
-  "TenantToken": "@MENDER_TENANT_TOKEN@",
+  "TenantToken": "@MENDER_TENANT_TOKEN@"
 }
