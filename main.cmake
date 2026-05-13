@@ -85,3 +85,5 @@ endif()
 
 message(STATUS "Build tests: ${BUILD_TESTS}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+include(cmake/dist-package.cmake)
