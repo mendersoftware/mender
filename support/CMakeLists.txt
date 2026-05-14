@@ -83,28 +83,30 @@ add_custom_target(uninstall-identity-scripts
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
-install(FILES ${DBUS_POLICY_FILES}
-  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/dbus-1/system.d
-  COMPONENT dbus-policy-files
-)
-add_custom_target(install-dbus-policy-files
-  COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component dbus-policy-files
-)
-add_custom_target(uninstall-dbus-policy-files
-  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_component dbus-policy-files -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-)
-install(FILES ${DBUS_SERVICE_FILES}
-  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/dbus-1/system-services
-  COMPONENT dbus-service-files
-)
-add_custom_target(install-dbus-service-files
-  COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component dbus-service-files
-)
-add_custom_target(uninstall-dbus-service-files
-  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_component dbus-service-files -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-)
+if(MENDER_USE_DBUS)
+  install(FILES ${DBUS_POLICY_FILES}
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/dbus-1/system.d
+    COMPONENT dbus-policy-files
+  )
+  add_custom_target(install-dbus-policy-files
+    COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component dbus-policy-files
+  )
+  add_custom_target(uninstall-dbus-policy-files
+    COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_component dbus-policy-files -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+  install(FILES ${DBUS_SERVICE_FILES}
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/dbus-1/system-services
+    COMPONENT dbus-service-files
+  )
+  add_custom_target(install-dbus-service-files
+    COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component dbus-service-files
+  )
+  add_custom_target(uninstall-dbus-service-files
+    COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_component dbus-service-files -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+endif()
 
 install(PROGRAMS ${MODULES}
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/mender/modules/v3
