@@ -18,7 +18,7 @@ option(MENDER_BUILD_DIST_PACKAGE "Build the dist-package tarball as part of the 
 function(_setup_dist_package)
     # Clear potential stale configured files
     file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/dist-package)
-    configure_file(${CMAKE_CURRENT_LIST_DIR}/dist-package/mender.conf.in ${CMAKE_BINARY_DIR}/dist-package/mender.conf @ONLY)
+    configure_file(${CMAKE_CURRENT_LIST_DIR}/dist-package/mender.conf.in ${CMAKE_BINARY_DIR}/dist-package/mender.conf FILE_PERMISSIONS OWNER_READ OWNER_WRITE @ONLY)
     configure_file(${CMAKE_CURRENT_LIST_DIR}/dist-package/device_type.in ${CMAKE_BINARY_DIR}/dist-package/device_type @ONLY)
 
     set(STAGE_DIR ${CMAKE_BINARY_DIR}/mender-${MENDER_VERSION})
