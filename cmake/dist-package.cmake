@@ -41,7 +41,7 @@ function(_setup_dist_package)
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/dist-package/mender.conf ${STAGE_DIR}/etc/mender/
         COMMAND ${CMAKE_COMMAND} -E make_directory ${STAGE_DIR}/var/lib/mender
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/dist-package/device_type ${STAGE_DIR}/var/lib/mender/
-        COMMAND ${CMAKE_COMMAND} -E tar czf mender-${MENDER_VERSION}.tar.gz mender-${MENDER_VERSION}
+        COMMAND tar -czf mender-${MENDER_VERSION}.tar.gz --owner=0 --group=0 mender-${MENDER_VERSION}
         COMMAND ${CMAKE_COMMAND} -E rm -rf ${STAGE_DIR}
         COMMAND ${CMAKE_COMMAND} -E echo "Created ${CMAKE_BINARY_DIR}/mender-${MENDER_VERSION}.tar.gz"
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
