@@ -1,0 +1,17 @@
+#!/bin/bash
+
+if ! which lddtree > /dev/null; then
+  echo "lddtree not found, please install it (most likely part of the pax-utils package)"
+  exit 1
+fi
+
+export LD_LIBRARY_PATH=@LOCAL_LIB_PATH@
+get_deps() {
+  # lddtree produces a tree-like output with
+  #   "SOMELIB.so => THE_PATH_TO_THE/SOMELIB.so"
+  # pairs or with "not found" as the path (but if things built and linked, we don't
+  # care, just skip those)
+  lddtree "@CMAKE_BINARY_DIR@/$1" 2>&1 | awk -F"=>" '/^\s+lib.*/ { print $2; }' | sort | uniq | grep -v "not found"
+}
+
+cat <(get_deps src/mender-update/mender-update) <(get_deps src/mender-auth/mender-auth) | sort | uniq | xargs cp -t @TARGET_LIB_PATH@

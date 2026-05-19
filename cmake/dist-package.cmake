@@ -14,6 +14,7 @@ set(MENDER_SERVER_URL "https://hosted.mender.io/" CACHE STRING "Server URL baked
 string(TOLOWER "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}" _MENDER_DEVICE_TYPE_DEFAULT)
 set(MENDER_DEVICE_TYPE "${_MENDER_DEVICE_TYPE_DEFAULT}" CACHE STRING "device_type baked into the dist-package /var/lib/mender/device_type")
 option(MENDER_BUILD_DIST_PACKAGE "Build the dist-package tarball as part of the default build" OFF)
+option(MENDER_DIST_DEPS "Include dependencies (dynamic libraries) in the dist-package tarball" OFF)
 
 # Clear potential stale configured files
 file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/dist-package)
@@ -54,12 +55,28 @@ function(_setup_dist_package)
     if(MENDER_BUILD_DIST_PACKAGE)
         list(APPEND _dp_target_args ALL)
     endif()
+    set(_extra_install_commands "")
+
+    if(MENDER_DIST_DEPS)
+        if(${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
+            set(LOCAL_LIB_PATH ${CMAKE_SYSROOT}/$ENV{QNX_TARGET_ARCH}/usr/${CMAKE_INSTALL_LIBDIR})
+        else()
+            set(LOCAL_LIB_PATH ${CMAKE_SYSROOT}/usr/${CMAKE_INSTALL_LIBDIR})
+        endif()
+        message(STATUS "Including dependencies from ${LOCAL_LIB_PATH}")
+        set(TARGET_LIB_PATH ${STAGE_DIR}/usr/${CMAKE_INSTALL_LIBDIR})
+        list(APPEND _extra_install_commands COMMAND mkdir -p ${TARGET_LIB_PATH})
+        configure_file(${CMAKE_CURRENT_LIST_DIR}/dist-package/install-deps.in ${CMAKE_BINARY_DIR}/dist-package/install-deps FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE @ONLY)
+        list(APPEND _extra_install_commands COMMAND ${CMAKE_BINARY_DIR}/dist-package/install-deps)
+    endif()
+
     add_custom_target(${_dp_target_args}
         COMMAND ${CMAKE_COMMAND} -E rm -rf ${STAGE_DIR}
         COMMAND ${CMAKE_COMMAND} -E env DESTDIR=${STAGE_DIR} ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --prefix /usr
         COMMAND ${CMAKE_COMMAND} -E env DESTDIR=${STAGE_DIR} ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --prefix / --component mender-state-dir
         COMMAND ${CMAKE_COMMAND} -E env DESTDIR=${STAGE_DIR} ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --prefix / --component mender-conf
         COMMAND ${CMAKE_COMMAND} -E env DESTDIR=${STAGE_DIR} ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --prefix / --component mender-device-type
+        ${_extra_install_commands}
         COMMAND tar -czf mender-${MENDER_VERSION}.tar.gz --owner=0 --group=0 mender-${MENDER_VERSION}
         COMMAND ${CMAKE_COMMAND} -E rm -rf ${STAGE_DIR}
         COMMAND ${CMAKE_COMMAND} -E echo "Created ${CMAKE_BINARY_DIR}/mender-${MENDER_VERSION}.tar.gz"
