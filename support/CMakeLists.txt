@@ -13,15 +13,20 @@ set(DBUS_SERVICE_FILES
 set(DOCS_EXAMPLES demo.crt)
 set(IDENTITYSCRIPTS mender-device-identity)
 set(INVENTORYSCRIPTS
-  mender-inventory-bootloader-integration
-  mender-inventory-hostinfo
-  mender-inventory-intervals
-  mender-inventory-network
-  mender-inventory-os
   mender-inventory-provides
-  mender-inventory-rootfs-type
-  mender-inventory-update-modules
 )
+if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
+  list(APPEND INVENTORYSCRIPTS
+    mender-inventory-bootloader-integration
+    mender-inventory-hostinfo
+    mender-inventory-intervals
+    mender-inventory-network
+    mender-inventory-os
+    mender-inventory-rootfs-type
+    mender-inventory-update-modules
+  )
+endif()
+
 set(INVENTORY_NETWORKSCRIPTS mender-inventory-geo
 )
 set (ROOTFS_IMAGE
@@ -47,20 +52,20 @@ if(MENDER_DATA_DIR_SYSTEMD_UNIT)
   list(APPEND SYSTEMD_UNITS mender-data-dir.service)
 endif()
 
+install(PROGRAMS ${INVENTORYSCRIPTS}
+  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/mender/inventory
+  COMPONENT inventory-scripts
+)
+add_custom_target(install-inventory-scripts
+  COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component inventory-scripts
+)
+add_custom_target(uninstall-inventory-scripts
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_component inventory-scripts -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
 # MEN-9704: these don't work on QNX
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
-  install(PROGRAMS ${INVENTORYSCRIPTS}
-    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/mender/inventory
-    COMPONENT inventory-scripts
-  )
-  add_custom_target(install-inventory-scripts
-    COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component inventory-scripts
-  )
-  add_custom_target(uninstall-inventory-scripts
-    COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_component inventory-scripts -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-  )
-
   install(PROGRAMS ${INVENTORY_NETWORKSCRIPTS}
     DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/mender/inventory
     COMPONENT inventory-network-scripts
