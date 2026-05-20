@@ -257,10 +257,45 @@ added, Mender can be configured and built with the following commands:
 ```
 mkdir build && cd build
 source ~/qnx800/qnxsdp-env.sh
-QNX_TARGET_ARCH=aarch64le cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/qnx.cmake -DMENDER_USE_DBUS=OFF -DMENDER_EMBED_MENDER_AUTH=ON -DMENDER_USE_LMDB=OFF
+export QNX_TARGET_ARCH=aarch64le
+cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/qnx.cmake -DMENDER_USE_DBUS=OFF -DMENDER_EMBED_MENDER_AUTH=ON -DMENDER_USE_LMDB=OFF
 make
 ```
 
+A binary tarball with the `mender-update` binary and all its dependencies can be
+created by using the `dist-package` target with the `MENDER_DIST_DEPS=ON` build
+option:
+
+```
+cmake .. -DMENDER_DIST_DEPS=ON
+make dist-package
+```
+
+and contents of such a tarball can be inspected with:
+
+```
+tar -tvf ./mender-*.tar.gz
+```
+
+In order to install such a tarball on a Raspberry Pi 5 running QNX it needs to
+be copied over to the Raspberry Pi (e.g. with `scp`) and extracted with the
+following command:
+
+```
+sudo tar -x --skip-old-files --strip-components=1 -C / -f ./mender-*.tar.gz
+```
+
+**It's important to use the above CLI options for `tar`** so that system
+directories, and directories and files present on the system in general, are not
+overwritten by contents of the tarball.
+
+After running the above command, the `/etc/mender/mender.conf` file needs to be
+modified at least by inserting a valid Mender Tenant token and then
+`mender-update` can be started with:
+
+```
+sudo mender-update daemon
+```
 
 ## Running
 
