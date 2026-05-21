@@ -18,7 +18,7 @@ option(MENDER_DIST_DEPS "Include dependencies (dynamic libraries) in the dist-pa
 
 # Clear potential stale configured files
 file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/dist-package)
-configure_file(${CMAKE_CURRENT_LIST_DIR}/dist-package/mender.conf.in ${CMAKE_BINARY_DIR}/dist-package/mender.conf FILE_PERMISSIONS OWNER_READ OWNER_WRITE @ONLY)
+configure_file(${CMAKE_CURRENT_LIST_DIR}/dist-package/mender.conf.in ${CMAKE_BINARY_DIR}/dist-package/mender.conf @ONLY)
 configure_file(${CMAKE_CURRENT_LIST_DIR}/dist-package/device_type.in ${CMAKE_BINARY_DIR}/dist-package/device_type @ONLY)
 
 # /var/lib/mender
@@ -31,6 +31,7 @@ install(DIRECTORY
 install(FILES
   ${CMAKE_BINARY_DIR}/dist-package/mender.conf
   DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/mender
+  PERMISSIONS OWNER_READ OWNER_WRITE
   COMPONENT mender-conf
   EXCLUDE_FROM_ALL
 )
