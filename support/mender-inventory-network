@@ -38,30 +38,60 @@
 
 set -ue
 
-INCLUDE_DOCKER_INTERFACES="${INCLUDE_DOCKER_INTERFACES:-false}"
+case $(uname -s) in
+  Linux)
+    INCLUDE_DOCKER_INTERFACES="${INCLUDE_DOCKER_INTERFACES:-false}"
 
-SCN=/sys/class/net
-min=65535
-ifdev=
+    SCN=/sys/class/net
+    min=65535
+    ifdev=
 
-# find iface with lowest ifindex, except loopback
-for devpath in $SCN/*; do
-    dev=$(basename $devpath)
-    if [ $dev = "lo" ]; then
+    # find iface with lowest ifindex, except loopback
+    for devpath in $SCN/*; do
+      dev=$(basename $devpath)
+      if [ $dev = "lo" ]; then
         continue
-    fi
-    if [ "${INCLUDE_DOCKER_INTERFACES}" = "false" ]; then
+      fi
+      if [ "${INCLUDE_DOCKER_INTERFACES}" = "false" ]; then
         if echo $dev | grep -q -E '^(br-.*|docker.*|veth.*)'; then
-            continue
+          continue
         fi
-    fi
-    if ! [ "x$(cat $devpath/address)x" = "xx" ]; then
+      fi
+      if ! [ "x$(cat $devpath/address)x" = "xx" ]; then
         echo "mac_$dev=$(cat $devpath/address)"
-    fi
-    echo "network_interfaces=$dev"
+      fi
+      echo "network_interfaces=$dev"
 
-    ip addr show dev $dev | awk -v dev=$dev '
-       /inet / { printf("ipv4_%s=%s\n", dev, $2) }
-       /inet6 / {printf("ipv6_%s=%s\n", dev, $2) }
-    '
-done
+      ip addr show dev $dev | awk -v dev=$dev '
+/inet / { printf("ipv4_%s=%s\n", dev, $2) }
+/inet6 / {printf("ipv6_%s=%s\n", dev, $2) }
+'
+    done
+
+      ;;
+
+  QNX)
+    ifconfig | awk '
+/^\w+:/ {
+        split($1, a, ":")
+        iface = a[1]
+        print("network_interfaces="iface)
+}
+/ether / {
+        print("mac_"iface"="$2)
+}
+/inet / {
+        print("ipv4_"iface"="$2)
+}
+/inet6 / {
+        split($2, a, "%")
+        print("ipv6_"iface"="a[1])
+}
+/status: / {
+        printf("status_"iface"=")
+        for(i=2; i<=NF; i++) printf($i" ");
+        print("")
+}
+'
+      ;;
+esac
