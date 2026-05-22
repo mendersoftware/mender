@@ -26,6 +26,9 @@ err() {
  exit $rc
 }
 
+# make sure we don't create world-readable files and directories
+umask 077
+
 TIMEOUT=10 # Request timeout
 TEMPFILE="/tmp/mender/inventory-geo"
 
