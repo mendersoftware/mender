@@ -26,6 +26,9 @@ err() {
  exit $rc
 }
 
+# make sure we don't create world-readable files and directories
+umask 077
+
 TIMEOUT=10 # Request timeout
 TEMPFILE="/tmp/mender/inventory-geo"
 
@@ -39,26 +42,36 @@ ATTR_NAME_TIMEZONE="geo-timezone"
 ATTR_NAME_LAT="geo-lat"
 ATTR_NAME_LON="geo-lon"
 
+# Prefer curl if it's available as it nicely maps to our use case of storing the
+# HTTP response in a variable
 # Check if wget is a full version or is it provided by BusyBox
 # Limit retries to 2 to avoid waiting a long time in case of failures
 fetch_ipinfo() {
-    WGET_BUSYBOX=0
-    WGET_OUTPUT="$(wget 2>&1)"
+    if command -v curl >/dev/null; then
+        IP_INFO=$(curl --connect-timeout ${TIMEOUT} -sL --retry 2 \
+                       --header 'Accept: application/json' \
+                       https://ipinfo.io)
+    elif command -v wget >/dev/null; then
+        WGET_BUSYBOX=0
+        WGET_OUTPUT="$(wget 2>&1)"
 
-    case "$WGET_OUTPUT" in
-        *"BusyBox"*) WGET_BUSYBOX=1 ;;
-    esac
+        case "$WGET_OUTPUT" in
+            *"BusyBox"*) WGET_BUSYBOX=1 ;;
+        esac
 
-    if [ "$WGET_BUSYBOX" -eq 1 ]; then
-        for i in 1 2; do
-            IP_INFO=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout \
-                --header 'Accept: application/json' \
-                https://ipinfo.io) && break
-        done
+        if [ "$WGET_BUSYBOX" -eq 1 ]; then
+            for i in 1 2; do
+                IP_INFO=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout \
+                               --header 'Accept: application/json' \
+                               https://ipinfo.io) && break
+            done
+        else
+            IP_INFO=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout --tries=2 \
+                           --header 'Accept: application/json' \
+                           https://ipinfo.io)
+        fi
     else
-        IP_INFO=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout --tries=2 \
-            --header 'Accept: application/json' \
-            https://ipinfo.io)
+        err 2 "curl or wget needs to be present to get IP info"
     fi
 
     if [ $? != 0 ] || [ -z "${IP_INFO}" ]; then

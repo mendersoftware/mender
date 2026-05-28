@@ -8,16 +8,68 @@ set -ue
 LC_ALL=C
 export LC_ALL
 
-grep 'model name' /proc/cpuinfo | uniq | awk -F': ' '
-     // { printf("cpu_model=%s\n", $2);}
+case $(uname -s) in
+  Linux)
+    grep 'model name' /proc/cpuinfo | uniq | awk -F': ' '
+// { printf("cpu_model=%s\n", $2);}
 '
-echo "kernel=$(cat /proc/version)"
+    echo "kernel=$(cat /proc/version)"
 
-cat /proc/meminfo | awk '
+    cat /proc/meminfo | awk '
 /MemTotal/ {printf("mem_total_kB=%d\n", $2)}
 '
+    hostname="localhost"
+    hostname >/dev/null 2>&1 && hostname="$(hostname)"
+    [ "$hostname" = "" ] && [ -f /etc/hostname ] && hostname=$(cat /etc/hostname 2>/dev/null)
+    echo hostname=${hostname:-"localhost"}
 
-hostname="localhost"
-hostname >/dev/null 2>&1 && hostname="$(hostname)"
-[ "$hostname" = "" ] && [ -f /etc/hostname ] && hostname=$(cat /etc/hostname 2>/dev/null)
-echo hostname=${hostname:-"localhost"}
+    ;;
+
+ QNX)
+   # Sample output:
+   # CPU:AARCH64 Release:8.0.0  FreeMem:1778MB/2048MB BootTime:May 22 07:28:45 UTC 2026
+   # Processes: 36, Threads: 178
+   # Processor1: 1095749809 Cortex-A76 1500MHz FPU
+   # Processor2: 1095749809 Cortex-A76 1500MHz FPU
+   # Processor3: 1095749809 Cortex-A76 1500MHz FPU
+   # Processor4: 1095749809 Cortex-A76 1500MHz FPU
+   pidin info | awk '
+BEGIN {
+    system_info["n_cpus"] = 0
+}
+/^CPU:/ {
+    # Extract FreeMem and TotalMem
+    split($3, c, "[:/]");
+    if (match(c[2], /[0-9]+/)) {
+        unit = tolower(substr(c[2], RSTART + RLENGTH));
+        system_info["mem_free_" unit] = substr(c[2], RSTART, RLENGTH)
+    }
+    if (match(c[3], /[0-9]+/)) {
+        unit = tolower(substr(c[3], RSTART + RLENGTH));
+        system_info["mem_total_" unit] = substr(c[3], RSTART, RLENGTH)
+    }
+}
+/^Processor/ {
+    system_info["n_cpus"] += 1
+    if (system_info["cpu_model"] == "") {
+      model = $3
+      for (i = 4; i <= NF - 2; i++) {
+        model = model " " $i
+      }
+      system_info["cpu_model"] = model
+      system_info["cpu_speed"] = $(NF - 1)
+    }
+}
+END {
+    for (key in system_info) {
+        printf("%s=%s\n", key, system_info[key])
+    }
+}
+'
+   echo "kernel=$(uname -k)"
+   echo "system=$(uname -s)-$(uname -r)"
+   echo "architecture=$(uname -p)"
+   echo "machine=$(uname -m)"
+   echo "hostname=$(uname -n)"
+   ;;
+esac

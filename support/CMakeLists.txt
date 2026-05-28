@@ -14,16 +14,16 @@ set(DOCS_EXAMPLES demo.crt)
 set(IDENTITYSCRIPTS mender-device-identity)
 set(INVENTORYSCRIPTS
   mender-inventory-provides
+  mender-inventory-hostinfo
+  mender-inventory-intervals
+  mender-inventory-network
+  mender-inventory-update-modules
 )
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
   list(APPEND INVENTORYSCRIPTS
     mender-inventory-bootloader-integration
-    mender-inventory-hostinfo
-    mender-inventory-intervals
-    mender-inventory-network
     mender-inventory-os
     mender-inventory-rootfs-type
-    mender-inventory-update-modules
   )
 endif()
 
@@ -64,22 +64,19 @@ add_custom_target(uninstall-inventory-scripts
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
-# MEN-9704: these don't work on QNX
-if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "QNX")
-  install(PROGRAMS ${INVENTORY_NETWORKSCRIPTS}
-    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/mender/inventory
-    COMPONENT inventory-network-scripts
-    # Disabled by default to avoid API throttling.
-    EXCLUDE_FROM_ALL
-  )
-  add_custom_target(install-inventory-network-scripts
-    COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component inventory-network-scripts
-  )
-  add_custom_target(uninstall-inventory-network-scripts
-    COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_component inventory-network-scripts -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-  )
-endif()
+install(PROGRAMS ${INVENTORY_NETWORKSCRIPTS}
+  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/mender/inventory
+  COMPONENT inventory-network-scripts
+  # Disabled by default to avoid API throttling.
+  EXCLUDE_FROM_ALL
+)
+add_custom_target(install-inventory-network-scripts
+  COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component inventory-network-scripts
+)
+add_custom_target(uninstall-inventory-network-scripts
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_component inventory-network-scripts -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
 
 install(PROGRAMS ${IDENTITYSCRIPTS}
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/mender/identity
