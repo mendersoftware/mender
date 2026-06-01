@@ -45,6 +45,7 @@ include:
   - project: "Northern.tech/Mender/mendertesting"
     file: "qa-common/send-results-to-mantra.yml"
     ref: "master"
+  - component: gitlab.com/Northern.tech/Mender/mendertesting/publish-codecov@feat/QA-1574-new-codecov-templates
   - component: gitlab.com/renovate-bot/renovate-runner/renovate.gitlab-ci@main
 
 default:
@@ -182,40 +183,9 @@ test:docker:
     - ./tests/build-docker
 
 publish:tests:
-  stage: publish
-  allow_failure: true
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/python:3.11
+  extends: .publish:codecov
   dependencies:
     - test:unit
-  before_script:
-    - !reference [.qa-common-network-apt-retry, before_script]
-    # Install dependencies
-    - apt update && apt install -yyq lcov
-    - pip install cpp-coveralls pyyaml
-
-    # eddyxu/cpp-coveralls appears dead, but there doesn't seem to be an
-    # alternative. Use this patch from someone who attempted to fix it. An
-    # alternative to this is to use pyyaml<6, but it's better to use just one
-    # old component than two.
-    - curl -f https://github.com/eddyxu/cpp-coveralls/commit/067c837c04e039e8c70aa53bceda1cded6751408.patch | patch -f /usr/local/lib/python3.11/site-packages/cpp_coveralls/__init__.py
-
-    # Set "TRAVIS_*" variables based on GitLab ones
-    - export TRAVIS_BRANCH=$CI_COMMIT_BRANCH
-    - export TRAVIS_JOB_ID=$CI_PIPELINE_ID
-
-  script:
-    - 'echo "service_name: gitlab-ci" > .coveralls.yml'
-    - cpp-coveralls
-      --repo-token ${COVERALLS_TOKEN}
-      --no-gcov
-      --lcov-file coverage.lcov
-
-publish:tests:codecov:
-  stage: publish
-  image: alpine
-  before_script:
-    - apk add --no-cache bash curl findutils git
-  dependencies:
-    - test:unit
-  script:
-    - curl -s https://codecov.io/bash | bash -s -- -Z
+  variables:
+    CODECOV_FILE: coverage.lcov
+    CODECOV_FLAG: unittests
