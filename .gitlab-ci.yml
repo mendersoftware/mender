@@ -46,6 +46,9 @@ include:
     file: "qa-common/send-results-to-mantra.yml"
     ref: "master"
   - component: gitlab.com/Northern.tech/Mender/mendertesting/publish-codecov@feat/QA-1574-new-codecov-templates
+    inputs:
+      coverage_file: coverage.lcov
+      flag: unittests
   - component: gitlab.com/renovate-bot/renovate-runner/renovate.gitlab-ci@main
 
 default:
@@ -182,10 +185,3 @@ test:docker:
   script:
     - ./tests/build-docker
 
-publish:tests:
-  extends: .publish:codecov
-  dependencies:
-    - test:unit
-  variables:
-    CODECOV_FILE: coverage.lcov
-    CODECOV_FLAG: unittests
