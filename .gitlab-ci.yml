@@ -56,6 +56,27 @@ default:
     - k8s
   retry: !reference [.qa-common-default-retry, retry]
 
+# Test the build with libc++ (QA-1626)
+build-with-libc++:
+  stage: test
+  image: registry.gitlab.com/northern.tech/mender/mender-test-containers/base-mender-cpp:master
+  script:
+    - |
+      BUILD_DIR="${BUILD_DIR:-build-libcxx}"
+      rm -rf "$BUILD_DIR"
+      unset BOOST_ROOT BOOST_INCLUDEDIR BOOST_LIBRARYDIR Boost_DIR
+      cmake -S . -B "$BUILD_DIR" \
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ \
+        -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+        -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
+        -DCMAKE_SHARED_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
+        -DSTD_FILESYSTEM_LIB_NAME="" \
+        -DMENDER_DOWNLOAD_BOOST=ON \
+        -DBoost_NO_SYSTEM_PATHS=ON \
+        -DBoost_NO_BOOST_CMAKE=ON
+      cmake --build "$BUILD_DIR" -j
+
 # Override rules
 renovate:
   needs: []
