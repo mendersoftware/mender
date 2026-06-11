@@ -102,7 +102,7 @@ TEST(ConfigParserDefaultsTests, ConfigParserDefaults) {
 
 	EXPECT_EQ(mc.update_poll_interval_seconds, 1800);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 28800);
-	EXPECT_EQ(mc.retry_poll_interval_seconds, 0);
+	EXPECT_EQ(mc.retry_poll_interval_seconds, 300);
 	EXPECT_EQ(mc.retry_poll_count, 0);
 	EXPECT_EQ(mc.state_script_timeout_seconds, 3600);
 	EXPECT_EQ(mc.state_script_retry_timeout_seconds, 1800);
@@ -191,7 +191,7 @@ TEST_F(ConfigParserTests, LoadPartial) {
 
 	EXPECT_EQ(mc.update_poll_interval_seconds, 1800);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 28800);
-	EXPECT_EQ(mc.retry_poll_interval_seconds, 0);
+	EXPECT_EQ(mc.retry_poll_interval_seconds, 300);
 	EXPECT_EQ(mc.retry_poll_count, 0);
 	EXPECT_EQ(mc.state_script_timeout_seconds, 3600);
 	EXPECT_EQ(mc.state_script_retry_timeout_seconds, 1800);
@@ -519,7 +519,7 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 
 	EXPECT_EQ(mc.update_poll_interval_seconds, 1800);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 28800);
-	EXPECT_EQ(mc.retry_poll_interval_seconds, 0);
+	EXPECT_EQ(mc.retry_poll_interval_seconds, 300);
 	EXPECT_EQ(mc.retry_poll_count, 0);
 	EXPECT_EQ(mc.state_script_timeout_seconds, 3600);
 	EXPECT_EQ(mc.state_script_retry_timeout_seconds, 1800);
