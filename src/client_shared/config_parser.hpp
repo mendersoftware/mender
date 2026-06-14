@@ -134,8 +134,10 @@ public:
 	/** Skip CA certificate validation */
 	bool skip_verify = false;
 
-	/** Global retry polling max interval for fetching update, authorize wait and update status */
-	int retry_poll_interval_seconds = 0;
+	/** Global retry polling max interval for fetching update, authorize wait and update status.
+	 * Defaults to 300s; the retry backoff starts at 60s and is capped at this value. If set below
+	 * 60, retries use that value as a fixed interval without backoff. */
+	int retry_poll_interval_seconds = 300;
 
 	/** Global max retry poll count */
 	int retry_poll_count = 0;
