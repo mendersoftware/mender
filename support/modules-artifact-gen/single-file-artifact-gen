@@ -211,8 +211,12 @@ mender-artifact write module-image \
   -f "$file" \
   "${passthrough_args[@]}"
 
-echo "Artifact $output_path generated successfully:"
-mender-artifact read "$output_path"
+if [ ! -s "$output_path" ]; then
+  echo "Error: mender-artifact failed to write \"$output_path\"." >&2
+  exit 1
+fi
 
+mender-artifact read "$output_path"
+echo "Artifact $output_path generated successfully."
 rm -rf $tmpdir
 exit 0
