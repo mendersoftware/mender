@@ -166,6 +166,8 @@ case $dest_dir in
   ;;
 esac
 
+trap 'rm -f $update_files_tar $dest_dir_file' EXIT
+
 # Create tarball, accepts directory.
 if [ -e "${file_tree}" ]; then
   if [ -d "${file_tree}" ]; then
@@ -202,6 +204,3 @@ fi
 
 mender-artifact read $output_path
 echo "Artifact $output_path generated successfully."
-rm $update_files_tar
-rm $dest_dir_file
-exit 0
