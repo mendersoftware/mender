@@ -180,6 +180,7 @@ fi
 
 # Create required files for the Update Module
 tmpdir=$(mktemp -d)
+trap 'rm -rf $tmpdir' EXIT
 dest_dir_file="$tmpdir/dest_dir"
 filename_file="$tmpdir/filename"
 permissions_file="$tmpdir/permissions"
@@ -218,5 +219,3 @@ fi
 
 mender-artifact read "$output_path"
 echo "Artifact $output_path generated successfully."
-rm -rf $tmpdir
-exit 0
