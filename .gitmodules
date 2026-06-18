@@ -16,3 +16,4 @@
 [submodule "src/common/vendor/yaml-cpp"]
 	path = src/common/vendor/yaml-cpp
 	url = https://github.com/jbeder/yaml-cpp.git
+    ignore = untracked
