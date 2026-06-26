@@ -41,75 +41,86 @@ const CliOption help_option = {
 	.description = "Show help and exit",
 };
 
-const vector<CliOption> common_global_options = {
-	CliOption {
-		.long_option = "config",
-		.short_option = "c",
-		.description = "Configuration FILE path",
-		.default_value = DefaultPaths.conf_file,
-		.parameter = "FILE",
-	},
-	CliOption {
-		.long_option = "fallback-config",
-		.short_option = "b",
-		.description = "Fallback configuration FILE path",
-		.default_value = DefaultPaths.fallback_conf_file,
-		.parameter = "FILE",
-	},
-	CliOption {
-		.long_option = "data",
-		.description = "Deprecated; alias for --datastore",
-		.parameter = "DIR",
-	},
-	CliOption {
-		.long_option = "datastore",
-		.short_option = "d",
-		.description = "Mender state data DIRECTORY path",
-		.default_value = DefaultPaths.data_store,
-		.parameter = "DIR",
-	},
-	CliOption {
-		.long_option = "log-file",
-		.short_option = "L",
-		.description = "FILE to log to",
-		.parameter = "FILE",
-	},
-	CliOption {
-		.long_option = "log-level",
-		.short_option = "l",
-		.description = "Set logging level",
-		.default_value = "info",
-		.parameter = "LEVEL",
-	},
-	CliOption {
-		.long_option = "trusted-certs",
-		.short_option = "E",
-		.description = "Trusted server certificates FILE path",
-		.parameter = "FILE",
-	},
-	CliOption {
-		.long_option = "skipverify",
-		.description = "Skip certificate verification",
-	},
-	CliOption {
-		.long_option = "version",
-		.short_option = "v",
-		.description = "Print version and exit",
-	},
-	help_option,
-};
+// Construct-on-first-use so that order of initalization of DefaultPaths and common_global_options
+// does not matter. The relative initialization order of globals across translation units is
+// unspecified: when using -flto in the Debian package's build this common_global_options could be
+// initialized before DefaultPaths, reading uninitialized std::strings and crashing in static init.
+const vector<CliOption> &CommonGlobalOptions() {
+	static const vector<CliOption> common_global_options = {
+		CliOption {
+			.long_option = "config",
+			.short_option = "c",
+			.description = "Configuration FILE path",
+			.default_value = DefaultPaths.conf_file,
+			.parameter = "FILE",
+		},
+		CliOption {
+			.long_option = "fallback-config",
+			.short_option = "b",
+			.description = "Fallback configuration FILE path",
+			.default_value = DefaultPaths.fallback_conf_file,
+			.parameter = "FILE",
+		},
+		CliOption {
+			.long_option = "data",
+			.description = "Deprecated; alias for --datastore",
+			.parameter = "DIR",
+		},
+		CliOption {
+			.long_option = "datastore",
+			.short_option = "d",
+			.description = "Mender state data DIRECTORY path",
+			.default_value = DefaultPaths.data_store,
+			.parameter = "DIR",
+		},
+		CliOption {
+			.long_option = "log-file",
+			.short_option = "L",
+			.description = "FILE to log to",
+			.parameter = "FILE",
+		},
+		CliOption {
+			.long_option = "log-level",
+			.short_option = "l",
+			.description = "Set logging level",
+			.default_value = "info",
+			.parameter = "LEVEL",
+		},
+		CliOption {
+			.long_option = "trusted-certs",
+			.short_option = "E",
+			.description = "Trusted server certificates FILE path",
+			.parameter = "FILE",
+		},
+		CliOption {
+			.long_option = "skipverify",
+			.description = "Skip certificate verification",
+		},
+		CliOption {
+			.long_option = "version",
+			.short_option = "v",
+			.description = "Print version and exit",
+		},
+		help_option,
+	};
+	return common_global_options;
+}
 
-const string common_description_append = R"(Global flag remarks:
+// Construct-on-first-use, see CommonGlobalOptions() above.
+const string &CommonDescriptionAppend() {
+	static const string common_description_append = R"(Global flag remarks:
    - Supported log levels incudes: 'trace', 'debug', 'info', 'warning', 'error', and
      'fatal'.
 
 Environment variables:
-   - MENDER_CONF_DIR - configuration (default: )"
-										 + DefaultPaths.path_conf_dir + R"().
+   - MENDER_CONF_DIR - configuration (default: )" + DefaultPaths.path_conf_dir
+													+ R"().
    - MENDER_DATA_DIR - identity, inventory and update modules (default: )"
-										 + DefaultPaths.path_data_dir + R"().
+													+ DefaultPaths.path_data_dir + R"().
    - MENDER_DATASTORE_DIR - runtime datastore (default: )"
-										 + DefaultPaths.data_store + R"().)";
+													+ DefaultPaths.data_store + R"().)";
+	return common_description_append;
+}
 
 template <typename InputIterator>
 using ColumnFormatter = function<string(typename iterator_traits<InputIterator>::value_type)>;
@@ -225,7 +236,7 @@ void PrintCliHelp(const CliApp &cli, ostream &stream) {
 	if (!cli.long_description.empty()) {
 		stream << "DESCRIPTION:" << endl << indent << cli.long_description << endl;
 		;
-		stream << common_description_append;
+		stream << CommonDescriptionAppend();
 		stream << endl << endl;
 	}
 
@@ -239,7 +250,7 @@ void PrintCliHelp(const CliApp &cli, ostream &stream) {
 	stream << endl;
 
 	stream << "GLOBAL OPTIONS:" << endl;
-	PrintOptions(common_global_options, stream);
+	PrintOptions(CommonGlobalOptions(), stream);
 }
 
 bool FindCmdlineHelpArg(vector<string>::const_iterator start, vector<string>::const_iterator end) {
@@ -288,11 +299,11 @@ const OptsSet OptsSetFromCliOpts(const vector<CliOption> &options, bool without_
 }
 
 const OptsSet GlobalOptsSetWithValue() {
-	return OptsSetFromCliOpts(common_global_options, false);
+	return OptsSetFromCliOpts(CommonGlobalOptions(), false);
 }
 
 const OptsSet GlobalOptsSetWithoutValue() {
-	return OptsSetFromCliOpts(common_global_options, true);
+	return OptsSetFromCliOpts(CommonGlobalOptions(), true);
 }
 
 const OptsSet CommandOptsSetWithValue(const vector<CliOption> &options) {
