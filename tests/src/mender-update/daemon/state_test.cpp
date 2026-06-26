@@ -25,6 +25,7 @@
 #include <api/client.hpp>
 #include <common/common.hpp>
 #include <client_shared/conf.hpp>
+#include <common/device_tier.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/key_value_database.hpp>
@@ -48,6 +49,7 @@ namespace fs = std::filesystem;
 namespace api = mender::api;
 namespace common = mender::common;
 namespace conf = mender::client_shared::conf;
+namespace device_tier = mender::common::device_tier;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace kvdb = mender::common::key_value_database;
@@ -3915,25 +3917,46 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 class StateTestWithArtifact : public testing::Test {
 public:
 	void SetUp() override {
-		processes::Process proc({
-			"mender-artifact",
-			"write",
-			"module-image",
-			"--type",
-			"test-module",
-			"--compatible-types",
-			"test-type",
-			"--artifact-name",
-			"artifact-name",
-			"--output-path",
-			ArtifactPath(),
-		});
-		auto err = proc.Run();
-		ASSERT_EQ(err, error::NoError) << err.String();
+		{
+			processes::Process proc({
+				"mender-artifact",
+				"write",
+				"module-image",
+				"--type",
+				"test-module",
+				"--compatible-types",
+				"test-type",
+				"--artifact-name",
+				"artifact-name",
+				"--output-path",
+				ArtifactPath(),
+			});
+			ASSERT_EQ(proc.Run(), error::NoError);
+		}
+		{
+			processes::Process proc({
+				"mender-artifact",
+				"write",
+				"module-image",
+				"--type",
+				context::MenderContext::orchestrator_manifest_payload_type,
+				"--compatible-types",
+				"test-type",
+				"--artifact-name",
+				"artifact-name",
+				"--output-path",
+				ManifestArtifactPath(),
+			});
+			ASSERT_EQ(proc.Run(), error::NoError);
+		}
 	}
 
 	string ArtifactPath() const {
 		return path::Join(tmpdir_.Path(), "artifact.mender");
+	}
+
+	string ManifestArtifactPath() const {
+		return path::Join(tmpdir_.Path(), "manifest.mender");
 	}
 
 private:
@@ -3998,6 +4021,89 @@ TEST_F(StateTestWithArtifact, DeploymentLogging) {
 		path::Join(tmpdir.Path(), "deployments.0002." DEPLOYMENT_ID ".log");
 	EXPECT_FALSE(mtesting::FileContains(no_such_deployment_log, "Running mender-update"));
 }
+
+static void WriteNoopUpdateModule(const string &modules_path, const string &payload_type) {
+	auto module = path::Join(modules_path, payload_type);
+	{
+		ofstream f(module);
+		f << "#!/bin/sh\n"
+			 "case \"$1\" in\n"
+			 "  SupportsRollback) echo No ;;\n"
+			 "  NeedsArtifactReboot) echo No ;;\n"
+			 "esac\n"
+			 "exit 0\n";
+	}
+	chmod(module.c_str(), S_IRUSR | S_IWUSR | S_IXUSR);
+}
+
+static void ExpectManagedDeployment(
+	const string &configured_tier, const string &artifact_path, bool expect_success) {
+	mtesting::TemporaryDirectory tmpdir;
+	mtesting::TemporaryDirectory topology_dir;
+
+	// System tier resolves compatible type from topology system_type, standard from device_type.
+	{
+		ofstream f(path::Join(tmpdir.Path(), "device_type"));
+		f << "device_type=test-type\n";
+	}
+	{
+		ofstream f(path::Join(topology_dir.Path(), "topology.yaml"));
+		f << "system_type: test-type\n";
+	}
+	setenv("MENDER_ORCHESTRATOR_TOPOLOGY_DIR", topology_dir.Path().c_str(), 1);
+
+	conf::MenderConfig config;
+	config.paths.SetDataStore(tmpdir.Path());
+	config.paths.SetModulesPath(tmpdir.Path());
+	config.paths.SetModulesWorkPath(tmpdir.Path());
+	config.device_tier = configured_tier;
+
+	context::MenderContext main_context(config);
+	auto err = main_context.Initialize();
+	ASSERT_EQ(err, error::NoError);
+	err = main_context.GetMenderStoreDB().Write(
+		main_context.artifact_name_key, common::ByteVectorFromString("original"));
+	ASSERT_EQ(err, error::NoError);
+	WriteNoopUpdateModule(tmpdir.Path(), "test-module");
+	WriteNoopUpdateModule(
+		tmpdir.Path(), context::MenderContext::orchestrator_manifest_payload_type);
+
+	mtesting::TestEventLoop event_loop;
+	Context ctx(main_context, event_loop);
+
+	mtesting::HttpFileServer server(path::DirName(artifact_path));
+	auto artifact_url = http::JoinUrl(server.GetBaseUrl(), path::BaseName(artifact_path));
+	auto status_log = path::Join(tmpdir.Path(), "status.log");
+	auto deployment_client =
+		make_shared<TestDeploymentClient>(event_loop, artifact_url, status_log);
+	ctx.deployment_client = deployment_client;
+	ctx.inventory_client = make_shared<NoopInventoryClient>();
+
+	StateMachine state_machine(ctx, event_loop);
+	state_machine.StopAfterDeployment();
+	err = state_machine.Run();
+	ASSERT_EQ(err, error::NoError);
+	unsetenv("MENDER_ORCHESTRATOR_TOPOLOGY_DIR");
+
+	EXPECT_EQ(mtesting::FileContains(status_log, "success"), expect_success);
+}
+
+TEST_F(StateTestWithArtifact, SystemTierRejectsNonManifestArtifact) {
+	ExpectManagedDeployment(device_tier::kSystem, ArtifactPath(), false);
+}
+
+// Same artifact installs on standard tier, so the system-tier failure above is the guard.
+TEST_F(StateTestWithArtifact, StandardTierInstallsNonManifestArtifact) {
+	ExpectManagedDeployment(device_tier::kStandard, ArtifactPath(), true);
+}
+
+#ifdef MENDER_USE_YAML_CPP
+// Manifest deployment reaches topology system_type resolution, which is YAML-only.
+TEST_F(StateTestWithArtifact, SystemTierInstallsManifestArtifact) {
+	ExpectManagedDeployment(device_tier::kSystem, ManifestArtifactPath(), true);
+}
+#endif // MENDER_USE_YAML_CPP
+
 class StateTests : public testing::Test {
 public:
 	StateTests() :

@@ -15,6 +15,7 @@
 #include <mender-update/daemon/states.hpp>
 
 #include <client_shared/conf.hpp>
+#include <common/device_tier.hpp>
 #include <common/events_io.hpp>
 #include <common/log.hpp>
 #include <common/path.hpp>
@@ -27,6 +28,7 @@ namespace update {
 namespace daemon {
 
 namespace conf = mender::client_shared::conf;
+namespace device_tier = mender::common::device_tier;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace kv_db = mender::common::key_value_database;
@@ -475,6 +477,19 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 		return;
 	}
 	auto &header = exp_header.value();
+
+	// A System Device only accepts the orchestrator manifest; any other payload type is rejected.
+	if (ctx.mender_context.GetConfig().device_tier == device_tier::kSystem
+		&& header.header.payload_type
+			   != main_context::MenderContext::orchestrator_manifest_payload_type) {
+		log::Error(
+			"Refusing to install artifact '" + header.header.artifact_name
+			+ "': its payload type is '" + header.header.payload_type
+			+ "', but this is a System Device (DeviceTier=system) which only accepts '"
+			+ main_context::MenderContext::orchestrator_manifest_payload_type + "' artifacts");
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
 
 	auto exp_matches = ctx.mender_context.MatchesArtifactDepends(header.header);
 	if (!exp_matches) {
