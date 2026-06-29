@@ -648,16 +648,15 @@ error::Error JsonLogMessagesReader::Rewind() {
 	closing_rem_ = closing_.size();
 	bad_data_msg_rem_ = bad_data_msg_.size();
 	too_much_data_msg_rem_ = too_much_data_msg_.size();
+	rem_raw_data_size_ = raw_data_size_;
 
-	// release/close the file first so that the FileDelete() below can actually
-	// delete it and free space up
-	reader_.reset();
-	auto del_err = path::FileDelete(sanitized_fpath_);
-	if (del_err != error::NoError) {
-		log::Error("Failed to delete auxiliary logs file: " + del_err.String());
-	}
-	sanitized_fpath_.erase();
-	return SanitizeLogs();
+	// Re-read the snapshot produced by SanitizeLogs() from its start. We must not
+	// re-sanitize the original log file here: it may still be growing while the
+	// upload is in flight (the deployment keeps logging to it), which would make
+	// the streamed body larger than the Content-Length already computed from
+	// TotalDataSize() and cause the server to reject the truncated body with
+	// "unexpected EOF".
+	return reader_->Rewind();
 }
 
 int64_t JsonLogMessagesReader::TotalDataSize() {

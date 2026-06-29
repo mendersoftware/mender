@@ -1122,6 +1122,117 @@ TEST_F(DeploymentsTests, JsonLogMessageReaderRewindTest) {
 	EXPECT_EQ(ss2.str(), expected_data);
 }
 
+TEST_F(DeploymentsTests, JsonLogMessageReaderRewindIgnoresAppendedDataTest) {
+	// Regression test: while a logs upload is in flight, the deployment's own
+	// logging keeps appending to the original log file. The body produced after
+	// Rewind() must stay identical to the snapshot that SanitizeLogs() computed
+	// the Content-Length (TotalDataSize()) from. Otherwise the streamed body and
+	// the declared Content-Length diverge and the server rejects the truncated
+	// body with "unexpected EOF".
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
+{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"}
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	string header = R"({"messages":[)";
+	string closing = "]}";
+	string expected_data =
+		R"({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})";
+
+	deps::JsonLogMessagesReader logs_reader {test_log_file_path};
+	EXPECT_EQ(logs_reader.SanitizeLogs(), error::NoError);
+
+	// the reader takes size of the data without a trailing newline
+	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_total_size);
+
+	// Simulate the original log file growing after the snapshot and the
+	// Content-Length have been computed, but before the body is streamed.
+	ofstream append_os {test_log_file_path, std::ios::app};
+	err = io::WriteStringIntoOfstream(
+		append_os,
+		R"({"timestamp": "2022-03-11T13:03:17.063493443Z", "level": "INFO", "message": "Appended after snapshot"})"
+		"\n");
+	ASSERT_EQ(err, error::NoError);
+	append_os.close();
+
+	// The advertised size must not change because of the append.
+	EXPECT_EQ(logs_reader.TotalDataSize(), expected_total_size);
+
+	ASSERT_EQ(logs_reader.Rewind(), error::NoError);
+
+	stringstream ss;
+	vector<uint8_t> buf(1024);
+	size_t n_read = 0;
+	size_t total_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		EXPECT_LE(n_read, buf.size());
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+		total_read += n_read;
+	} while (n_read > 0);
+
+	// The streamed body must match the snapshot exactly: the appended entry is
+	// not included, and the total number of bytes equals the advertised size.
+	EXPECT_EQ(ss.str(), expected_data);
+	EXPECT_EQ(total_read, static_cast<size_t>(expected_total_size));
+}
+
+TEST_F(DeploymentsTests, JsonLogMessageReaderRewindTruncatedLogsKeepNewestTest) {
+	// Logs larger than maximum_log_size_ are truncated to keep the newest
+	// entries. The reader starts at an offset into the sanitized snapshot, so
+	// Rewind() must return to that offset rather than the start of the file.
+	// Otherwise the upload would stream the oldest (dropped) entries instead of
+	// the newest ones it advertised.
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	os << R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "FIRSTLINE_MARKER"})"
+	   << "\n";
+	// Enough filler to exceed maximum_log_size_ (~1MB) and trigger truncation.
+	for (int i = 0; i < 15000; i++) {
+		os << R"({"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "INFO", "message": "filler entry padded out to add bytes xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"})"
+		   << "\n";
+	}
+	os << R"({"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "INFO", "message": "LASTLINE_MARKER"})"
+	   << "\n";
+	os.close();
+
+	deps::JsonLogMessagesReader logs_reader {test_log_file_path};
+	ASSERT_EQ(logs_reader.SanitizeLogs(), error::NoError);
+	ASSERT_EQ(logs_reader.Rewind(), error::NoError);
+
+	stringstream ss;
+	vector<uint8_t> buf(4096);
+	size_t n_read = 0;
+	size_t total_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+		total_read += n_read;
+	} while (n_read > 0);
+
+	const string body = ss.str();
+	// Truncation keeps the newest entries and drops the oldest.
+	EXPECT_NE(body.find("LASTLINE_MARKER"), string::npos);
+	EXPECT_EQ(body.find("FIRSTLINE_MARKER"), string::npos);
+	// The body must match the advertised Content-Length exactly.
+	EXPECT_EQ(total_read, static_cast<size_t>(logs_reader.TotalDataSize()));
+}
+
 TEST_F(DeploymentsTests, JsonLogMessageReaderMalformedJsonTest) {
 	const string messages =
 		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
@@ -1650,8 +1761,6 @@ TEST_F(DeploymentsTests, PushLogsFailureTest) {
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	NoAuthHTTPClient client {client_config, loop};
-
 	const string messages =
 		R"({"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
 )";
@@ -1714,42 +1823,53 @@ TEST_F(DeploymentsTests, PushLogsFailureTest) {
 			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
+	// Each attempt uses its own client scope so the request, and the reader
+	// holding the sanitized snapshot, is torn down before the next attempt. This
+	// mirrors the daemon, which releases the previous request when it issues the
+	// next one between retries.
 	bool handler_called = false;
-	err = deps::DeploymentClient().PushLogs(
-		deployment_id,
-		test_log_file_path,
-		client,
-		[&handler_called, &loop](deps::StatusAPIResponse resp) {
-			handler_called = true;
-			EXPECT_NE(resp.error, error::NoError);
-			EXPECT_THAT(resp.error.message, testing::HasSubstr("Got unexpected response"));
-			EXPECT_THAT(resp.error.message, testing::HasSubstr("403"));
-			EXPECT_THAT(resp.error.message, testing::HasSubstr("Access denied"));
-			loop.Stop();
-		});
-	EXPECT_EQ(err, error::NoError);
+	{
+		NoAuthHTTPClient client {client_config, loop};
+		err = deps::DeploymentClient().PushLogs(
+			deployment_id,
+			test_log_file_path,
+			client,
+			[&handler_called, &loop](deps::StatusAPIResponse resp) {
+				handler_called = true;
+				EXPECT_NE(resp.error, error::NoError);
+				EXPECT_THAT(resp.error.message, testing::HasSubstr("Got unexpected response"));
+				EXPECT_THAT(resp.error.message, testing::HasSubstr("403"));
+				EXPECT_THAT(resp.error.message, testing::HasSubstr("Access denied"));
+				loop.Stop();
+			});
+		EXPECT_EQ(err, error::NoError);
 
-	loop.Run();
+		loop.Run();
+	}
 	EXPECT_TRUE(handler_called);
 
 	// Redo with 413 Request Body Too Large
 	handler_called = false;
 	request_body_too_large = true;
 
-	err = deps::DeploymentClient().PushLogs(
-		deployment_id,
-		test_log_file_path,
-		client,
-		[&handler_called, &loop](deps::StatusAPIResponse resp) {
-			handler_called = true;
-			EXPECT_NE(resp.error, error::NoError);
-			EXPECT_EQ(resp.error.code, deps::MakeError(deps::RequestBodyTooLargeError, "").code);
-			EXPECT_THAT(resp.error.message, testing::HasSubstr("Could not send logs to server"));
-			loop.Stop();
-		});
-	EXPECT_EQ(err, error::NoError);
+	{
+		NoAuthHTTPClient client {client_config, loop};
+		err = deps::DeploymentClient().PushLogs(
+			deployment_id,
+			test_log_file_path,
+			client,
+			[&handler_called, &loop](deps::StatusAPIResponse resp) {
+				handler_called = true;
+				EXPECT_NE(resp.error, error::NoError);
+				EXPECT_EQ(
+					resp.error.code, deps::MakeError(deps::RequestBodyTooLargeError, "").code);
+				EXPECT_THAT(resp.error.message, testing::HasSubstr("Could not send logs to server"));
+				loop.Stop();
+			});
+		EXPECT_EQ(err, error::NoError);
 
-	loop.Run();
+		loop.Run();
+	}
 	EXPECT_TRUE(handler_called);
 }
 
