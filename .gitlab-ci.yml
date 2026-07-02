@@ -50,6 +50,10 @@ include:
       coverage_file: coverage.lcov
       flag: unittests
   - component: gitlab.com/renovate-bot/renovate-runner/renovate.gitlab-ci@main
+# Release CI/CD components
+  - component: gitlab.com/Northern.tech/Mender/mendertesting/release-candidate@master
+    inputs:
+      github_repo: mendersoftware/mender
 
 default:
   tags:
