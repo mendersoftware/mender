@@ -472,6 +472,23 @@ error::Error DownloadResumerClient::ScheduleNextResumeRequest() {
 void DownloadResumerClient::CallUserHandler(http::ExpectedIncomingResponsePtr exp_resp) {
 	if (!exp_resp) {
 		DoCancel();
+
+		// If a read is pending on the body reader, complete it with the error as well. When the
+		// body is consumed through a DownloadResumerAsyncReader (streaming download, as the
+		// update state machine does), a terminal error such as giving up on resuming after the
+		// retry backoff is exhausted only reaches the user through the user body handler below.
+		// But that handler cannot recover a streaming read, and the update client intentionally
+		// ignores errors there, relying on them surfacing through the reader instead. Without
+		// completing the pending read, that consumer blocks forever and the daemon wedges
+		// without ever reporting a deployment failure. Delivering the error here does not
+		// disturb the buffered SetBodyWriter case, where the pending read belongs to an internal
+		// AsyncCopy that merely logs the error, and the user body handler below still runs.
+		auto resumer_reader = resumer_reader_.lock();
+		if (resumer_reader && last_read_.handler) {
+			auto handler = last_read_.handler;
+			last_read_.handler = nullptr;
+			handler(expected::unexpected(exp_resp.error()));
+		}
 	}
 	if (resumer_state_->user_handlers_state == DownloadResumerUserHandlersStatus::None) {
 		resumer_state_->user_handlers_state =
