@@ -235,7 +235,12 @@ This is to ensure that:
 
 At the Mender project we are adhering to a slightly modified version of
 [conventional
-commits](https://www.conventionalcommits.org/en/v1.0.0/#specification).
+commits](https://www.conventionalcommits.org/en/v1.0.0/#specification). The full
+commit rules live in one place — the
+[commit specification](https://github.com/mendersoftware/mendertesting/blob/master/commitlint/grammar.md).
+
+Your commit just needs the right format and a sign-off. The `Ticket:` and
+`Changelog:` trailers are optional.
 
 tldr; in general your contribution will fall into one of two categories:
 
@@ -248,7 +253,7 @@ fix: <description of the fix>
 
 <More detailed explanation of the commit>
 
-Ticket: <None|Ticket Nr>
+<OPTIONAL Ticket: <TICKET NUMBER>>
 ```
 
 
@@ -260,7 +265,7 @@ feat: <description of the new feature>
 
 <More detailed explanation of the commit>
 
-Ticket: <None|Ticket Nr>
+<OPTIONAL Ticket: <TICKET NUMBER>>
 ```
 
 ### Use of AI/LLMs in contributions
