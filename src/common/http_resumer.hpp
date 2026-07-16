@@ -74,6 +74,9 @@ public:
 		vector<uint8_t>::iterator end,
 		io::AsyncIoHandler handler) override;
 
+	// Stop the reader with an error (unlike Cancel())
+	void Fail(error::Error err);
+
 	void Cancel() override;
 
 private:
@@ -107,6 +110,26 @@ private:
 // Main class to download the Artifact, which will react to server
 // disconnections or other sorts of short read by scheduling new HTTP
 // requests with `Range` header.
+// This is how it works:
+// - it is an http::ClientInterface class so AsyncCall() is the entry point
+// - the given header and body handlers are wrapped into handlers that
+//   transparently attempt multiple HTTP connections (and requests) in case of
+//   failures (incl. disconnections)
+// - the caller calls MakeBodyAsyncReader() in the header handler and then the
+//   result's AsyncRead() to be able to process chunks of data from potentially
+//   multiple HTTP responses, or
+// - the caller calls SetBodyWriter() in the header handler in order to
+//   capture all data from potentially multiple HTTP responses; however,
+//   SetBodyWriter() internally uses MakeBodyAsyncReader() as well, together
+//   with AsyncCopy() to move the data between the reader and the respective
+//   writer passed as argument
+// - the body handler is only called when there are no more HTTP connections and
+//   requests to be done, i.e. when all data is fetched or when an error occurs,
+//   which may happen after processing any amount of response data (from none to
+//   all but the last byte)
+// - MakeBodyAsyncReader() utilizes the above DownloadResumerAsyncReader class
+//   which then utilizes this class (DownloadResumerClient) to schedule multiple
+//   HTTP connections (and requests), if necessary, at the desired intervals
 // It needs to be used from a shared_ptr
 class DownloadResumerClient :
 	virtual public http::ClientInterface,
