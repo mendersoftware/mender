@@ -301,6 +301,17 @@ DownloadResumerAsyncReader::~DownloadResumerAsyncReader() {
 	Cancel();
 }
 
+void DownloadResumerAsyncReader::Fail(error::Error err) {
+	if (last_read_.handler) {
+		// Remove the handler first in case calling the handler causes this
+		// function to be called again (or another function relying on the
+		// handler).
+		auto handler = last_read_.handler;
+		last_read_.handler = nullptr;
+		handler(expected::unexpected(err));
+	}
+}
+
 void DownloadResumerAsyncReader::Cancel() {
 	auto resumer_client = resumer_client_.lock();
 	if (!*cancelled_ && resumer_client) {
@@ -470,6 +481,18 @@ error::Error DownloadResumerClient::ScheduleNextResumeRequest() {
 void DownloadResumerClient::CallUserHandler(http::ExpectedIncomingResponsePtr exp_resp) {
 	if (!exp_resp) {
 		DoCancel();
+
+		// Fail the resumer_reader because that's the mechanism to deliver the
+		// information about a failure to the consumer of this
+		// (DownloadResumerClient) API handling incoming data through the body
+		// *reader* callback invoked for every chunk of data rather than by
+		// means of the body *handler* callback which is only called once full
+		// body is fetched (see the explanation of how this class works and is
+		// used near its declaration).
+		auto resumer_reader = resumer_reader_.lock();
+		if (resumer_reader) {
+			resumer_reader->Fail(exp_resp.error());
+		}
 	}
 	if (resumer_state_->user_handlers_state == DownloadResumerUserHandlersStatus::None) {
 		resumer_state_->user_handlers_state =
