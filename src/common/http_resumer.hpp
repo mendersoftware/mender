@@ -90,6 +90,14 @@ private:
 
 	weak_ptr<DownloadResumerClient> resumer_client_;
 
+	// Parameters from the last time that user called AsyncRead.
+	// They are re-used when resuming the download
+	struct {
+		vector<uint8_t>::iterator start;
+		vector<uint8_t>::iterator end;
+		io::AsyncIoHandler handler;
+	} last_read_;
+
 	// The header handler needs to manipulate inner_reader_ in order to replace it in
 	// subsequent requests.
 	friend class HeaderHandlerFunctor;
@@ -163,16 +171,6 @@ private:
 		http::ExponentialBackoff backoff;
 		events::Timer wait_timer;
 	} retry_;
-
-	// Parameters from the last time that user called AsyncRead.
-	// They are re-used when resuming the download
-	struct {
-		vector<uint8_t>::iterator start;
-		vector<uint8_t>::iterator end;
-		io::AsyncIoHandler handler;
-	} last_read_;
-
-	friend class DownloadResumerAsyncReader;
 
 	friend class HeaderHandlerFunctor;
 	friend class BodyHandlerFunctor;
