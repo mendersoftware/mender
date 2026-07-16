@@ -322,7 +322,7 @@ error::Error DownloadResumerAsyncReader::AsyncRead(
 			"DownloadResumerAsyncReader::AsyncRead called after stream is destroyed");
 	}
 	// Save user parameters for further resumes of the body read
-	resumer_client->last_read_ = {.start = start, .end = end, .handler = handler};
+	last_read_ = {.start = start, .end = end, .handler = handler};
 	return AsyncReadResume();
 }
 
@@ -334,9 +334,7 @@ error::Error DownloadResumerAsyncReader::AsyncReadResume() {
 			"DownloadResumerAsyncReader::AsyncReadResume called after client is destroyed");
 	}
 	return inner_reader_->AsyncRead(
-		resumer_client->last_read_.start,
-		resumer_client->last_read_.end,
-		[this](io::ExpectedSize result) {
+		last_read_.start, last_read_.end, [this](io::ExpectedSize result) {
 			if (!result) {
 				logger_.Warning(
 					"Reading error, a new request will be re-scheduled. "
@@ -349,7 +347,7 @@ error::Error DownloadResumerAsyncReader::AsyncReadResume() {
 				logger_.Debug("read " + to_string(result.value()) + " bytes");
 				auto resumer_client = resumer_client_.lock();
 				if (resumer_client) {
-					resumer_client->last_read_.handler(result);
+					last_read_.handler(result);
 				} else {
 					logger_.Error(
 						"AsyncRead finish handler called after resumer client has been destroyed.");
