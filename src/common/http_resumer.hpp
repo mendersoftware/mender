@@ -144,6 +144,14 @@ public:
 		http::ResponseHandler header_handler,
 		http::ResponseHandler body_handler) override;
 
+	// NOTE: Unlike the basic http::Client which constructs the reader and
+	//       returns it, leaving the API user code to manage the reader's
+	//       lifetime, the DownloadResumerClient keeps a reference (shared
+	//       pointer) to the reader too and thus manages its lifetime. The
+	//       reason for this is that while the http::Client's reader (and it's
+	//       lifetime) is bound to a socket that gets closed on an error or
+	//       completion, only the DownloadResumerClient itself knows when the
+	//       reader won't produce more data (when no more retries).
 	io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(http::IncomingResponsePtr resp) override;
 
 	void Cancel() override;
@@ -174,7 +182,7 @@ private:
 	void DoCancel();
 
 	shared_ptr<DownloadResumerClientState> resumer_state_;
-	weak_ptr<DownloadResumerAsyncReader> resumer_reader_;
+	shared_ptr<DownloadResumerAsyncReader> resumer_reader_;
 
 	http::Client client_;
 	log::Logger logger_;

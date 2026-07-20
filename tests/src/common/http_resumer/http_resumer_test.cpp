@@ -664,9 +664,7 @@ TEST_F(DownloadResumerTest, ResponseBodyReaderSmallBuffer) {
 			reader->RepeatedAsyncRead(
 				buf.begin(),
 				buf.end(),
-				// Note in particular the capture of `reader`, to keep it alive.
-				[&buf, reader, body_writer, &got_read_error, &got_read_success](
-					io::ExpectedSize result) {
+				[&buf, body_writer, &got_read_error, &got_read_success](io::ExpectedSize result) {
 					if (!result) {
 						EXPECT_TRUE(false) << "Unexpected error: " << result.error().String();
 						got_read_error = true;
@@ -759,23 +757,16 @@ TEST_F(DownloadResumerTest, ServerDownWhileReadingBodyReportsError) {
 	bool got_read_error {false};
 	error::Error read_error;
 
-	// The reader retured by resp->MakeBodyAsyncReader() has to be captured
-	// because otherwise it won't live long enough to repeatedly process the
-	// data it provides and it cannot be lambda-captured because that would
-	// create a circular dependency between shared pointers and thus a memory
-	// leak.
-	io::AsyncReaderPtr resp_reader;
 	client->AsyncCall(
 		req,
-		[&buf, &resp_reader, &got_read_error, &read_error, &loop](
-			http::ExpectedIncomingResponsePtr exp_resp) {
+		[&buf, &got_read_error, &read_error, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
 			auto resp = exp_resp.value();
 
 			auto exp_reader = resp->MakeBodyAsyncReader();
 			ASSERT_TRUE(exp_reader);
-			resp_reader = exp_reader.value();
-			resp_reader->RepeatedAsyncRead(
+			auto reader = exp_reader.value();
+			reader->RepeatedAsyncRead(
 				buf.begin(),
 				buf.end(),
 				[&got_read_error, &read_error, &loop](io::ExpectedSize result) {
@@ -1266,7 +1257,7 @@ TEST_F(DownloadResumerTest, UserCancelInBodyHandler) {
 	EXPECT_TRUE(body_handler_called);
 }
 
-TEST_F(DownloadResumerTest, UserDestroysReader) {
+TEST_F(DownloadResumerTest, UserCancelsReader) {
 	TestEventLoop loop(chrono::seconds(10));
 
 	// Server
@@ -1324,7 +1315,7 @@ TEST_F(DownloadResumerTest, UserDestroysReader) {
 	ASSERT_EQ(err, error::NoError);
 
 	events::Timer timer(loop);
-	timer.AsyncWait(chrono::milliseconds(10), [&reader](error::Error err) { reader.reset(); });
+	timer.AsyncWait(chrono::milliseconds(10), [&reader](error::Error err) { reader->Cancel(); });
 
 	loop.Run();
 
@@ -1336,7 +1327,7 @@ TEST_F(DownloadResumerTest, UserDestroysReader) {
 	EXPECT_TRUE(body_handler_called);
 }
 
-TEST_F(DownloadResumerTest, CallerDestroysReaderInTheMiddleOfAWait) {
+TEST_F(DownloadResumerTest, CallerCancelsReaderInTheMiddleOfAWait) {
 	TestEventLoop loop(chrono::seconds(10));
 
 	// Server
@@ -1405,10 +1396,9 @@ TEST_F(DownloadResumerTest, CallerDestroysReaderInTheMiddleOfAWait) {
 			reader = exp_reader.value();
 			auto writer = make_shared<io::Discard>();
 
-			// Note the use of references instead of pointers. This is to make sure that
-			// the reader gets destroyed by the pointer reset below, otherwise there
-			// would still be a reference here. The writer we keep alive using the
-			// capture.
+			// Note the use of references instead of pointers. This is to avoid
+			// circular dependencies between callbacks and the writer and
+			// reader.
 			io::AsyncCopy(
 				*writer, *reader, [writer](error::Error err) { ASSERT_EQ(err, error::NoError); });
 		};
@@ -1418,12 +1408,10 @@ TEST_F(DownloadResumerTest, CallerDestroysReaderInTheMiddleOfAWait) {
 		EXPECT_EQ(exp_resp.error().code, make_error_condition(errc::operation_canceled));
 	};
 
-	events::Timer destroy_reader(loop);
-	destroy_reader.AsyncWait(chrono::milliseconds(500), [&loop, &reader](error::Error err) {
+	events::Timer cancel_reader(loop);
+	cancel_reader.AsyncWait(chrono::milliseconds(500), [&loop, &reader](error::Error err) {
 		ASSERT_EQ(err, error::NoError);
-		// Make sure this destroys the reader.
-		EXPECT_EQ(reader.use_count(), 1);
-		reader.reset();
+		reader->Cancel();
 		loop.Stop();
 	});
 
