@@ -79,7 +79,7 @@ public:
 	}
 
 	void ExpireToken();
-	error::Error WithToken(AuthenticatedAction action);
+	void WithToken(AuthenticatedAction action);
 
 	// Register a callback to be called on re-authentication. Will overwrite the
 	// stored callback with the new one.

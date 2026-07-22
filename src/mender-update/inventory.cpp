@@ -146,7 +146,7 @@ error::Error InventoryClient::PushInventoryData(
 	req->SetBodyGenerator(payload_gen);
 
 	auto received_body = make_shared<vector<uint8_t>>();
-	return client.AsyncCall(
+	client.AsyncCall(
 		req,
 		[this, received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
 			this->HeaderHandler(received_body, api_handler, exp_resp);
@@ -186,6 +186,8 @@ error::Error InventoryClient::PushInventoryData(
 							+ " from inventory API: " + err_str)});
 			}
 		});
+
+	return error::NoError;
 }
 
 void InventoryClient::HeaderHandler(

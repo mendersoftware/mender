@@ -52,15 +52,18 @@ public:
 	NoAuthHTTPClient(const http::ClientConfig &config, events::EventLoop &event_loop) :
 		http_client_ {config, event_loop} {};
 
-	error::Error AsyncCall(
+	void AsyncCall(
 		api::APIRequestPtr req,
 		http::ResponseHandler header_handler,
 		http::ResponseHandler body_handler) override {
 		auto ex_req = req->WithAuthData({TEST_SERVER, ""});
 		if (!ex_req) {
-			return ex_req.error();
+			// Not reached in tests (TEST_SERVER is non-empty); kept so the mock honors
+			// api::Client's contract of always delivering the outcome via the handler.
+			header_handler(common::expected::unexpected(ex_req.error()));
+			return;
 		}
-		return http_client_.AsyncCall(ex_req.value(), header_handler, body_handler);
+		http_client_.AsyncCall(ex_req.value(), header_handler, body_handler);
 	}
 
 private:
