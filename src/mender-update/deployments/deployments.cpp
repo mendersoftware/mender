@@ -224,11 +224,7 @@ error::Error DeploymentClient::CheckNewDeployments(
 		} else if (status == http::StatusNotFound) {
 			log::Debug(
 				"POST request to v2 version of the deployments API failed, falling back to v1 version and GET");
-			auto err = client.AsyncCall(v1_req, header_handler, v1_body_handler);
-			if (err != error::NoError) {
-				api_handler(expected::unexpected(CheckUpdatesAPIResponseError {
-					status, nullopt, err.WithContext("While calling v1 endpoint")}));
-			}
+			client.AsyncCall(v1_req, header_handler, v1_body_handler);
 		} else {
 			auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
 			string err_str;
@@ -246,7 +242,8 @@ error::Error DeploymentClient::CheckNewDeployments(
 		}
 	};
 
-	return client.AsyncCall(v2_req, header_handler, v2_body_handler);
+	client.AsyncCall(v2_req, header_handler, v2_body_handler);
+	return error::NoError;
 }
 
 void DeploymentClient::HeaderHandler(
@@ -319,7 +316,7 @@ error::Error DeploymentClient::PushStatus(
 	req->SetBodyGenerator(payload_gen);
 
 	auto received_body = make_shared<vector<uint8_t>>();
-	return client.AsyncCall(
+	client.AsyncCall(
 		req,
 		[this, received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
 			this->PushStatusHeaderHandler(received_body, api_handler, exp_resp);
@@ -361,6 +358,8 @@ error::Error DeploymentClient::PushStatus(
 							+ " from status API: " + err_str)});
 			}
 		});
+
+	return error::NoError;
 }
 
 void DeploymentClient::PushStatusHeaderHandler(
@@ -761,7 +760,7 @@ error::Error DeploymentClient::PushLogs(
 	});
 
 	auto received_body = make_shared<vector<uint8_t>>();
-	return client.AsyncCall(
+	client.AsyncCall(
 		req,
 		[this, received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
 			this->PushLogsHeaderHandler(received_body, api_handler, exp_resp);
@@ -800,6 +799,8 @@ error::Error DeploymentClient::PushLogs(
 							+ " from logs API: " + err_str)});
 			}
 		});
+
+	return error::NoError;
 }
 
 void DeploymentClient::PushLogsHeaderHandler(

@@ -55,32 +55,49 @@ void Authenticator::ExpireToken() {
 	}
 }
 
-error::Error Authenticator::WithToken(AuthenticatedAction action) {
-	pending_actions_.push_back(action);
-
+void Authenticator::WithToken(AuthenticatedAction action) {
 	auto err = StartWatchingTokenSignal();
 	if (err != error::NoError) {
-		// Should never fail. We rely on the signal heavily so let's fail
-		// hard if it does.
-		return err;
+		// StartWatchingTokenSignal can fail while D-Bus is unavailable (e.g.
+		// dbus.socket is down). Deliver the failure to THIS action only, via the
+		// event loop, and leave pending_actions_ and token_fetch_in_progress_
+		// untouched: any actions already queued are waiting on an unrelated, in-flight
+		// token fetch and must not be failed with this error. They are delivered when
+		// that fetch resolves, or failed by whichever token-fetch timeout is pending
+		// if it never does resolve.
+		//
+		// This branch is currently never reached while other actions are queued: a
+		// non-empty queue means a fetch is in progress, and the serialized state
+		// machine issues no further WithToken() until that fetch's callback drains the
+		// queue (no WithToken will take place because we are still in the same state, so no new
+		// requests are made). Delivering only this action is therefore defensive, but it keeps the
+		// behavior correct should that ever change.
+		ExpectedAuthData ex_auth_data = expected::unexpected(err);
+		loop_.Post([action, ex_auth_data]() { action(ex_auth_data); });
+		return;
 	}
 
 	if (token_fetch_in_progress_) {
 		// Already waiting for a new token.
-		return error::NoError;
+		pending_actions_.push_back(action);
+		return;
 	}
-	// else => should fetch the token, cache it and call all pending actions
+	// No fetch is in progress, so this call starts one. GetJwtToken() requests the
+	// token asynchronously; the action is queued below and delivered, together with
+	// any others waiting, once the token resolves (via HandleReceivedToken ->
+	// PostPendingActions).
 
 	err = GetJwtToken();
 	if (err != error::NoError) {
-		// No token and failed to try to get one (should never happen).
+		// No token and failed to try to get one, can happen while dbus.socket is down.
 		ExpectedAuthData ex_auth_data = expected::unexpected(err);
-		PostPendingActions(ex_auth_data);
-		return err;
+		loop_.Post([action, ex_auth_data]() { action(ex_auth_data); });
+		return;
 	}
 	// else record that token is already being fetched (by GetJwtToken()).
+	pending_actions_.push_back(action);
 	token_fetch_in_progress_ = true;
-	return error::NoError;
+	return;
 }
 
 void Authenticator::PostPendingActions(const ExpectedAuthData &ex_auth_data) {

@@ -148,7 +148,7 @@ TEST_F(APIClientTests, ClientBasicTest) {
 	auto received_body = make_shared<vector<uint8_t> >();
 	bool header_handler_called = false;
 	bool body_handler_called = false;
-	auto err = client.AsyncCall(
+	client.AsyncCall(
 		req,
 		[&header_handler_called, received_body](http::ExpectedIncomingResponsePtr exp_resp) {
 			EXPECT_FALSE(header_handler_called);
@@ -172,7 +172,6 @@ TEST_F(APIClientTests, ClientBasicTest) {
 			loop.Stop();
 		});
 
-	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 	loop.Run();
 
 	EXPECT_TRUE(header_handler_called);
@@ -255,7 +254,7 @@ TEST_F(APIClientTests, TwoClientsTest) {
 	auto received_body1 = make_shared<vector<uint8_t> >();
 	bool header_handler_called1 = false;
 	bool body_handler_called1 = false;
-	auto err = client1.AsyncCall(
+	client1.AsyncCall(
 		req1,
 		[&header_handler_called1, received_body1](http::ExpectedIncomingResponsePtr exp_resp) {
 			EXPECT_FALSE(header_handler_called1);
@@ -280,7 +279,6 @@ TEST_F(APIClientTests, TwoClientsTest) {
 			loop.Stop();
 		});
 
-	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 
 	loop.Run();
 
@@ -293,7 +291,7 @@ TEST_F(APIClientTests, TwoClientsTest) {
 	auto received_body2 = make_shared<vector<uint8_t> >();
 	bool header_handler_called2 = false;
 	bool body_handler_called2 = false;
-	err = client2.AsyncCall(
+	client2.AsyncCall(
 		req2,
 		[&header_handler_called2, received_body2](http::ExpectedIncomingResponsePtr exp_resp) {
 			EXPECT_FALSE(header_handler_called2);
@@ -316,7 +314,6 @@ TEST_F(APIClientTests, TwoClientsTest) {
 			EXPECT_EQ(common::StringFromByteVector(*received_body2), test_data2);
 			loop.Stop();
 		});
-	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 
 	loop.Run();
 
@@ -501,14 +498,12 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 
 		EXPECT_EQ(common::StringFromByteVector(*received_body1), test_data1);
 		loop.Post([&client, req2, header_handler2, body_handler2]() {
-			auto err = client.AsyncCall(req2, header_handler2, body_handler2);
-			EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+			client.AsyncCall(req2, header_handler2, body_handler2);
 		});
 	};
 
-	auto err = client.AsyncCall(req1, header_handler1, body_handler1);
+	client.AsyncCall(req1, header_handler1, body_handler1);
 
-	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 	loop.Run();
 
 	EXPECT_TRUE(header_handler_called1);
@@ -541,7 +536,7 @@ TEST_F(APIClientTests, ClientEarlyAuthErrorTest) {
 	bool header_handler_called = false;
 	bool body_handler_called = false;
 	events::Timer timer {loop};
-	auto err = client.AsyncCall(
+	client.AsyncCall(
 		req,
 		[&header_handler_called, &timer, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
 			EXPECT_FALSE(header_handler_called);
@@ -560,7 +555,6 @@ TEST_F(APIClientTests, ClientEarlyAuthErrorTest) {
 			loop.Stop();
 		});
 
-	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 	loop.Run();
 
 	EXPECT_TRUE(header_handler_called);
@@ -712,14 +706,12 @@ TEST_F(APIClientTests, ClientAuthenticationTimeoutFailureTest) {
 
 		EXPECT_EQ(common::StringFromByteVector(*received_body1), test_data1);
 		loop.Post([&client, req2, header_handler2, body_handler2]() {
-			auto err = client.AsyncCall(req2, header_handler2, body_handler2);
-			EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+			client.AsyncCall(req2, header_handler2, body_handler2);
 		});
 	};
 
-	auto err = client.AsyncCall(req1, header_handler1, body_handler1);
+	client.AsyncCall(req1, header_handler1, body_handler1);
 
-	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 	loop.Run();
 
 	EXPECT_TRUE(header_handler_called1);
@@ -878,14 +870,12 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 
 		EXPECT_EQ(common::StringFromByteVector(*received_body1), test_data1);
 		loop.Post([&client, req2, header_handler2, body_handler2]() {
-			auto err = client.AsyncCall(req2, header_handler2, body_handler2);
-			EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+			client.AsyncCall(req2, header_handler2, body_handler2);
 		});
 	};
 
-	auto err = client.AsyncCall(req1, header_handler1, body_handler1);
+	client.AsyncCall(req1, header_handler1, body_handler1);
 
-	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 	loop.Run();
 
 	EXPECT_TRUE(header_handler_called1);
