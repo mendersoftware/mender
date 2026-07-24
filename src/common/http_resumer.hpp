@@ -74,6 +74,9 @@ public:
 		vector<uint8_t>::iterator end,
 		io::AsyncIoHandler handler) override;
 
+	// Stop the reader with an error (unlike Cancel())
+	void Fail(error::Error err);
+
 	void Cancel() override;
 
 private:
@@ -90,6 +93,14 @@ private:
 
 	weak_ptr<DownloadResumerClient> resumer_client_;
 
+	// Parameters from the last time that user called AsyncRead.
+	// They are re-used when resuming the download
+	struct {
+		vector<uint8_t>::iterator start;
+		vector<uint8_t>::iterator end;
+		io::AsyncIoHandler handler;
+	} last_read_;
+
 	// The header handler needs to manipulate inner_reader_ in order to replace it in
 	// subsequent requests.
 	friend class HeaderHandlerFunctor;
@@ -99,6 +110,26 @@ private:
 // Main class to download the Artifact, which will react to server
 // disconnections or other sorts of short read by scheduling new HTTP
 // requests with `Range` header.
+// This is how it works:
+// - it is an http::ClientInterface class so AsyncCall() is the entry point
+// - the given header and body handlers are wrapped into handlers that
+//   transparently attempt multiple HTTP connections (and requests) in case of
+//   failures (incl. disconnections)
+// - the caller calls MakeBodyAsyncReader() in the header handler and then the
+//   result's AsyncRead() to be able to process chunks of data from potentially
+//   multiple HTTP responses, or
+// - the caller calls SetBodyWriter() in the header handler in order to
+//   capture all data from potentially multiple HTTP responses; however,
+//   SetBodyWriter() internally uses MakeBodyAsyncReader() as well, together
+//   with AsyncCopy() to move the data between the reader and the respective
+//   writer passed as argument
+// - the body handler is only called when there are no more HTTP connections and
+//   requests to be done, i.e. when all data is fetched or when an error occurs,
+//   which may happen after processing any amount of response data (from none to
+//   all but the last byte)
+// - MakeBodyAsyncReader() utilizes the above DownloadResumerAsyncReader class
+//   which then utilizes this class (DownloadResumerClient) to schedule multiple
+//   HTTP connections (and requests), if necessary, at the desired intervals
 // It needs to be used from a shared_ptr
 class DownloadResumerClient :
 	virtual public http::ClientInterface,
@@ -113,6 +144,14 @@ public:
 		http::ResponseHandler header_handler,
 		http::ResponseHandler body_handler) override;
 
+	// NOTE: Unlike the basic http::Client which constructs the reader and
+	//       returns it, leaving the API user code to manage the reader's
+	//       lifetime, the DownloadResumerClient keeps a reference (shared
+	//       pointer) to the reader too and thus manages its lifetime. The
+	//       reason for this is that while the http::Client's reader (and it's
+	//       lifetime) is bound to a socket that gets closed on an error or
+	//       completion, only the DownloadResumerClient itself knows when the
+	//       reader won't produce more data (when no more retries).
 	io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(http::IncomingResponsePtr resp) override;
 
 	void Cancel() override;
@@ -143,7 +182,7 @@ private:
 	void DoCancel();
 
 	shared_ptr<DownloadResumerClientState> resumer_state_;
-	weak_ptr<DownloadResumerAsyncReader> resumer_reader_;
+	shared_ptr<DownloadResumerAsyncReader> resumer_reader_;
 
 	http::Client client_;
 	log::Logger logger_;
@@ -163,16 +202,6 @@ private:
 		http::ExponentialBackoff backoff;
 		events::Timer wait_timer;
 	} retry_;
-
-	// Parameters from the last time that user called AsyncRead.
-	// They are re-used when resuming the download
-	struct {
-		vector<uint8_t>::iterator start;
-		vector<uint8_t>::iterator end;
-		io::AsyncIoHandler handler;
-	} last_read_;
-
-	friend class DownloadResumerAsyncReader;
 
 	friend class HeaderHandlerFunctor;
 	friend class BodyHandlerFunctor;

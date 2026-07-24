@@ -176,7 +176,7 @@ void HeaderHandlerFunctor::HandleNextResponse(
 	// If an error occurs during handling here, cancel the resuming and call the user handler.
 
 	auto resp = exp_resp.value();
-	auto resumer_reader = resumer_client->resumer_reader_.lock();
+	auto resumer_reader = resumer_client->resumer_reader_;
 	if (!resumer_reader) {
 		// Errors should already have been handled as part of the Cancel() inside the
 		// destructor of the reader.
@@ -262,7 +262,7 @@ void BodyHandlerFunctor::operator()(http::ExpectedIncomingResponsePtr exp_resp) 
 		resumer_client->resumer_state_->offset < resumer_client->resumer_state_->content_length;
 	if (!exp_resp || (is_range_response && is_data_missing)) {
 		if (!exp_resp) {
-			auto resumer_reader = resumer_client->resumer_reader_.lock();
+			auto resumer_reader = resumer_client->resumer_reader_;
 			if (resumer_reader) {
 				resumer_reader->inner_reader_.reset();
 			}
@@ -301,6 +301,17 @@ DownloadResumerAsyncReader::~DownloadResumerAsyncReader() {
 	Cancel();
 }
 
+void DownloadResumerAsyncReader::Fail(error::Error err) {
+	if (last_read_.handler) {
+		// Remove the handler first in case calling the handler causes this
+		// function to be called again (or another function relying on the
+		// handler).
+		auto handler = last_read_.handler;
+		last_read_.handler = nullptr;
+		handler(expected::unexpected(err));
+	}
+}
+
 void DownloadResumerAsyncReader::Cancel() {
 	auto resumer_client = resumer_client_.lock();
 	if (!*cancelled_ && resumer_client) {
@@ -322,7 +333,7 @@ error::Error DownloadResumerAsyncReader::AsyncRead(
 			"DownloadResumerAsyncReader::AsyncRead called after stream is destroyed");
 	}
 	// Save user parameters for further resumes of the body read
-	resumer_client->last_read_ = {.start = start, .end = end, .handler = handler};
+	last_read_ = {.start = start, .end = end, .handler = handler};
 	return AsyncReadResume();
 }
 
@@ -334,9 +345,7 @@ error::Error DownloadResumerAsyncReader::AsyncReadResume() {
 			"DownloadResumerAsyncReader::AsyncReadResume called after client is destroyed");
 	}
 	return inner_reader_->AsyncRead(
-		resumer_client->last_read_.start,
-		resumer_client->last_read_.end,
-		[this](io::ExpectedSize result) {
+		last_read_.start, last_read_.end, [this](io::ExpectedSize result) {
 			if (!result) {
 				logger_.Warning(
 					"Reading error, a new request will be re-scheduled. "
@@ -349,7 +358,7 @@ error::Error DownloadResumerAsyncReader::AsyncReadResume() {
 				logger_.Debug("read " + to_string(result.value()) + " bytes");
 				auto resumer_client = resumer_client_.lock();
 				if (resumer_client) {
-					resumer_client->last_read_.handler(result);
+					last_read_.handler(result);
 				} else {
 					logger_.Error(
 						"AsyncRead finish handler called after resumer client has been destroyed.");
@@ -375,6 +384,7 @@ DownloadResumerClient::~DownloadResumerClient() {
 		logger_.Warning("DownloadResumerClient destroyed while request is still active!");
 	}
 	client_.Cancel();
+	resumer_reader_.reset();
 }
 
 error::Error DownloadResumerClient::AsyncCall(
@@ -395,6 +405,7 @@ error::Error DownloadResumerClient::AsyncCall(
 
 	*cancelled_ = false;
 	retry_.backoff.Reset();
+	resumer_reader_.reset();
 	resumer_state_->active_state = DownloadResumerActiveStatus::Inactive;
 	resumer_state_->user_handlers_state = DownloadResumerUserHandlersStatus::None;
 	return client_.AsyncCall(req, resumer_header_handler, resumer_body_handler);
@@ -472,6 +483,17 @@ error::Error DownloadResumerClient::ScheduleNextResumeRequest() {
 void DownloadResumerClient::CallUserHandler(http::ExpectedIncomingResponsePtr exp_resp) {
 	if (!exp_resp) {
 		DoCancel();
+
+		// Fail the resumer_reader because that's the mechanism to deliver the
+		// information about a failure to the consumer of this
+		// (DownloadResumerClient) API handling incoming data through the body
+		// *reader* callback invoked for every chunk of data rather than by
+		// means of the body *handler* callback which is only called once full
+		// body is fetched (see the explanation of how this class works and is
+		// used near its declaration).
+		if (resumer_reader_) {
+			resumer_reader_->Fail(exp_resp.error());
+		}
 	}
 	if (resumer_state_->user_handlers_state == DownloadResumerUserHandlersStatus::None) {
 		resumer_state_->user_handlers_state =
@@ -483,6 +505,8 @@ void DownloadResumerClient::CallUserHandler(http::ExpectedIncomingResponsePtr ex
 		resumer_state_->user_handlers_state = DownloadResumerUserHandlersStatus::BodyHandlerCalled;
 		DoCancel();
 		user_body_handler_(exp_resp);
+		// we are done, the body reader won't produce any more data
+		resumer_reader_.reset();
 	} else {
 		string msg;
 		if (!exp_resp) {
@@ -498,6 +522,7 @@ void DownloadResumerClient::CallUserHandler(http::ExpectedIncomingResponsePtr ex
 void DownloadResumerClient::Cancel() {
 	DoCancel();
 	client_.Cancel();
+	resumer_reader_.reset();
 };
 
 void DownloadResumerClient::DoCancel() {

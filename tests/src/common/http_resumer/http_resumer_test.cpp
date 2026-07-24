@@ -664,9 +664,7 @@ TEST_F(DownloadResumerTest, ResponseBodyReaderSmallBuffer) {
 			reader->RepeatedAsyncRead(
 				buf.begin(),
 				buf.end(),
-				// Note in particular the capture of `reader`, to keep it alive.
-				[&buf, reader, body_writer, &got_read_error, &got_read_success](
-					io::ExpectedSize result) {
+				[&buf, body_writer, &got_read_error, &got_read_success](io::ExpectedSize result) {
 					if (!result) {
 						EXPECT_TRUE(false) << "Unexpected error: " << result.error().String();
 						got_read_error = true;
@@ -690,6 +688,113 @@ TEST_F(DownloadResumerTest, ResponseBodyReaderSmallBuffer) {
 
 	EXPECT_TRUE(got_read_success);
 	EXPECT_FALSE(got_read_error);
+}
+
+// MEN-9954: when the body is consumed through the async reader (as the update
+// state machine does) and the server stays down until the resumer exhausts its
+// retry backoff, the "giving up" error must be delivered through the reader's
+// pending read handler and not just through the user body handler (which the
+// update client intentionally ignores)
+TEST_F(DownloadResumerTest, ServerDownWhileReadingBodyReportsError) {
+	TestEventLoop loop(chrono::seconds(30));
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+	events::Timer kill_timer(loop);
+	bool kill_scheduled {false};
+
+	int server_num_requests = 0;
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&server, &server_num_requests, &kill_timer, &kill_scheduled](
+			http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			server_num_requests++;
+
+			auto size = RangeBodyOfXes::TARGET_BODY_SIZE;
+			resp->SetStatusCodeAndMessage(200, "Success");
+			// Announce the full length, but only deliver a small part of it, so the client
+			// sees a short read and tries to resume. Keep it small so the first response
+			// finishes well before the server is taken down below.
+			resp->SetHeader("Content-Length", to_string(size));
+			auto partial_body = make_shared<RangeBodyOfXes>();
+			partial_body->SetRanges(0, 4999);
+			resp->SetBodyReader(partial_body);
+
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+
+			// After the first (partial) response, take the server down and keep it down, so
+			// every resume attempt fails until the resumer gives up. Cancelling from a timer
+			// (rather than the reply handler) avoids tearing down the stream mid-write.
+			if (!kill_scheduled) {
+				kill_scheduled = true;
+				kill_timer.AsyncWait(
+					chrono::milliseconds(100), [&server](error::Error) { server.Cancel(); });
+			}
+		});
+
+	http::ClientConfig client_config;
+	shared_ptr<http_resumer::DownloadResumerClient> client =
+		make_shared<http_resumer::DownloadResumerClient>(client_config, loop);
+	// First resume waits longer than the server-kill delay above, so the server is already
+	// down by the time we retry, and the retries are then exhausted quickly.
+	client->SetSmallestWaitInterval(chrono::milliseconds(200));
+
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+
+	vector<uint8_t> buf;
+	buf.resize(1235);
+	bool got_read_error {false};
+	error::Error read_error;
+
+	client->AsyncCall(
+		req,
+		[&buf, &got_read_error, &read_error, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+
+			auto exp_reader = resp->MakeBodyAsyncReader();
+			ASSERT_TRUE(exp_reader);
+			auto reader = exp_reader.value();
+			reader->RepeatedAsyncRead(
+				buf.begin(),
+				buf.end(),
+				[&got_read_error, &read_error, &loop](io::ExpectedSize result) {
+					if (!result) {
+						got_read_error = true;
+						read_error = result.error();
+						loop.Stop();
+						return io::Repeat::No;
+					}
+					if (result.value() == 0) {
+						// Unexpected clean EOF; stop so the test does not hang.
+						loop.Stop();
+						return io::Repeat::No;
+					}
+					return io::Repeat::Yes;
+				});
+		},
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			// Body handler intentionally ignores errors, exactly like the update state
+			// machine: the error must surface through the reader instead.
+		});
+
+	loop.Run();
+
+	EXPECT_TRUE(got_read_error)
+		<< "resumer gave up but the reader never reported an error (the daemon would hang here)";
+	EXPECT_EQ(read_error.code, http::MakeError(http::DownloadResumerError, "").code)
+		<< "unexpected error: " << read_error.String();
 }
 
 TEST_F(DownloadResumerTest, TwoRangesClientReuse) {
@@ -1152,7 +1257,7 @@ TEST_F(DownloadResumerTest, UserCancelInBodyHandler) {
 	EXPECT_TRUE(body_handler_called);
 }
 
-TEST_F(DownloadResumerTest, UserDestroysReader) {
+TEST_F(DownloadResumerTest, UserCancelsReader) {
 	TestEventLoop loop(chrono::seconds(10));
 
 	// Server
@@ -1210,7 +1315,7 @@ TEST_F(DownloadResumerTest, UserDestroysReader) {
 	ASSERT_EQ(err, error::NoError);
 
 	events::Timer timer(loop);
-	timer.AsyncWait(chrono::milliseconds(10), [&reader](error::Error err) { reader.reset(); });
+	timer.AsyncWait(chrono::milliseconds(10), [&reader](error::Error err) { reader->Cancel(); });
 
 	loop.Run();
 
@@ -1222,7 +1327,7 @@ TEST_F(DownloadResumerTest, UserDestroysReader) {
 	EXPECT_TRUE(body_handler_called);
 }
 
-TEST_F(DownloadResumerTest, CallerDestroysReaderInTheMiddleOfAWait) {
+TEST_F(DownloadResumerTest, CallerCancelsReaderInTheMiddleOfAWait) {
 	TestEventLoop loop(chrono::seconds(10));
 
 	// Server
@@ -1291,10 +1396,9 @@ TEST_F(DownloadResumerTest, CallerDestroysReaderInTheMiddleOfAWait) {
 			reader = exp_reader.value();
 			auto writer = make_shared<io::Discard>();
 
-			// Note the use of references instead of pointers. This is to make sure that
-			// the reader gets destroyed by the pointer reset below, otherwise there
-			// would still be a reference here. The writer we keep alive using the
-			// capture.
+			// Note the use of references instead of pointers. This is to avoid
+			// circular dependencies between callbacks and the writer and
+			// reader.
 			io::AsyncCopy(
 				*writer, *reader, [writer](error::Error err) { ASSERT_EQ(err, error::NoError); });
 		};
@@ -1304,12 +1408,10 @@ TEST_F(DownloadResumerTest, CallerDestroysReaderInTheMiddleOfAWait) {
 		EXPECT_EQ(exp_resp.error().code, make_error_condition(errc::operation_canceled));
 	};
 
-	events::Timer destroy_reader(loop);
-	destroy_reader.AsyncWait(chrono::milliseconds(500), [&loop, &reader](error::Error err) {
+	events::Timer cancel_reader(loop);
+	cancel_reader.AsyncWait(chrono::milliseconds(500), [&loop, &reader](error::Error err) {
 		ASSERT_EQ(err, error::NoError);
-		// Make sure this destroys the reader.
-		EXPECT_EQ(reader.use_count(), 1);
-		reader.reset();
+		reader->Cancel();
 		loop.Stop();
 	});
 

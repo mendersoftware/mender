@@ -235,9 +235,7 @@ This is to ensure that:
 
 At the Mender project we are adhering to a slightly modified version of
 [conventional
-commits](https://www.conventionalcommits.org/en/v1.0.0/#specification). The full
-specification of which can be found
-[here](https://github.com/mendersoftware/mendertesting/blob/master/commitlint/grammar.md).
+commits](https://www.conventionalcommits.org/en/v1.0.0/#specification).
 
 tldr; in general your contribution will fall into one of two categories:
 
@@ -250,7 +248,6 @@ fix: <description of the fix>
 
 <More detailed explanation of the commit>
 
-Changelog: <None|Title|Commit|All>
 Ticket: <None|Ticket Nr>
 ```
 
@@ -263,7 +260,6 @@ feat: <description of the new feature>
 
 <More detailed explanation of the commit>
 
-Changelog: <None|Title|Commit|All>
 Ticket: <None|Ticket Nr>
 ```
 

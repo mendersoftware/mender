@@ -104,19 +104,27 @@ ReaderFromAsyncReader::ReaderFromAsyncReader(EventLoop &event_loop, mio::AsyncRe
 
 mio::ExpectedSize ReaderFromAsyncReader::Read(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
-	mio::ExpectedSize read;
-	bool finished = false;
-	event_loop_.Post([start, end, this, &finished, &read]() {
-		auto err =
-			reader_->AsyncRead(start, end, [this, &finished, &read](mio::ExpectedSize num_read) {
-				read = num_read;
-				finished = true;
-				event_loop_.Stop();
+	auto read = make_shared<mio::ExpectedSize>();
+	auto loop_stopped_here = make_shared<bool>(false);
+	event_loop_.Post([start, end, this, read, loop_stopped_here]() {
+		auto err = reader_->AsyncRead(
+			start, end, [this, read, loop_stopped_here](mio::ExpectedSize num_read) {
+				*read = num_read;
+				// Make sure to only stop the event loop here *once* because
+				// it's only recursively run once below. If this handler gets
+				// called multiple time, always stopping the loop here could
+				// stop the loop for good.
+				if (!*loop_stopped_here) {
+					event_loop_.Stop();
+					*loop_stopped_here = true;
+				}
 			});
 		if (err != error::NoError) {
-			read = expected::unexpected(err);
-			finished = true;
-			event_loop_.Stop();
+			*read = expected::unexpected(err);
+			if (!*loop_stopped_here) {
+				event_loop_.Stop();
+				*loop_stopped_here = true;
+			}
 		}
 	});
 
@@ -124,7 +132,7 @@ mio::ExpectedSize ReaderFromAsyncReader::Read(
 	// loop recursively to keep processing events.
 	event_loop_.Run();
 
-	if (!finished) {
+	if (!*loop_stopped_here) {
 		// If this happens then it means that the event loop was stopped by somebody
 		// else. We have no choice now but to return error, since we have to get out of this
 		// stack frame. We also need to re-stop the event loop, since the first stop was
@@ -134,7 +142,7 @@ mio::ExpectedSize ReaderFromAsyncReader::Read(
 			error::Error(make_error_condition(errc::operation_canceled), "Event loop was stopped"));
 	}
 
-	return read;
+	return *read;
 }
 
 TeeReader::ExpectedTeeReaderLeafPtr TeeReader::MakeAsyncReader() {
