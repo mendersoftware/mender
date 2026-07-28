@@ -84,7 +84,7 @@ test:unit:
 test:backward-compat:
   stage: test
   # Keep the image aligned with the oldest LTS at mender-dist-packages
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:12
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/debian:13
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
     - apt update && apt install -yyq ccache g++ git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libboost-regex-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus cmake
