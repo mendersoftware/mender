@@ -586,6 +586,11 @@ error::Error JsonLogMessagesReader::SanitizeLogs() {
 
 error::Error JsonLogMessagesReader::Rewind() {
 	AssertOrReturnError(!sanitized_fpath_.empty());
+
+	if (at_start_) {
+		return error::NoError;
+	}
+
 	header_rem_ = header_.size();
 	closing_rem_ = closing_.size();
 	bad_data_msg_rem_ = bad_data_msg_.size();
@@ -618,6 +623,7 @@ ExpectedSize JsonLogMessagesReader::Read(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
 	AssertOrReturnUnexpected(!sanitized_fpath_.empty());
 
+	at_start_ = false;
 	if (header_rem_ > 0) {
 		io::Vsize target_size = end - start;
 		auto copy_end = copy_n(
