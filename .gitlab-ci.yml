@@ -156,17 +156,27 @@ test:static:no-dbus:
     EXTRA_CMAKE_ARGS: -D MENDER_USE_DBUS=OFF -D MENDER_EMBED_MENDER_AUTH=ON
   extends: .test:static-template
 
-test:modules-artifact-gen:
+.test:pytest-template:
   stage: test
   image: registry.gitlab.com/northern.tech/mender/mender-test-containers/mender-base-ubuntu:master
   before_script:
     # Test dependencies
     - pip install -r support/modules-artifact-gen/tests/requirements.txt --break-system-packages
   script:
-    - python3 -m pytest --verbose --junitxml=results.xml support/modules-artifact-gen/tests
+    - python3 -m pytest --verbose --junitxml=results.xml ${PYTEST_PATH}
   after_script:
     - export MANTRA_PROJECT_NAME="client_general"
     - !reference [.mantra-push-results]
+
+test:modules-artifact-gen:
+  variables:
+    PYTEST_PATH: support/modules-artifact-gen/tests
+  extends: .test:pytest-template
+
+test:update-modules:
+  variables:
+    PYTEST_PATH: support/modules/tests
+  extends: .test:pytest-template
 
 test:docker:
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker:${DOCKER_VERSION}

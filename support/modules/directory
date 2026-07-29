@@ -26,9 +26,10 @@ case "$STATE" in
         test "$dest_dir" = "/" && \
             echo "Error: destination dir is '/', install not supported." && exit 1
         mkdir -p $dest_dir
-        if ! tar -cf ${prev_files_tar} -C ${dest_dir} .
+        ret=0
+        tar -cf ${prev_files_tar} -C ${dest_dir} . || ret=$?
+        if [ "$ret" -ne 0 ]
         then
-            ret=$?
             # Make sure there is no half-backup lying around.
             rm -f ${prev_files_tar}
             exit $ret
