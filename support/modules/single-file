@@ -40,9 +40,11 @@ case "$STATE" in
         mkdir -p "${tmp_backup_dir}"
         if test -f "${dest_dir}/${filename}"
         then
-            if ! safe_copy "${dest_dir}/${filename}" "${tmp_backup_dir}/${filename}"
+            ret=0
+            safe_copy "${dest_dir}/${filename}" "${tmp_backup_dir}/${filename}" \
+                || ret=$?
+            if [ "$ret" -ne 0 ]
             then
-                ret=$?
                 # Make sure there is no half-backup lying around.
                 rm -rf "${tmp_backup_dir}"
                 exit $ret
