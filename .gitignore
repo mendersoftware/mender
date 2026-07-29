@@ -49,6 +49,10 @@ config.h
 # Test reports
 /reports
 
+# Python test caches
+__pycache__/
+.pytest_cache/
+
 # Misc
 /.clang-format
 build/
