@@ -153,7 +153,7 @@ test:modules-artifact-gen:
     - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/workstation-tools ubuntu/jammy/stable main" | tee /etc/apt/sources.list.d/mender.list
     - apt update && apt install -yy mender-artifact
     # Test dependencies
-    - pip install -r support/modules-artifact-gen/tests/requirements.txt
+    - pip install -r support/modules-artifact-gen/tests/requirements.txt --break-system-packages
   script:
     - python3 -m pytest support/modules-artifact-gen/tests
 
@@ -179,7 +179,7 @@ publish:tests:
     - !reference [.qa-common-network-apt-retry, before_script]
     # Install dependencies
     - apt update && apt install -yyq lcov
-    - pip install cpp-coveralls pyyaml
+    - pip install cpp-coveralls pyyaml --break-system-packages
 
     # eddyxu/cpp-coveralls appears dead, but there doesn't seem to be an
     # alternative. Use this patch from someone who attempted to fix it. An
