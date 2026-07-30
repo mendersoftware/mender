@@ -49,7 +49,7 @@ http::ExpectedOutgoingRequestPtr APIRequest::WithAuthData(const auth::AuthData &
 	return out_req;
 }
 
-error::Error HTTPClient::AsyncCall(
+void HTTPClient::AsyncCall(
 	APIRequestPtr req, http::ResponseHandler header_handler, http::ResponseHandler body_handler) {
 	// If the first request fails with 401, we need to get a new token and then
 	// try again with the new token. We should avoid using the same
@@ -89,70 +89,68 @@ error::Error HTTPClient::AsyncCall(
 			}
 		};
 
-	return authenticator_.WithToken(
-		[this, req, header_handler, body_handler, reauthenticated_handler](
-			auth::ExpectedAuthData ex_auth_data) {
-			if (!ex_auth_data) {
-				log::Error("Failed to obtain authentication credentials");
-				event_loop_.Post([header_handler, ex_auth_data]() {
-					error::Error err = ex_auth_data.error();
-					header_handler(expected::unexpected(err));
-				});
-				return;
-			}
-			auto ex_req = req->WithAuthData(ex_auth_data.value());
-			if (!ex_req) {
-				log::Error("Failed to set new authentication data on HTTP request");
-				auto err = ex_req.error();
-				event_loop_.Post([header_handler, err]() {
-					error::Error err_copy {err};
-					header_handler(expected::unexpected(err_copy));
-				});
-				return;
-			}
-			auto err = http_client_.AsyncCall(
-				ex_req.value(),
-				[this, header_handler, reauthenticated_handler](
-					http::ExpectedIncomingResponsePtr ex_resp) {
-					if (!ex_resp) {
-						header_handler(ex_resp);
-						return;
-					}
-					auto resp = ex_resp.value();
-					auto status = resp->GetStatusCode();
-					if (status != http::StatusUnauthorized) {
-						header_handler(ex_resp);
-						return;
-					}
-					log::Debug(
-						"Got " + to_string(http::StatusUnauthorized)
-						+ " from the server, expiring token");
-					authenticator_.ExpireToken();
-					authenticator_.WithToken(reauthenticated_handler);
-				},
-				[body_handler](http::ExpectedIncomingResponsePtr ex_resp) {
-					if (!ex_resp) {
-						body_handler(ex_resp);
-						return;
-					}
-					auto resp = ex_resp.value();
-					auto status = resp->GetStatusCode();
-					// 401, 413, and 429 handled by the header handler. Don't call the body handler.
-					if (status != http::StatusUnauthorized
-						&& status != http::StatusRequestBodyTooLarge
-						&& status != http::StatusTooManyRequests) {
-						body_handler(ex_resp);
-					}
-				});
-			if (err != error::NoError) {
-				log::Error("Failed to schedule an HTTP request with an existing new token");
-				event_loop_.Post([header_handler, err]() {
-					error::Error err_copy {err};
-					header_handler(expected::unexpected(err_copy));
-				});
-				return;
-			}
-		});
+	authenticator_.WithToken([this, req, header_handler, body_handler, reauthenticated_handler](
+								 auth::ExpectedAuthData ex_auth_data) {
+		if (!ex_auth_data) {
+			log::Error("Failed to obtain authentication credentials");
+			event_loop_.Post([header_handler, ex_auth_data]() {
+				error::Error err = ex_auth_data.error();
+				header_handler(expected::unexpected(err));
+			});
+			return;
+		}
+		auto ex_req = req->WithAuthData(ex_auth_data.value());
+		if (!ex_req) {
+			log::Error("Failed to set new authentication data on HTTP request");
+			auto err = ex_req.error();
+			event_loop_.Post([header_handler, err]() {
+				error::Error err_copy {err};
+				header_handler(expected::unexpected(err_copy));
+			});
+			return;
+		}
+		auto err = http_client_.AsyncCall(
+			ex_req.value(),
+			[this, header_handler, reauthenticated_handler](
+				http::ExpectedIncomingResponsePtr ex_resp) {
+				if (!ex_resp) {
+					header_handler(ex_resp);
+					return;
+				}
+				auto resp = ex_resp.value();
+				auto status = resp->GetStatusCode();
+				if (status != http::StatusUnauthorized) {
+					header_handler(ex_resp);
+					return;
+				}
+				log::Debug(
+					"Got " + to_string(http::StatusUnauthorized)
+					+ " from the server, expiring token");
+				authenticator_.ExpireToken();
+				authenticator_.WithToken(reauthenticated_handler);
+			},
+			[body_handler](http::ExpectedIncomingResponsePtr ex_resp) {
+				if (!ex_resp) {
+					body_handler(ex_resp);
+					return;
+				}
+				auto resp = ex_resp.value();
+				auto status = resp->GetStatusCode();
+				// 401, 413, and 429 handled by the header handler. Don't call the body handler.
+				if (status != http::StatusUnauthorized && status != http::StatusRequestBodyTooLarge
+					&& status != http::StatusTooManyRequests) {
+					body_handler(ex_resp);
+				}
+			});
+		if (err != error::NoError) {
+			log::Error("Failed to schedule an HTTP request with an existing new token");
+			event_loop_.Post([header_handler, err]() {
+				error::Error err_copy {err};
+				header_handler(expected::unexpected(err_copy));
+			});
+			return;
+		}
+	});
 }
 
 } // namespace api

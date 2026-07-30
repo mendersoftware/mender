@@ -50,7 +50,21 @@ using APIRequestPtr = shared_ptr<APIRequest>;
 // with a class skipping authentication.
 class Client {
 public:
-	virtual error::Error AsyncCall(
+	// Dispatches an authenticated request. This ALWAYS delivers the outcome to the
+	// handlers exactly once, asynchronously, on the event loop - including failures
+	// such as an unavailable authenticator or a token that cannot be obtained. There
+	// is deliberately no return value: callers must not implement their own
+	// "on error" path for the dispatch itself, and must never call the handler
+	// themselves in addition to this.
+	//
+	// Callers that wrap AsyncCall (e.g. deployments/inventory clients) may still fail
+	// synchronously BEFORE reaching this call - while building the request, loading
+	// provides, reading a file, etc. Those wrappers should signal only such
+	// pre-dispatch failures through their own return value; once AsyncCall is reached,
+	// the handler is the single delivery channel and the wrapper should return
+	// success. Returning an error after AsyncCall has been called would deliver the
+	// outcome twice.
+	virtual void AsyncCall(
 		APIRequestPtr req,
 		http::ResponseHandler header_handler,
 		http::ResponseHandler body_handler) = 0;
@@ -70,7 +84,7 @@ public:
 		authenticator_ {authenticator} {};
 
 	// see http::Client::AsyncCall() for details about the handlers
-	error::Error AsyncCall(
+	void AsyncCall(
 		APIRequestPtr req,
 		http::ResponseHandler header_handler,
 		http::ResponseHandler body_handler) override;

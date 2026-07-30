@@ -73,7 +73,7 @@ TEST_F(AuthDBusTests, AuthenticatorBasicTest) {
 	auth::AuthenticatorDBus authenticator {loop};
 
 	bool action_called = false;
-	auto err = authenticator.WithToken(
+	authenticator.WithToken(
 		[JWT_TOKEN, SERVER_URL, &action_called, &loop](auth::ExpectedAuthData ex_auth_data) {
 			action_called = true;
 			ASSERT_TRUE(ex_auth_data);
@@ -82,7 +82,6 @@ TEST_F(AuthDBusTests, AuthenticatorBasicTest) {
 			EXPECT_EQ(ex_auth_data.value().server_url, SERVER_URL);
 			loop.Stop();
 		});
-	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 
 	loop.Run();
 	EXPECT_TRUE(action_called);
@@ -111,22 +110,20 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsTest) {
 
 	bool action1_called = false;
 	bool action2_called = false;
-	auto err =
-		authenticator.WithToken([JWT_TOKEN, SERVER_URL, &action1_called, &action2_called, &loop](
-									auth::ExpectedAuthData ex_auth_data) {
-			action1_called = true;
-			ASSERT_TRUE(ex_auth_data);
+	authenticator.WithToken([JWT_TOKEN, SERVER_URL, &action1_called, &action2_called, &loop](
+								auth::ExpectedAuthData ex_auth_data) {
+		action1_called = true;
+		ASSERT_TRUE(ex_auth_data);
 
-			EXPECT_EQ(ex_auth_data.value().token, JWT_TOKEN);
-			EXPECT_EQ(ex_auth_data.value().server_url, SERVER_URL);
-			if (action1_called && action2_called) {
-				loop.Stop();
-			}
-		});
-	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+		EXPECT_EQ(ex_auth_data.value().token, JWT_TOKEN);
+		EXPECT_EQ(ex_auth_data.value().server_url, SERVER_URL);
+		if (action1_called && action2_called) {
+			loop.Stop();
+		}
+	});
 
-	err = authenticator.WithToken([JWT_TOKEN, SERVER_URL, &action1_called, &action2_called, &loop](
-									  auth::ExpectedAuthData ex_auth_data) {
+	authenticator.WithToken([JWT_TOKEN, SERVER_URL, &action1_called, &action2_called, &loop](
+								auth::ExpectedAuthData ex_auth_data) {
 		action2_called = true;
 		ASSERT_TRUE(ex_auth_data);
 
@@ -136,7 +133,6 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsTest) {
 			loop.Stop();
 		}
 	});
-	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 
 	loop.Run();
 	EXPECT_TRUE(action1_called);
@@ -181,7 +177,7 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearTest) {
 
 	bool action1_called = false;
 	bool action2_called = false;
-	auto err = authenticator.WithToken(
+	authenticator.WithToken(
 		[JWT_TOKEN, SERVER_URL, &action1_called, &action2_called, &loop, &authenticator](
 			auth::ExpectedAuthData ex_auth_data) {
 			action1_called = true;
@@ -192,8 +188,8 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearTest) {
 
 			authenticator.ExpireToken();
 
-			auto err = authenticator.WithToken([JWT_TOKEN, SERVER_URL, &action2_called, &loop](
-												   auth::ExpectedAuthData ex_auth_data) {
+			authenticator.WithToken([JWT_TOKEN, SERVER_URL, &action2_called, &loop](
+										auth::ExpectedAuthData ex_auth_data) {
 				action2_called = true;
 				ASSERT_TRUE(ex_auth_data);
 
@@ -202,9 +198,7 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearTest) {
 
 				loop.Stop();
 			});
-			EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 		});
-	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 	loop.Run();
 
 	EXPECT_EQ(n_replies, 2);
@@ -244,7 +238,7 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearAndTimeoutTest) {
 
 	bool action1_called = false;
 	bool action2_called = false;
-	auto err = authenticator.WithToken(
+	authenticator.WithToken(
 		[JWT_TOKEN, SERVER_URL, &action1_called, &action2_called, &loop, &authenticator](
 			auth::ExpectedAuthData ex_auth_data) {
 			action1_called = true;
@@ -255,16 +249,14 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearAndTimeoutTest) {
 
 			authenticator.ExpireToken();
 
-			auto err = authenticator.WithToken([JWT_TOKEN, SERVER_URL, &action2_called, &loop](
-												   auth::ExpectedAuthData ex_auth_data) {
+			authenticator.WithToken([JWT_TOKEN, SERVER_URL, &action2_called, &loop](
+										auth::ExpectedAuthData ex_auth_data) {
 				action2_called = true;
 				ASSERT_FALSE(ex_auth_data);
 
 				loop.Stop();
 			});
-			EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 		});
-	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 	loop.Run();
 
 	EXPECT_EQ(n_replies, 2);
@@ -305,7 +297,7 @@ TEST_F(AuthDBusTests, AuthenticatorBasicRealLifeTest) {
 	auth::AuthenticatorDBus authenticator {loop, chrono::seconds {2}};
 
 	bool action_called = false;
-	auto err = authenticator.WithToken(
+	authenticator.WithToken(
 		[JWT_TOKEN, SERVER_URL, &action_called, &loop](auth::ExpectedAuthData ex_auth_data) {
 			action_called = true;
 			ASSERT_TRUE(ex_auth_data);
@@ -314,7 +306,6 @@ TEST_F(AuthDBusTests, AuthenticatorBasicRealLifeTest) {
 			EXPECT_EQ(ex_auth_data.value().server_url, SERVER_URL);
 			loop.Stop();
 		});
-	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 
 	loop.Run();
 	EXPECT_TRUE(action_called);
@@ -330,10 +321,14 @@ TEST(AuthNoDBusTests, AuthenticatorAttemptNoDBus) {
 	TestEventLoop loop;
 	auth::AuthenticatorDBus authenticator {loop};
 
-	int action_called = false;
-	auto err = authenticator.WithToken(
-		[&action_called](auth::ExpectedAuthData ex_auth_data) { action_called = true; });
-	EXPECT_NE(error::NoError, err);
+	bool action_called = false;
+	authenticator.WithToken([&action_called](auth::ExpectedAuthData ex_auth_data) {
+		action_called = true;
+		// With no D-Bus available the token cannot be obtained. WithToken no longer
+		// returns an error; instead the failure is delivered to the action itself with error set
+		// in ex_auth_data.
+		EXPECT_FALSE(ex_auth_data);
+	});
 
 	events::Timer timer(loop);
 	timer.AsyncWait(chrono::milliseconds(500), [&loop](error::Error err) {
@@ -342,8 +337,131 @@ TEST(AuthNoDBusTests, AuthenticatorAttemptNoDBus) {
 	});
 
 	loop.Run();
-	EXPECT_FALSE(action_called);
+	EXPECT_TRUE(action_called);
 
 	unsetenv("DBUS_SYSTEM_BUS_ADDRESS");
 #endif // MENDER_USE_DBUS
+}
+
+// Deterministic authenticator for the MEN-9246 StartWatchingTokenSignal regression
+// test, without a real D-Bus: StartWatchingTokenSignal() can be made to fail, and
+// the internal queue / in-progress state is exposed so the test can assert on it
+// directly.
+class TestAuthenticator : public auth::Authenticator {
+public:
+	using auth::Authenticator::Authenticator;
+
+	bool start_watching_fails = false;
+	bool get_jwt_token_fails = false;
+
+	// Expose the real internal state so tests can assert on it directly, rather
+	// than only on whether an action callback happened to run.
+	size_t PendingActionsCount() const {
+		return pending_actions_.size();
+	}
+	bool TokenFetchInProgress() const {
+		return token_fetch_in_progress_;
+	}
+
+protected:
+	error::Error StartWatchingTokenSignal() override {
+		if (start_watching_fails) {
+			return auth::MakeError(auth::AuthenticationError, "simulated signal watch failure");
+		}
+		return error::NoError;
+	}
+	error::Error GetJwtToken() override {
+		if (get_jwt_token_fails) {
+			return auth::MakeError(auth::AuthenticationError, "simulated GetJwtToken failure");
+		}
+		// Fetch is "initiated" but never resolves in this test (no token delivered),
+		// which keeps it in progress with the action queued.
+		return error::NoError;
+	}
+	error::Error FetchJwtToken() override {
+		return error::NoError;
+	}
+};
+
+// Regression test for MEN-9246, StartWatchingTokenSignal branch.
+//
+// This branch runs BEFORE the token_fetch_in_progress_ gate, so it can be
+// reached while a fetch is already in flight with other actions queued behind
+// it. A failure here must be delivered to THIS action only and must NOT leave
+// the action in pending_actions_: the original defect stranded it in the shared
+// queue, so a later token resolution re-delivered it as a surplus terminal event
+// (this is what aborted the state machine on D-Bus restore). It must also not
+// disturb the in-flight fetch. We assert on pending_actions_ / the in-progress
+// flag directly, because on the buggy code the failing branch never invokes the
+// action, so an action-callback counter alone would not observe the defect.
+TEST(AuthRegressionTests, StartWatchingFailureDoesNotStrandTheAction) {
+	TestEventLoop loop;
+	TestAuthenticator authenticator {loop};
+
+	// A fetch is in progress, with one action queued behind it.
+	authenticator.WithToken([](auth::ExpectedAuthData) {});
+	ASSERT_EQ(authenticator.PendingActionsCount(), 1u);
+	ASSERT_TRUE(authenticator.TokenFetchInProgress());
+
+	// A second call whose StartWatchingTokenSignal fails.
+	int failed_calls = 0;
+	authenticator.start_watching_fails = true;
+	authenticator.WithToken([&failed_calls](auth::ExpectedAuthData ex_auth_data) {
+		failed_calls++;
+		EXPECT_FALSE(ex_auth_data);
+	});
+	authenticator.start_watching_fails = false;
+
+	// The failing action must NOT have been left in the shared queue, and the
+	// in-flight fetch (and its queued action) must be untouched. On the buggy code
+	// the action is stranded here, so the count is 2.
+	EXPECT_EQ(authenticator.PendingActionsCount(), 1u);
+	EXPECT_TRUE(authenticator.TokenFetchInProgress());
+
+	events::Timer timer {loop};
+	timer.AsyncWait(chrono::milliseconds {200}, [&loop](error::Error) { loop.Stop(); });
+	loop.Run();
+
+	// The failing action is delivered its error exactly once (not stranded, not
+	// dropped).
+	EXPECT_EQ(failed_calls, 1);
+}
+
+// Coverage test for MEN-9246, GetJwtToken branch.
+//
+// This branch is reached only when NO fetch is in progress (it starts one), so
+// it cannot strand an action behind an in-flight fetch the way the
+// StartWatchingTokenSignal branch could. On master this branch was already
+// auth-correct (it delivered the error once and cleared the queue); the surplus
+// terminal event that aborted the state machine came from the caller layer
+// (WithToken both delivered the error AND returned it), which is not observable
+// inside Authenticator and is now structurally prevented by the void return.
+TEST(AuthRegressionTests, GetJwtTokenFailureDeliversErrorWithoutQueueing) {
+	TestEventLoop loop;
+	TestAuthenticator authenticator {loop};
+
+	// No fetch in progress and nothing queued: this call is the one that would
+	// start a fetch, but GetJwtToken fails.
+	ASSERT_EQ(authenticator.PendingActionsCount(), 0u);
+	ASSERT_FALSE(authenticator.TokenFetchInProgress());
+
+	int failed_calls = 0;
+	authenticator.get_jwt_token_fails = true;
+	authenticator.WithToken([&failed_calls](auth::ExpectedAuthData ex_auth_data) {
+		failed_calls++;
+		EXPECT_FALSE(ex_auth_data);
+	});
+	authenticator.get_jwt_token_fails = false;
+
+	// The failing action must not be queued, and no fetch must be marked in
+	// progress: the failure fully resolves this call and leaves no state behind.
+	EXPECT_EQ(authenticator.PendingActionsCount(), 0u);
+	EXPECT_FALSE(authenticator.TokenFetchInProgress());
+
+	events::Timer timer {loop};
+	timer.AsyncWait(chrono::milliseconds {200}, [&loop](error::Error) { loop.Stop(); });
+	loop.Run();
+
+	// The error is delivered to the action exactly once.
+	EXPECT_EQ(failed_calls, 1);
 }
