@@ -11,5 +11,16 @@ codecov:
   # coverage requirements for merging the PR are satisfied) in the PR immediately.
     after_n_builds: 1
 
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: 80%
+        informational: true
+
 ignore:
   - "vendor/"
