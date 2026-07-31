@@ -144,7 +144,7 @@ test:static:no-dbus:
 
 test:modules-artifact-gen:
   stage: test
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:26.04
   before_script:
     - !reference [.qa-common-network-apt-retry, before_script]
     - apt update && apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
@@ -153,7 +153,7 @@ test:modules-artifact-gen:
     - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/workstation-tools ubuntu/jammy/stable main" | tee /etc/apt/sources.list.d/mender.list
     - apt update && apt install -yy mender-artifact
     # Test dependencies
-    - pip install -r support/modules-artifact-gen/tests/requirements.txt --break-system-packages
+    - pip install -r support/modules-artifact-gen/tests/requirements.txt --break-system-packages --ignore-installed
   script:
     - python3 -m pytest support/modules-artifact-gen/tests
 
