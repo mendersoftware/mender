@@ -142,7 +142,7 @@ test:static:no-dbus:
     EXTRA_CMAKE_ARGS: -D MENDER_USE_DBUS=OFF -D MENDER_EMBED_MENDER_AUTH=ON
   extends: .test:static-template
 
-test:modules-artifact-gen:
+.test:pytest-template:
   stage: test
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/ubuntu:22.04
   before_script:
@@ -155,7 +155,17 @@ test:modules-artifact-gen:
     # Test dependencies
     - pip install -r support/modules-artifact-gen/tests/requirements.txt
   script:
-    - python3 -m pytest support/modules-artifact-gen/tests
+    - python3 -m pytest ${PYTEST_PATH}
+
+test:modules-artifact-gen:
+  variables:
+    PYTEST_PATH: support/modules-artifact-gen/tests
+  extends: .test:pytest-template
+
+test:update-modules:
+  variables:
+    PYTEST_PATH: support/modules/tests
+  extends: .test:pytest-template
 
 test:docker:
   image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/docker:${DOCKER_VERSION}
