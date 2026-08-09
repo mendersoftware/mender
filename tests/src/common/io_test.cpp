@@ -357,6 +357,35 @@ TEST_F(StreamIOTests, OpenIfstreamOfstreamOK) {
 	is.close();
 }
 
+TEST_F(StreamIOTests, FileReaderRewind) {
+	string test_file_path = tmp_dir.Path() + "/test_file";
+	auto ex_os = io::OpenOfstream(test_file_path);
+	ASSERT_TRUE(ex_os);
+	ex_os.value() << "foobarbaz";
+	ex_os.value().close();
+
+	// Reader starting at a non-zero offset.
+	io::FileReader reader {test_file_path, 3};
+	vector<uint8_t> buf(16);
+
+	// Read past the end to leave the stream in an EOF/fail state.
+	auto ex_read = reader.Read(buf.begin(), buf.end());
+	ASSERT_TRUE(ex_read) << ex_read.error().String();
+	EXPECT_EQ(ex_read.value(), 6); // "barbaz"
+	EXPECT_EQ(string(buf.begin(), buf.begin() + 6), "barbaz");
+	ex_read = reader.Read(buf.begin(), buf.end());
+	ASSERT_TRUE(ex_read) << ex_read.error().String();
+	EXPECT_EQ(ex_read.value(), 0);
+
+	// Rewind must recover from the EOF state and return to the start offset, not
+	// to the beginning of the file.
+	ASSERT_EQ(reader.Rewind(), error::NoError);
+	ex_read = reader.Read(buf.begin(), buf.end());
+	ASSERT_TRUE(ex_read) << ex_read.error().String();
+	EXPECT_EQ(ex_read.value(), 6);
+	EXPECT_EQ(string(buf.begin(), buf.begin() + 6), "barbaz");
+}
+
 TEST_F(StreamIOTests, OpenIfstreamOfstreamNoexist) {
 	string test_file_path = tmp_dir.Path() + "/test_file";
 	auto ex_is = io::OpenIfstream(test_file_path);
