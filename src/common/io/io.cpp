@@ -580,16 +580,15 @@ error::Error FileReader::Rewind() {
 		}
 		is_ = ex_is.value();
 	}
-	if (!(*is_)) {
-		return Error(std::error_condition(std::errc::io_error), "Bad stream, cannot rewind");
-	}
+	// Clear any eofbit/failbit set by a previous read so the seek can succeed.
+	is_->clear();
 	errno = 0;
-	is_->seekg(0, ios::beg);
+	is_->seekg(start_offset_);
 	int io_errno = errno;
 	if (!(*is_)) {
 		return Error(
 			generic_category().default_error_condition(io_errno),
-			"Failed to seek to the beginning of the stream");
+			"Failed to seek to the read start of the stream");
 	}
 	return error::NoError;
 }

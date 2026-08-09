@@ -198,6 +198,7 @@ private:
 	const string log_fpath_;
 	string sanitized_fpath_;
 	unique_ptr<io::FileReader> reader_;
+	bool at_start_ = true;
 	int64_t raw_data_size_;
 	int64_t rem_raw_data_size_;
 	static const vector<uint8_t> header_;
