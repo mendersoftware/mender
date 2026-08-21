@@ -12,6 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+#include <algorithm>
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
@@ -640,6 +642,134 @@ TEST(HttpForwarderTests, ProtocolSwitch) {
 	server_socket->Cancel();
 
 	EXPECT_EQ(copies, 2);
+}
+
+TEST(HttpForwarderTests, ProtocolSwitchSurvivesIdlePastStreamTimeout) {
+	// Regression test for MEN-9433: an earlier fix armed Beast's stream timeout and never disarmed
+	// it, so it followed the socket to its new owner and closed a healthy connection on expiry.
+	// This is how mender-connect's WebSocket is forwarded, so it is idle for long stretches.
+	const int timeout_seconds = 1;
+	const auto idle_time = chrono::seconds(timeout_seconds * 3);
+
+	// Generous, since the test deliberately spends most of its time waiting.
+	mtesting::TestEventLoop loop {chrono::seconds(30)};
+
+	const vector<uint8_t> payload {'i', 'd', 'l', 'e', '-', 'o', 'k'};
+
+	io::AsyncReadWriterPtr client_socket, server_socket;
+	events::Timer idle_timer {loop};
+	vector<uint8_t> received(payload.size());
+	size_t bytes_read = 0;
+	bool wrote_after_idle = false;
+	bool read_after_idle = false;
+	// Recorded rather than asserted in the handlers, so a failure still stops the loop.
+	error::Error write_error = error::NoError;
+	error::Error read_error = error::NoError;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	auto err = server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto exp_resp = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+
+			resp->SetStatusCodeAndMessage(101, "Switching Protocols");
+			auto err = resp->AsyncSwitchProtocol([&](io::ExpectedAsyncReadWriterPtr exp_socket) {
+				ASSERT_TRUE(exp_socket) << exp_socket.error().String();
+				server_socket = exp_socket.value();
+
+				// Sit idle well past the timeout, then write. A timeout left armed anywhere along
+				// the forwarded path closes the socket before this runs.
+				idle_timer.AsyncWait(idle_time, [&](error::Error err) {
+					ASSERT_EQ(err, error::NoError);
+
+					auto write_err = server_socket->AsyncWrite(
+						payload.begin(), payload.end(), [&](io::ExpectedSize result) {
+							if (!result) {
+								write_error = result.error();
+								// The read will never complete now, so end the test here.
+								loop.Stop();
+								return;
+							}
+							wrote_after_idle = true;
+						});
+					EXPECT_EQ(write_err, error::NoError);
+				});
+			});
+			ASSERT_EQ(err, error::NoError);
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	http::ClientConfig client_config;
+	client_config.stream_timeout_seconds = timeout_seconds;
+
+	hf::TestServer forwarder(server_config, client_config, loop);
+	err = forwarder.AsyncForward("http://127.0.0.1:0", "http://127.0.0.1:" TEST_PORT "/");
+	ASSERT_EQ(err, error::NoError);
+
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress(http::JoinUrl(forwarder.GetUrl(), "/test-endpoint"));
+
+	err = client.AsyncCall(
+		req,
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+		},
+		[&](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			ASSERT_EQ(exp_resp.value()->GetStatusCode(), 101);
+
+			auto exp_socket = exp_resp.value()->SwitchProtocol();
+			ASSERT_TRUE(exp_socket) << exp_socket.error().String();
+			client_socket = exp_socket.value();
+
+			// Post the read straight away and let it sit; it has to survive the idle period.
+			auto read_err = client_socket->AsyncRead(
+				received.begin(), received.end(), [&](io::ExpectedSize result) {
+					if (!result) {
+						read_error = result.error();
+					} else {
+						bytes_read = result.value();
+						read_after_idle = true;
+					}
+					loop.Stop();
+				});
+			EXPECT_EQ(read_err, error::NoError);
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	loop.Run();
+
+	// A stale timeout closes the socket, surfacing as an error on whichever side touches it first.
+	// These are the assertions that matter.
+	EXPECT_EQ(write_error, error::NoError) << "socket closed by a stale timeout?";
+	EXPECT_EQ(read_error, error::NoError) << "socket closed by a stale timeout?";
+	EXPECT_TRUE(wrote_after_idle);
+	EXPECT_TRUE(read_after_idle);
+
+	// The byte count is incidental (a short read is legal), so only compare what arrived.
+	EXPECT_GT(bytes_read, 0U);
+	ASSERT_LE(bytes_read, payload.size());
+	EXPECT_TRUE(std::equal(
+		received.begin(), received.begin() + static_cast<ptrdiff_t>(bytes_read), payload.begin()))
+		<< "Data received after the idle period does not match what was sent";
+
+	if (server_socket) {
+		server_socket->Cancel();
+	}
+	if (client_socket) {
+		client_socket->Cancel();
+	}
 }
 
 TEST(HttpForwarderTests, SocketMemoryLeaks) {

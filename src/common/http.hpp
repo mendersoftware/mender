@@ -396,6 +396,10 @@ private:
 template <typename StreamType>
 class BodyAsyncReader;
 
+// Long enough not to disturb slow but healthy transfers, short enough that a device recovers
+// on its own.
+static constexpr int kDefaultStreamTimeoutSeconds = 300;
+
 // Master object that connections are made from. Configure TLS options on this object before making
 // connections.
 struct ClientConfig {
@@ -412,6 +416,14 @@ struct ClientConfig {
 	string https_proxy;
 	string no_proxy;
 	string ssl_engine;
+
+	// Per-operation timeout on the underlying socket. Without it a peer which accepts a request
+	// and never answers wedges the client permanently. Does not apply to connections handed over
+	// after 101 Switching Protocols; see `Client::DisarmStreamTimeout()`.
+	//
+	// Uses def_value for the same reason as skip_verify above: a default member initializer would
+	// stop this being an aggregate under C++11, which Debug builds use on purpose.
+	common::def_value<int, kDefaultStreamTimeoutSeconds> stream_timeout_seconds;
 };
 
 enum class TransactionStatus {
@@ -566,6 +578,12 @@ private:
 
 	error::Error Initialize();
 	void DoCancel();
+
+	// Armed before each operation of a transaction. Must be disarmed before the socket is handed
+	// over after 101 Switching Protocols: Beast closes it on expiry regardless of who owns it by
+	// then, which would tear down a healthy long lived connection.
+	void ArmStreamTimeout();
+	void DisarmStreamTimeout();
 
 	void CallHandler(ResponseHandler handler);
 	void CallErrorHandler(

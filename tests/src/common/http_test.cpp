@@ -330,6 +330,71 @@ TEST(HttpTest, TestMissingResponse) {
 	EXPECT_EQ(http::TestInspector::GetStreams(server).size(), 1);
 }
 
+TEST(HttpTest, TestStalledResponseTimesOut) {
+	// A server which holds the connection open without answering, unlike one which drops it (see
+	// `TestMissingResponse`). Nothing else imposes a deadline, so the read used to stay
+	// outstanding forever.
+	TestEventLoop loop;
+
+	// Keeping the response alive is what stops the server tearing the connection down.
+	http::OutgoingResponsePtr stalled_resp;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+	auto err = server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&stalled_resp](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto exp_resp = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+
+			// Deliberately never reply.
+			stalled_resp = exp_resp.value();
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	http::ClientConfig client_config;
+	client_config.stream_timeout_seconds = 1;
+	http::Client client(client_config, loop);
+
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+
+	bool header_handler_called = false;
+	auto start = chrono::steady_clock::now();
+	chrono::milliseconds elapsed {0};
+
+	err = client.AsyncCall(
+		req,
+		[&loop, &header_handler_called, &start, &elapsed](
+			http::ExpectedIncomingResponsePtr exp_resp) {
+			header_handler_called = true;
+			elapsed =
+				chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now() - start);
+
+			EXPECT_FALSE(exp_resp) << "Expected the stalled request to fail, but got a response";
+
+			loop.Stop();
+		},
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			FAIL() << "Should never receive a body";
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	// Without the timeout the request never completes and `TestEventLoop` aborts the test.
+	loop.Run();
+
+	EXPECT_TRUE(header_handler_called);
+
+	// Guards against the connection having failed for some other reason instead.
+	EXPECT_GE(elapsed, chrono::milliseconds(900)) << "Failed too early to be the stream timeout";
+}
+
 TEST(HttpTest, TestDestroyResponseBeforeUsingIt) {
 	TestEventLoop loop;
 
