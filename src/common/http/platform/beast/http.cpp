@@ -595,6 +595,11 @@ io::ExpectedAsyncReadWriterPtr Client::SwitchProtocol(IncomingResponsePtr req) {
 	*cancelled_ = true;
 	cancelled_ = make_shared<bool>(false);
 
+	// Required, and not covered by the 101 branch of `ReadHeaderHandler()`: callers may switch
+	// from the *header* handler, which runs before that branch and cancels it. The forwarder does
+	// exactly that, so this is what keeps the timeout off mender-connect's socket.
+	DisarmStreamTimeout();
+
 	auto stream = stream_;
 	// This no longer belongs to us.
 	stream_.reset();
@@ -638,6 +643,23 @@ void Client::CallErrorHandler(
 	DoCancel();
 	handler(expected::unexpected(
 		err.WithContext(MethodToString(req->method_) + " " + req->orig_address_)));
+}
+
+// `next_layer().next_layer()` is the `beast::tcp_stream` inside
+// `ssl::stream<ssl::stream<beast::tcp_stream>>`, where the timeout lives in every socket mode.
+void Client::ArmStreamTimeout() {
+	if (!stream_) {
+		return;
+	}
+	stream_->next_layer().next_layer().expires_after(
+		chrono::seconds(client_config_.stream_timeout_seconds));
+}
+
+void Client::DisarmStreamTimeout() {
+	if (!stream_) {
+		return;
+	}
+	stream_->next_layer().next_layer().expires_never();
 }
 
 void Client::ResolveHandler(
@@ -693,6 +715,8 @@ void Client::ResolveHandler(
 
 	auto &cancelled = cancelled_;
 
+	// No timeout armed here: this connects on `lowest_layer()`, the raw socket, which bypasses the
+	// `beast::tcp_stream` timeout. Connect is bounded by the OS; later operations arm their own.
 	asio::async_connect(
 		stream_->lowest_layer(),
 		resolver_results_,
@@ -766,6 +790,8 @@ void Client::HandshakeHandler(
 
 	auto &cancelled = cancelled_;
 
+	ArmStreamTimeout();
+
 	stream.async_handshake(
 		ssl::stream_base::client, [this, cancelled, endpoint](const error_code &ec) {
 			if (*cancelled) {
@@ -823,6 +849,8 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 			WriteHeaderHandler(ec, num_written);
 		}
 	};
+
+	ArmStreamTimeout();
 
 	switch (socket_mode_) {
 	case SocketMode::TlsTls:
@@ -961,6 +989,8 @@ void Client::WriteBody() {
 		}
 	};
 
+	ArmStreamTimeout();
+
 	switch (socket_mode_) {
 	case SocketMode::TlsTls:
 		http::async_write_some(*stream_, *request_data_.http_request_serializer_, handler);
@@ -985,6 +1015,9 @@ void Client::ReadHeader() {
 			ReadHeaderHandler(ec, num_read);
 		}
 	};
+
+	// Without this, a server which never answers leaves this read outstanding forever.
+	ArmStreamTimeout();
 
 	switch (socket_mode_) {
 	case SocketMode::TlsTls:
@@ -1066,6 +1099,10 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 				// Make an exception for 101 Switching Protocols response, where the TCP connection
 				// is meant to be reused.
 				DoCancel();
+			} else {
+				// About to be handed over (see `SwitchProtocol()`) and legitimately idle for long
+				// stretches, so the timeout must not follow it.
+				DisarmStreamTimeout();
 			}
 			CallHandler(body_handler_);
 		}
@@ -1177,10 +1214,7 @@ void Client::AsyncReadNextBodyPart(
 	auto &cancelled = cancelled_;
 	auto &response_data = response_data_;
 
-	// Set timeout to 5 minutes to ensure we don't hang during async read
-	// `next_layer().next_layer()` accesses the `beast::tcp_stream` from
-	// `ssl::stream<ssl::stream<beast::tcp_stream>>`
-	stream_->next_layer().next_layer().expires_after(chrono::minutes(5));
+	ArmStreamTimeout();
 
 	auto async_handler = [this, cancelled, response_data](const error_code &ec, size_t num_read) {
 		if (!*cancelled) {
