@@ -371,6 +371,14 @@ expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode) {
 }
 
 expected::ExpectedBytes DecodeBase64(string to_decode) {
+	const uint8_t b64_block_overflow_n = to_decode.size() % 4;
+	// Sometimes signatures can arrive with extraneous encoding (excessive paddings) which breaks
+	// predicted len calculations, strip them if necessary.
+	if (b64_block_overflow_n > 0
+		&& b64_block_overflow_n
+			   <= static_cast<uint64_t>(std::count(to_decode.begin(), to_decode.end(), '='))) {
+		to_decode.erase(to_decode.length() - b64_block_overflow_n);
+	}
 	// Predict the len of the decoded for later verification. From man page:
 	// For every 4 input bytes exactly 3 output bytes will be
 	// produced. The output will be padded with 0 bits if necessary
