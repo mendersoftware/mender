@@ -22,7 +22,11 @@
 #include <common/common.hpp>
 #include <common/device_tier.hpp>
 #include <client_shared/conf.hpp>
+#ifdef MENDER_USE_LMDB
 #include <common/key_value_database_lmdb.hpp>
+#else
+#include <common/key_value_database_blobdb.hpp>
+#endif // MENDER_USE_LMDB
 #include <common/json.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
@@ -221,8 +225,13 @@ TEST_F(ContextTests, LoadProvidesClosedDB) {
 	err = db.Write("artifact-provides", common::ByteVectorFromString(input_provides_data_str));
 	ASSERT_EQ(err, error::NoError);
 
+#ifdef MENDER_USE_LMDB
 	auto &lmdb = dynamic_cast<kv_db::KeyValueDatabaseLmdb &>(db);
 	lmdb.Close();
+#else
+	auto &blobdb = dynamic_cast<kv_db::KeyValueDatabaseBlobdb &>(db);
+	blobdb.Close();
+#endif // MENDER_USE_LMDB
 
 	auto ex_provides_data = ctx.LoadProvides();
 	ASSERT_FALSE(ex_provides_data);
