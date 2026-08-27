@@ -14,6 +14,7 @@
 
 #include <common/events_io.hpp>
 
+#include <algorithm>
 #include <vector>
 #include <fstream>
 
@@ -557,8 +558,8 @@ TEST(EventsIo, AsyncIoFromSyncIo) {
 class CountOnesReader : virtual public io::AsyncReader {
 private:
 	io::AsyncReader &wrapped_reader_;
-	int found_ones_ {0};
-	int expected_ones_ {0};
+	size_t found_ones_ {0};
+	size_t expected_ones_ {0};
 
 public:
 	CountOnesReader(io::AsyncReader &reader, const int ones) :
@@ -573,13 +574,10 @@ public:
 			start, end, [this, start, handler](io::ExpectedSize result) {
 				if (!result) {
 					handler(result);
+					return;
 				}
 
-				for (auto &it : vector<uint8_t> {start, start + result.value()}) {
-					if (it == '1') {
-						found_ones_++;
-					}
-				}
+				found_ones_ += std::count(start, start + result.value(), '1');
 
 				if ((result.value() == 0) && (found_ones_ != expected_ones_)) {
 					handler(expected::unexpected(
