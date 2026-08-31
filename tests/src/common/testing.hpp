@@ -22,6 +22,7 @@
 
 #include <common/events.hpp>
 #include <common/http.hpp>
+#include <common/json.hpp>
 
 namespace mender {
 namespace common {
@@ -30,6 +31,7 @@ namespace testing {
 using namespace std;
 
 namespace http = mender::common::http;
+namespace json = mender::common::json;
 
 shared_ptr<ostream> AssertInDeathTestHelper(const char *func, const char *file, int line);
 
@@ -109,6 +111,9 @@ protected:
 		}
 	}
 };
+
+// Recursively compares two parsed JSON values for equality, independent of object key ordering.
+void ExpectJsonEq(const json::Json &expected, const json::Json &actual);
 
 ::testing::AssertionResult FileContains(const string &filename, const string &expected_content);
 ::testing::AssertionResult FileContainsExactly(

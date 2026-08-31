@@ -181,7 +181,12 @@ TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
 			auto req = exp_req.value();
 			EXPECT_EQ(req->GetPath(), "/api/devices/v2/deployments/device/deployments/next");
 			EXPECT_EQ(req->GetMethod(), http::Method::POST);
-			EXPECT_EQ(common::StringFromByteVector(received_body), expected_request_data);
+
+			auto expected_json = json::Load(expected_request_data);
+			ASSERT_TRUE(expected_json);
+			auto actual_json = json::Load(common::StringFromByteVector(received_body));
+			ASSERT_TRUE(actual_json);
+			mtesting::ExpectJsonEq(expected_json.value(), actual_json.value());
 
 			auto result = req->MakeResponse();
 			ASSERT_TRUE(result);
