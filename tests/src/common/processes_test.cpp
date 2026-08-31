@@ -354,11 +354,11 @@ exit 0
 
 	auto maybe_reader = proc.GetAsyncStdoutReader(loop);
 	ASSERT_TRUE(maybe_reader);
-	auto stdout = maybe_reader.value();
+	auto stdout_reader = maybe_reader.value();
 
 	maybe_reader = proc.GetAsyncStderrReader(loop);
 	ASSERT_TRUE(maybe_reader);
-	auto stderr = maybe_reader.value();
+	auto stderr_reader = maybe_reader.value();
 
 	int stdout_count = 0, stderr_count = 0;
 	bool stdout_eof = false, stderr_eof = false, wait_finished = false;
@@ -384,14 +384,15 @@ exit 0
 			ASSERT_EQ(result.value(), expected.size());
 
 			EXPECT_EQ(string(recv_stdout.begin(), recv_stdout.begin() + result.value()), expected);
-			auto err = stdout->AsyncRead(recv_stdout.begin(), recv_stdout.end(), stdout_handler);
+			auto err =
+				stdout_reader->AsyncRead(recv_stdout.begin(), recv_stdout.end(), stdout_handler);
 			ASSERT_EQ(err, error::NoError);
 		} else {
 			stdout_eof = true;
 			maybe_stop();
 		}
 	};
-	err = stdout->AsyncRead(recv_stdout.begin(), recv_stdout.end(), stdout_handler);
+	err = stdout_reader->AsyncRead(recv_stdout.begin(), recv_stdout.end(), stdout_handler);
 	ASSERT_EQ(err, error::NoError);
 
 	vector<uint8_t> recv_stderr;
@@ -406,14 +407,15 @@ exit 0
 			ASSERT_EQ(result.value(), expected.size());
 
 			EXPECT_EQ(string(recv_stderr.begin(), recv_stderr.begin() + result.value()), expected);
-			auto err = stderr->AsyncRead(recv_stderr.begin(), recv_stderr.end(), stderr_handler);
+			auto err =
+				stderr_reader->AsyncRead(recv_stderr.begin(), recv_stderr.end(), stderr_handler);
 			ASSERT_EQ(err, error::NoError);
 		} else {
 			stderr_eof = true;
 			maybe_stop();
 		}
 	};
-	err = stderr->AsyncRead(recv_stderr.begin(), recv_stderr.end(), stderr_handler);
+	err = stderr_reader->AsyncRead(recv_stderr.begin(), recv_stderr.end(), stderr_handler);
 	ASSERT_EQ(err, error::NoError);
 
 	err = proc.AsyncWait(loop, [&](error::Error err) {
