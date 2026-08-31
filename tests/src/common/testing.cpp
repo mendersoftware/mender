@@ -63,6 +63,11 @@ void TemporaryDirectory::CreateSubDirectory(const string &dirname) {
 	ASSERT_TRUE(fs::create_directory(sub_path));
 }
 
+bool HasMenderArtifact() {
+	processes::Process proc({"which", "mender-artifact"});
+	return proc.Run() == error::NoError;
+}
+
 ::testing::AssertionResult FileContains(const string &filename, const string &expected_content) {
 	ifstream is {filename};
 	if (!is) {

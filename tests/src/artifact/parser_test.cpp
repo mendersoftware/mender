@@ -41,10 +41,17 @@ namespace parser_error = mender::artifact::parser_error;
 namespace path = mender::common::path;
 
 
-class ParserTestEnv : public testing::Test {
+class ParserTestEnv : public mendertesting::MenderArtifactTest {
 public:
 protected:
 	static void SetUpTestSuite() {
+		// Not a real skip (GTEST_SKIP() here would not cascade to the individual TEST_F cases;
+		// that's what the inherited MenderArtifactTest::SetUp() is for) -- just avoids
+		// wastefully running the mender-artifact script below.
+		if (!mendertesting::HasMenderArtifact()) {
+			return;
+		}
+
 		mender::common::log::SetLevel(mender::common::log::LogLevel::Trace);
 
 		string script = R"(#! /bin/sh

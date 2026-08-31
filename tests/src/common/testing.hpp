@@ -81,6 +81,35 @@ private:
 	mender::common::events::Timer timer_;
 };
 
+// Returns true if the `mender-artifact` binary can be found on PATH. Tests which depend on it
+// should skip themselves (GTEST_SKIP()) when this returns false, instead of failing.
+bool HasMenderArtifact();
+
+// Mix-in fixture base: skips every test in the fixture if `mender-artifact` is not available.
+// Inherit from this (alongside any other ::testing::Test-derived base(s), using virtual
+// inheritance to avoid an ambiguous Test base) in fixtures whose tests build or read real
+// Artifacts.
+//
+// If the fixture also needs its own SetUp(), override it, call both parents' SetUp(), then
+// return early if Test::IsSkipped() before doing any Artifact-dependent work:
+//
+//   void SetUp() override {
+//       OtherBase::SetUp();
+//       MenderArtifactTest::SetUp();
+//       if (IsSkipped()) {
+//           return;
+//       }
+//       ...
+//   }
+class MenderArtifactTest : public virtual ::testing::Test {
+protected:
+	void SetUp() override {
+		if (!HasMenderArtifact()) {
+			GTEST_SKIP() << "mender-artifact not available";
+		}
+	}
+};
+
 ::testing::AssertionResult FileContains(const string &filename, const string &expected_content);
 ::testing::AssertionResult FileContainsExactly(
 	const string &filename, const string &expected_content);
