@@ -1396,6 +1396,9 @@ exit 0
 }
 
 TEST(AsyncFifoOpener, Open) {
+#ifdef MENDER_TEST_SKIP_ASYNC_FIFO_OPENER_TESTS
+	GTEST_SKIP();
+#endif
 	TestEventLoop loop;
 	TemporaryDirectory tmpdir;
 
@@ -1422,6 +1425,9 @@ TEST(AsyncFifoOpener, Open) {
 }
 
 TEST(AsyncFifoOpener, Error) {
+#ifdef MENDER_TEST_SKIP_ASYNC_FIFO_OPENER_TESTS
+	GTEST_SKIP();
+#endif
 	TestEventLoop loop;
 	TemporaryDirectory tmpdir;
 
@@ -1443,6 +1449,9 @@ TEST(AsyncFifoOpener, Error) {
 }
 
 TEST(AsyncFifoOpener, Cancel) {
+#ifdef MENDER_TEST_SKIP_ASYNC_FIFO_OPENER_TESTS
+	GTEST_SKIP();
+#endif
 	TestEventLoop loop;
 	TemporaryDirectory tmpdir;
 

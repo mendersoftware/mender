@@ -4,6 +4,7 @@ set(MENDER_SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 set(MENDER_TEST_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 option(MENDER_DOWNLOAD_GTEST "Download google test if it is not found (Default: ON)" ON)
+option(MENDER_TEST_SKIP_ASYNC_FIFO_OPENER_TESTS "Skip the AsyncFifoOpener tests (Default: OFF)" OFF)
 if (MENDER_DOWNLOAD_GTEST)
   ### BEGIN taken from https://google.github.io/googletest/quickstart-cmake.html
   include(FetchContent)
