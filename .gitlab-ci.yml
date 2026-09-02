@@ -1,6 +1,5 @@
 stages:
   - test
-  - renovate
   - publish
 
 variables:
@@ -31,9 +30,6 @@ include:
     inputs:
       coverage_file: coverage.lcov
       flag: unittests
-  - component: gitlab.com/Northern.tech/Mender/mendertesting/renovate@master
-    inputs:
-      stage: "renovate"
 
 default:
   tags:
