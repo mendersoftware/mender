@@ -437,9 +437,16 @@ error::Error Client::AsyncCall(
 
 	auto &cancelled = cancelled_;
 
+	// Only query address families the host is actually configured for. Without this,
+	// AF_UNSPEC makes glibc issue both A and AAAA on every lookup, including on devices
+	// with no IPv6 address at all -- whose AAAA answers we then fail to connect to and
+	// discard. Note this does not restrict IPv6: glibc narrows the family only when
+	// exactly one of IPv4/IPv6 is configured, so dual-stack hosts are unaffected and
+	// IPv6-only hosts narrow to IPv6.
 	resolver_.async_resolve(
 		request_->address_.host,
 		to_string(request_->address_.port),
+		asio::ip::resolver_base::address_configured,
 		[this, cancelled](
 			const error_code &ec, const asio::ip::tcp::resolver::results_type &results) {
 			if (!*cancelled) {
