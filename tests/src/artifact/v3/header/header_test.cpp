@@ -43,7 +43,7 @@ namespace header = mender::artifact::v3::header;
 
 using ExpectedHeader = mender::artifact::v3::header::ExpectedHeader;
 
-class HeaderTestEnv : public testing::Test {
+class HeaderTestEnv : public virtual testing::Test {
 public:
 protected:
 	static void CreateTestArtifact(
@@ -159,7 +159,14 @@ exit 0)";
 	}
 };
 
-TEST_F(HeaderTestEnv, TestHeaderRootfsAllFlagsSetSuccess) {
+// Tests which need to generate real Artifacts via
+// CreateTestArtifact()/CreateWrongHeadersFromHeader() and therefore depend on the external
+// mender-artifact binary being available.
+class HeaderTestEnvWithMenderArtifact :
+	public HeaderTestEnv,
+	public mendertesting::MenderArtifactTest {};
+
+TEST_F(HeaderTestEnvWithMenderArtifact, TestHeaderRootfsAllFlagsSetSuccess) {
 	mendertesting::TemporaryDirectory tmpdir {};
 	CreateTestArtifact(
 		tmpdir,
@@ -265,7 +272,7 @@ TEST_F(HeaderTestEnv, TestHeaderRootfsAllFlagsSetSuccess) {
 		header.subHeaders.at(0).type_info.clears_artifact_provides.value().at(2), "rootfs-image.*");
 }
 
-TEST_F(HeaderTestEnv, TestHeaderModuleImageAllFlagsSetSuccess) {
+TEST_F(HeaderTestEnvWithMenderArtifact, TestHeaderModuleImageAllFlagsSetSuccess) {
 	mendertesting::TemporaryDirectory tmpdir {};
 	CreateTestArtifact(
 		tmpdir,
@@ -377,7 +384,7 @@ TEST_F(HeaderTestEnv, TestHeaderModuleImageAllFlagsSetSuccess) {
 }
 
 
-TEST_F(HeaderTestEnv, TestTwoArtifactScriptsSuccess) {
+TEST_F(HeaderTestEnvWithMenderArtifact, TestTwoArtifactScriptsSuccess) {
 	mendertesting::TemporaryDirectory tmpdir {};
 	CreateTestArtifact(
 		tmpdir,
@@ -403,7 +410,7 @@ TEST_F(HeaderTestEnv, TestTwoArtifactScriptsSuccess) {
 	EXPECT_EQ(header.artifactScripts.value().size(), 2);
 }
 
-TEST_F(HeaderTestEnv, TestOneArtifactScripts) {
+TEST_F(HeaderTestEnvWithMenderArtifact, TestOneArtifactScripts) {
 	mendertesting::TemporaryDirectory tmpdir {};
 	CreateTestArtifact(
 		tmpdir,
@@ -427,7 +434,7 @@ TEST_F(HeaderTestEnv, TestOneArtifactScripts) {
 	EXPECT_EQ(header.artifactScripts.value().size(), 1);
 }
 
-TEST_F(HeaderTestEnv, TestHeaderNoExtraData) {
+TEST_F(HeaderTestEnvWithMenderArtifact, TestHeaderNoExtraData) {
 	mendertesting::TemporaryDirectory tmpdir {};
 	CreateTestArtifact(tmpdir, "module-image", {"--type test-module-image"});
 
@@ -441,7 +448,7 @@ TEST_F(HeaderTestEnv, TestHeaderNoExtraData) {
 	ASSERT_TRUE(expected_header) << expected_header.error().message;
 }
 
-TEST_F(HeaderTestEnv, TestHeaderIndexError) {
+TEST_F(HeaderTestEnvWithMenderArtifact, TestHeaderIndexError) {
 	mendertesting::TemporaryDirectory tmpdir {};
 	CreateTestArtifact(tmpdir, "module-image", {"--type test-module-image"});
 
@@ -460,7 +467,7 @@ TEST_F(HeaderTestEnv, TestHeaderIndexError) {
 		"Unexpected index order for the type-info: headers/0001/type-info expected: headers/0000/type-info");
 }
 
-TEST_F(HeaderTestEnv, TestHeaderFilesOutOfOrder) {
+TEST_F(HeaderTestEnvWithMenderArtifact, TestHeaderFilesOutOfOrder) {
 	mendertesting::TemporaryDirectory tmpdir {};
 	CreateTestArtifact(tmpdir, "module-image", {"--type test-module-image"});
 
@@ -655,7 +662,7 @@ TEST_F(HeaderTestEnv, TestHeaderMetaDataIs53BitFloatingPointIsRounded) {
 	}
 }
 
-TEST_F(HeaderTestEnv, TestHeaderModuleImageIllegalStateScriptPath) {
+TEST_F(HeaderTestEnvWithMenderArtifact, TestHeaderModuleImageIllegalStateScriptPath) {
 	mendertesting::TemporaryDirectory tmpdir {};
 	CreateTestArtifact(
 		tmpdir,
@@ -687,7 +694,7 @@ TEST_F(HeaderTestEnv, TestHeaderModuleImageIllegalStateScriptPath) {
 	EXPECT_FALSE(expected_header) << expected_header.error().message;
 }
 
-TEST_F(HeaderTestEnv, TestHeaderModuleImageMissingPayloadInHeaderInfo) {
+TEST_F(HeaderTestEnvWithMenderArtifact, TestHeaderModuleImageMissingPayloadInHeaderInfo) {
 	mendertesting::TemporaryDirectory tmpdir {};
 	CreateTestArtifact(
 		tmpdir,

@@ -55,7 +55,7 @@ namespace processes = mender::common::processes;
 using namespace std;
 using namespace mender::common::testing;
 
-class UpdateModuleTests : public testing::Test {
+class UpdateModuleTests : public virtual testing::Test {
 public:
 	TemporaryDirectory temp_dir_;
 	string test_scripts_dir_;
@@ -283,6 +283,17 @@ public:
 	unique_ptr<update_module::UpdateModule> update_module;
 };
 
+// Tests which need to build real Artifacts (via mender-artifact, e.g. through PrepareArtifact()
+// or UpdateModuleTestWithDefaultArtifact) and therefore depend on the external mender-artifact
+// binary being available.
+class UpdateModuleTestsWithMenderArtifact : public UpdateModuleTests, public MenderArtifactTest {
+protected:
+	void SetUp() override {
+		UpdateModuleTests::SetUp();
+		MenderArtifactTest::SetUp();
+	}
+};
+
 TEST_F(UpdateModuleTests, DiscoverUpdateModulesTest) {
 	auto ok = PrepareTestFile("file1", false);
 	ASSERT_TRUE(ok);
@@ -345,9 +356,14 @@ TEST_F(UpdateModuleTests, DiscoverUpdateModulesNoExecutablesTest) {
 	EXPECT_EQ(modules.size(), 0);
 }
 
-class UpdateModuleFileTreeTests : public testing::Test {
+class UpdateModuleFileTreeTests : public MenderArtifactTest {
 public:
 	void SetUp() override {
+		MenderArtifactTest::SetUp();
+		if (IsSkipped()) {
+			return;
+		}
+
 		this->cfg.paths.SetDataStore(test_state_dir.Path());
 
 		this->ctx = make_shared<context::MenderContext>(cfg);
@@ -512,7 +528,7 @@ TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 	ASSERT_EQ(err, error::NoError);
 }
 
-TEST_F(UpdateModuleTests, CallProvidePayloadFileSizes) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, CallProvidePayloadFileSizes) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -594,7 +610,7 @@ exit 1
 	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
 }
 
-TEST_F(UpdateModuleTests, DownloadProcessFailsImmediately) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, DownloadProcessFailsImmediately) {
 	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
@@ -613,7 +629,7 @@ exit 2
 	EXPECT_THAT(err.String(), testing::HasSubstr(" 2"));
 }
 
-TEST_F(UpdateModuleTests, DownloadProcess) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, DownloadProcess) {
 	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
@@ -640,7 +656,7 @@ test "$file" = ""
 		FilesEqual(path::Join(work_dir_, "payload"), path::Join(temp_dir_.Path(), "rootfs")));
 }
 
-TEST_F(UpdateModuleTests, DownloadProcessDiesMidway) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, DownloadProcessDiesMidway) {
 	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
@@ -664,7 +680,7 @@ dd if="$file" of=payload bs=1048576 bs=123456 count=1
 	EXPECT_EQ(err.code, make_error_condition(errc::broken_pipe)) << err.String();
 }
 
-TEST_F(UpdateModuleTests, DownloadProcessDoesntOpenStream) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, DownloadProcessDoesntOpenStream) {
 	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
@@ -687,7 +703,7 @@ test "$file" = "streams/rootfs"
 	EXPECT_EQ(err.code, make_error_condition(errc::broken_pipe)) << err.String();
 }
 
-TEST_F(UpdateModuleTests, DownloadProcessOpensStreamNextButDoesntRead) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, DownloadProcessOpensStreamNextButDoesntRead) {
 	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
@@ -708,7 +724,7 @@ dd if=stream-next count=0
 	EXPECT_EQ(err.code, make_error_condition(errc::broken_pipe)) << err.String();
 }
 
-TEST_F(UpdateModuleTests, DownloadProcessCrashesAfterStreamNext) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, DownloadProcessCrashesAfterStreamNext) {
 	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
@@ -733,7 +749,7 @@ exit 2
 		<< err.String();
 }
 
-TEST_F(UpdateModuleTests, DownloadProcessReadsEverythingExceptLastEntry) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, DownloadProcessReadsEverythingExceptLastEntry) {
 	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
@@ -757,7 +773,7 @@ cat "$file" > payload
 	EXPECT_EQ(err.code, make_error_condition(errc::broken_pipe)) << err.String();
 }
 
-TEST_F(UpdateModuleTests, DownloadProcessTwoFiles) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, DownloadProcessTwoFiles) {
 	UpdateModuleTestWithDefaultArtifact art(*this, 1, 2);
 	ASSERT_FALSE(HasFailure());
 
@@ -794,7 +810,7 @@ test "$file" = ""
 		FilesEqual(path::Join(work_dir_, "payload2"), path::Join(temp_dir_.Path(), "rootfs2")));
 }
 
-TEST_F(UpdateModuleTests, DownloadProcessStoreFiles) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, DownloadProcessStoreFiles) {
 	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
@@ -813,7 +829,7 @@ exit 0
 		FilesEqual(path::Join(temp_dir_.Path(), "rootfs"), path::Join(work_dir_, "files/rootfs")));
 }
 
-TEST_F(UpdateModuleTests, DownloadProcessStoreTwoFiles) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, DownloadProcessStoreTwoFiles) {
 	UpdateModuleTestWithDefaultArtifact art(*this, 1, 2);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
@@ -834,7 +850,7 @@ exit 0
 		FilesEqual(path::Join(temp_dir_.Path(), "rootfs"), path::Join(work_dir_, "files/rootfs2")));
 }
 
-TEST_F(UpdateModuleTests, DownloadProcessStoreFilesFailure) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, DownloadProcessStoreFilesFailure) {
 	// Make sure we get a sensible failure if storing a file failed. Running out of space is
 	// more likely than the error we make here (directory blocks the path), but we still test
 	// the error path.
@@ -858,7 +874,7 @@ exit 0
 	EXPECT_EQ(err.code, make_error_condition(errc::is_a_directory)) << err.String();
 }
 
-TEST_F(UpdateModuleTests, DownloadProcessTimesOut) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, DownloadProcessTimesOut) {
 	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
@@ -885,7 +901,7 @@ sleep 2
 	EXPECT_EQ(err.code, make_error_condition(errc::timed_out)) << err.String();
 }
 
-TEST_F(UpdateModuleTests, CallArtifactInstall) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, CallArtifactInstall) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -905,7 +921,7 @@ exit 1
 	ASSERT_EQ(error::NoError, ret);
 }
 
-TEST_F(UpdateModuleTests, DownloadWithFileSizesProcess) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, DownloadWithFileSizesProcess) {
 	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
@@ -937,7 +953,7 @@ test "$line" = ""
 		FilesEqual(path::Join(work_dir_, "payload"), path::Join(temp_dir_.Path(), "rootfs")));
 }
 
-TEST_F(UpdateModuleTests, CallArtifactReboot) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, CallArtifactReboot) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -956,7 +972,7 @@ exit 1
 	ASSERT_EQ(error::NoError, ret);
 }
 
-TEST_F(UpdateModuleTests, CallArtifactCommit) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, CallArtifactCommit) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -975,7 +991,7 @@ exit 1
 	ASSERT_EQ(error::NoError, ret);
 }
 
-TEST_F(UpdateModuleTests, CallArtifactRollback) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, CallArtifactRollback) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -994,7 +1010,7 @@ exit 1
 	ASSERT_EQ(error::NoError, ret);
 }
 
-TEST_F(UpdateModuleTests, CallArtifactVerifyReboot) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, CallArtifactVerifyReboot) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -1013,7 +1029,7 @@ exit 1
 	ASSERT_EQ(error::NoError, ret);
 }
 
-TEST_F(UpdateModuleTests, CallArtifactRollbackReboot) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, CallArtifactRollbackReboot) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -1032,7 +1048,7 @@ exit 1
 	ASSERT_EQ(error::NoError, ret);
 }
 
-TEST_F(UpdateModuleTests, CallArtifactVerifyRollbackReboot) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, CallArtifactVerifyRollbackReboot) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -1051,7 +1067,7 @@ exit 1
 	ASSERT_EQ(error::NoError, ret);
 }
 
-TEST_F(UpdateModuleTests, CallArtifactFailure) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, CallArtifactFailure) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -1070,7 +1086,7 @@ exit 1
 	ASSERT_EQ(error::NoError, ret);
 }
 
-TEST_F(UpdateModuleTests, CallCleanup) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, CallCleanup) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -1091,7 +1107,7 @@ exit 1
 
 // TODO Check if all states are called.
 
-TEST_F(UpdateModuleTests, CallNeedsArtifactReboot) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, CallNeedsArtifactReboot) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -1178,7 +1194,7 @@ exit 1
 }
 
 
-TEST_F(UpdateModuleTests, CallStatesWithOutputSupportsRollback) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, CallStatesWithOutputSupportsRollback) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -1246,7 +1262,7 @@ exit 1
 	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
 }
 
-TEST_F(UpdateModuleTests, CallStatesNegativeTests) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, CallStatesNegativeTests) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -1280,7 +1296,7 @@ exit 2
 	EXPECT_EQ(ret.message, "ArtifactCommit: Process exited with status 2");
 }
 
-TEST_F(UpdateModuleTests, RegularStateTimeout) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, RegularStateTimeout) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
 
@@ -1298,7 +1314,7 @@ sleep 10
 	EXPECT_EQ(ret.code, make_error_condition(errc::timed_out));
 }
 
-TEST_F(UpdateModuleTests, SystemReboot) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, SystemReboot) {
 	TestEventLoop loop;
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	auto &update_module = *update_module_test.update_module;
@@ -1347,7 +1363,7 @@ TEST_F(UpdateModuleTests, SystemReboot) {
 	EXPECT_THAT(err.String(), testing::HasSubstr("Unable to call system reboot command"));
 }
 
-TEST_F(UpdateModuleTests, IllegalPayloadFilePath) {
+TEST_F(UpdateModuleTestsWithMenderArtifact, IllegalPayloadFilePath) {
 	UpdateModuleTestWithArtifactContainingIllegalPayloadFile art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
@@ -1380,6 +1396,9 @@ exit 0
 }
 
 TEST(AsyncFifoOpener, Open) {
+#ifdef MENDER_TEST_SKIP_ASYNC_FIFO_OPENER_TESTS
+	GTEST_SKIP();
+#endif
 	TestEventLoop loop;
 	TemporaryDirectory tmpdir;
 
@@ -1406,6 +1425,9 @@ TEST(AsyncFifoOpener, Open) {
 }
 
 TEST(AsyncFifoOpener, Error) {
+#ifdef MENDER_TEST_SKIP_ASYNC_FIFO_OPENER_TESTS
+	GTEST_SKIP();
+#endif
 	TestEventLoop loop;
 	TemporaryDirectory tmpdir;
 
@@ -1427,6 +1449,9 @@ TEST(AsyncFifoOpener, Error) {
 }
 
 TEST(AsyncFifoOpener, Cancel) {
+#ifdef MENDER_TEST_SKIP_ASYNC_FIFO_OPENER_TESTS
+	GTEST_SKIP();
+#endif
 	TestEventLoop loop;
 	TemporaryDirectory tmpdir;
 
@@ -1467,9 +1492,23 @@ struct AliasingAndMaliciousArtifactTestParams {
 
 class UpdateModuleAliasingAndMaliciousArtifactsTests :
 	public UpdateModuleTests,
+	public MenderArtifactTest,
 	public ::testing::WithParamInterface<AliasingAndMaliciousArtifactTestParams> {
 protected:
+	// SetUpTestSuite() skipping does not cascade to the individual TEST_P cases, so each test
+	// also needs to skip itself via SetUp() below.
+	void SetUp() override {
+		UpdateModuleTests::SetUp();
+		MenderArtifactTest::SetUp();
+	}
+
 	static void SetUpTestSuite() {
+		// Not a real skip (GTEST_SKIP() here would not cascade to the individual TEST_P cases,
+		// see SetUp() above) -- just avoids wastefully running the mender-artifact script below.
+		if (!HasMenderArtifact()) {
+			return;
+		}
+
 		mender::common::log::SetLevel(mender::common::log::LogLevel::Warning);
 
 		string script = R"(#! /bin/sh
@@ -1593,6 +1632,13 @@ protected:
 
 public:
 	UpdateModuleAliasingAndMaliciousArtifactsTests() {
+		// GTEST_SKIP() cannot be used in a constructor (it would return a value from it), so we
+		// just avoid doing any artifact-dependent work here when mender-artifact is unavailable;
+		// SetUp(), which runs right after this constructor, is what actually skips the test.
+		if (!HasMenderArtifact()) {
+			return;
+		}
+
 		// ASSERT doesn't work well inside constructors because of some peculiar return
 		// semantics, so wrap it in a lambda.
 		[&]() {
@@ -1766,8 +1812,14 @@ struct FileNotInManifestTestParams {
 
 class UpdateModuleFileNotInManifestTests :
 	public UpdateModuleTests,
+	public MenderArtifactTest,
 	public ::testing::WithParamInterface<FileNotInManifestTestParams> {
 public:
+	void SetUp() override {
+		UpdateModuleTests::SetUp();
+		MenderArtifactTest::SetUp();
+	}
+
 	class UpdateModuleTestWithArtifactContainingPayloadFileNotInManifest {
 	public:
 		UpdateModuleTestWithArtifactContainingPayloadFileNotInManifest(

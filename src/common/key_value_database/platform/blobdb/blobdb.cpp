@@ -114,11 +114,14 @@ error::Error KeyValueDatabaseBlobdb::Open(const string &db_path_or_name) {
 }
 
 error::Error KeyValueDatabaseBlobdb::Close() {
+	db_path_or_name_.clear();
 	return error::NoError;
 }
 
 error::Error KeyValueDatabaseBlobdb::RunTransaction(
 	bool write, function<error::Error(Transaction &)> txnFunc) {
+	AssertOrReturnError(!db_path_or_name_.empty());
+
 	FileBlobdbTransaction txn {db_path_or_name_, write};
 	auto err = txn.LockDB();
 	if (err != error::NoError) {

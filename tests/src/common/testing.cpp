@@ -33,6 +33,47 @@ namespace fs = std::filesystem;
 namespace log = mender::common::log;
 namespace path = mender::common::path;
 
+void ExpectJsonEq(const json::Json &expected, const json::Json &actual) {
+	if (expected.IsObject()) {
+		ASSERT_TRUE(actual.IsObject());
+		auto expected_children = expected.GetChildren();
+		ASSERT_TRUE(expected_children);
+		auto actual_children = actual.GetChildren();
+		ASSERT_TRUE(actual_children);
+		ASSERT_EQ(expected_children.value().size(), actual_children.value().size());
+		for (const auto &item : expected_children.value()) {
+			auto it = actual_children.value().find(item.first);
+			ASSERT_NE(it, actual_children.value().end()) << "missing key: " << item.first;
+			ExpectJsonEq(item.second, it->second);
+		}
+	} else if (expected.IsArray()) {
+		ASSERT_TRUE(actual.IsArray());
+		auto expected_size = expected.GetArraySize();
+		ASSERT_TRUE(expected_size);
+		auto actual_size = actual.GetArraySize();
+		ASSERT_TRUE(actual_size);
+		ASSERT_EQ(expected_size.value(), actual_size.value());
+		for (size_t i = 0; i < expected_size.value(); i++) {
+			auto expected_item = expected.Get(i);
+			ASSERT_TRUE(expected_item);
+			auto actual_item = actual.Get(i);
+			ASSERT_TRUE(actual_item);
+			ExpectJsonEq(expected_item.value(), actual_item.value());
+		}
+	} else if (expected.IsString()) {
+		ASSERT_TRUE(actual.IsString());
+		EXPECT_EQ(expected.GetString().value(), actual.GetString().value());
+	} else if (expected.IsBool()) {
+		ASSERT_TRUE(actual.IsBool());
+		EXPECT_EQ(expected.GetBool().value(), actual.GetBool().value());
+	} else if (expected.IsNull()) {
+		EXPECT_TRUE(actual.IsNull());
+	} else {
+		ASSERT_TRUE(actual.IsNumber());
+		EXPECT_EQ(expected.GetDouble().value(), actual.GetDouble().value());
+	}
+}
+
 shared_ptr<ostream> AssertInDeathTestHelper(const char *func, const char *file, int line) {
 	// Unsuccessful assert. Return a stream which prints to stderr, and which aborts when it is
 	// destroyed (at the end of the statement evaluation).
@@ -61,6 +102,11 @@ void TemporaryDirectory::CreateSubDirectory(const string &dirname) {
 	fs::path sub_path {path_};
 	sub_path.append(dirname);
 	ASSERT_TRUE(fs::create_directory(sub_path));
+}
+
+bool HasMenderArtifact() {
+	processes::Process proc({"which", "mender-artifact"});
+	return proc.Run() == error::NoError;
 }
 
 ::testing::AssertionResult FileContains(const string &filename, const string &expected_content) {

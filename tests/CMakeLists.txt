@@ -4,6 +4,8 @@ set(MENDER_SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 set(MENDER_TEST_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 option(MENDER_DOWNLOAD_GTEST "Download google test if it is not found (Default: ON)" ON)
+option(MENDER_TEST_SKIP_ASYNC_FIFO_OPENER_TESTS "Skip the AsyncFifoOpener tests (Default: OFF)" OFF)
+option(MENDER_TEST_RUN_SEQUENTIALLY "Run tests sequentially instead of in parallel (Default: OFF)" OFF)
 if (MENDER_DOWNLOAD_GTEST)
   ### BEGIN taken from https://google.github.io/googletest/quickstart-cmake.html
   include(FetchContent)
@@ -53,8 +55,12 @@ add_custom_target(coverage_no_tests
 
 # CMake is not clever enough to build the tests before running them so we use
 # the 'check' target below that does both.
+set(MENDER_TEST_CTEST_ARGS --output-on-failure)
+if(MENDER_TEST_RUN_SEQUENTIALLY)
+  list(APPEND MENDER_TEST_CTEST_ARGS -j1)
+endif()
 add_custom_target(check
-  COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+  COMMAND ${CMAKE_CTEST_COMMAND} ${MENDER_TEST_CTEST_ARGS}
   DEPENDS tests
 )
 add_custom_target(tests
@@ -69,6 +75,8 @@ add_subdirectory(src/api)
 add_subdirectory(src/artifact)
 add_subdirectory(src/common)
 add_subdirectory(src/client_shared)
-add_subdirectory(src/mender-auth)
+if(NOT MENDER_EMBED_MENDER_AUTH)
+  add_subdirectory(src/mender-auth)
+endif()
 add_subdirectory(src/mender-update)
 

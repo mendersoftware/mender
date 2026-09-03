@@ -433,7 +433,12 @@ bool PrepareUpdateModule(const string &update_module, const string &content) {
 	return !::testing::Test::HasFailure();
 }
 
-TEST(CliTest, InstallAndCommitArtifact) {
+// Tests which need to build real Artifacts (via mender-artifact, e.g. through
+// PrepareSimpleArtifact()/PrepareBootstrapArtifact()) and therefore depend on the external
+// mender-artifact binary being available.
+class CliTestWithMenderArtifact : public mtesting::MenderArtifactTest {};
+
+TEST_F(CliTestWithMenderArtifact, InstallAndCommitArtifact) {
 	mtesting::TemporaryDirectory tmpdir;
 	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
 	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
@@ -490,7 +495,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, InstallAndCommitArtifactCheckProvidesDepends) {
+TEST_F(CliTestWithMenderArtifact, InstallAndCommitArtifactCheckProvidesDepends) {
 	/* Install two Artifacts. One to install some provides, and the second one to
 	 verify the depends
 	 */
@@ -585,7 +590,7 @@ System not modified.
 	}
 }
 
-TEST(CliTest, DownloadWithFileSizesInstallAndCommitArtifact) {
+TEST_F(CliTestWithMenderArtifact, DownloadWithFileSizesInstallAndCommitArtifact) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -658,7 +663,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, InstallAndThenCommitArtifact) {
+TEST_F(CliTestWithMenderArtifact, InstallAndThenCommitArtifact) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -747,7 +752,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, InstallAndThenRollBackArtifact) {
+TEST_F(CliTestWithMenderArtifact, InstallAndThenRollBackArtifact) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -837,7 +842,7 @@ artifact_name=previous
 )"));
 }
 
-TEST(CliTest, RollbackAfterFailure) {
+TEST_F(CliTestWithMenderArtifact, RollbackAfterFailure) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -910,7 +915,7 @@ artifact_name=previous
 )"));
 }
 
-TEST(CliTest, RollbackAfterFailureInDownload) {
+TEST_F(CliTestWithMenderArtifact, RollbackAfterFailureInDownload) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -981,7 +986,7 @@ artifact_name=previous
 )"));
 }
 
-TEST(CliTest, FailedRollbackAfterFailure) {
+TEST_F(CliTestWithMenderArtifact, FailedRollbackAfterFailure) {
 	mtesting::TemporaryDirectory tmpdir;
 	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
 	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
@@ -1050,7 +1055,7 @@ artifact_name=test_INCONSISTENT
 )"));
 }
 
-TEST(CliTest, NoRollbackAfterFailure) {
+TEST_F(CliTestWithMenderArtifact, NoRollbackAfterFailure) {
 	mtesting::TemporaryDirectory tmpdir;
 	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
 	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
@@ -1145,7 +1150,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, CommitNoExistingUpdate) {
+TEST_F(CliTestWithMenderArtifact, CommitNoExistingUpdate) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -1173,7 +1178,7 @@ artifact_name=previous
 )"));
 }
 
-TEST(CliTest, TryToRollBackWithoutSupport) {
+TEST_F(CliTestWithMenderArtifact, TryToRollBackWithoutSupport) {
 	// This case is pretty unlikely, since it requires an Update Module to *lose* its rollback
 	// capability. Still it's there as a possible error, so let's get the code coverage!
 
@@ -1281,7 +1286,7 @@ artifact_name=previous
 )"));
 }
 
-TEST(CliTest, InstallWithRebootRequiredNoArgument) {
+TEST_F(CliTestWithMenderArtifact, InstallWithRebootRequiredNoArgument) {
 	mtesting::TemporaryDirectory tmpdir;
 	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
 	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
@@ -1345,7 +1350,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, InstallWithRebootRequiredWithArgument) {
+TEST_F(CliTestWithMenderArtifact, InstallWithRebootRequiredWithArgument) {
 	mtesting::TemporaryDirectory tmpdir;
 	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
 	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
@@ -1410,7 +1415,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, InstallWhenUpdateInProgress) {
+TEST_F(CliTestWithMenderArtifact, InstallWhenUpdateInProgress) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -1488,7 +1493,7 @@ ArtifactInstall
 )"));
 }
 
-TEST(CliTest, InstallAndThenFailRollBack) {
+TEST_F(CliTestWithMenderArtifact, InstallAndThenFailRollBack) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -1602,7 +1607,7 @@ artifact_name=test_INCONSISTENT
 	}
 }
 
-TEST(CliTest, InstallAndFailCleanup) {
+TEST_F(CliTestWithMenderArtifact, InstallAndFailCleanup) {
 	mtesting::TemporaryDirectory tmpdir;
 	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
 	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
@@ -1669,7 +1674,7 @@ artifact_name=test_INCONSISTENT
 )"));
 }
 
-TEST(CliTest, FailureInArtifactFailure) {
+TEST_F(CliTestWithMenderArtifact, FailureInArtifactFailure) {
 	mtesting::TemporaryDirectory tmpdir;
 	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
 	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
@@ -1772,7 +1777,7 @@ TEST(CliTest, InvalidInstallArguments) {
 	}
 }
 
-TEST(CliTest, InstallAndThenCommitLegacyArtifact) {
+TEST_F(CliTestWithMenderArtifact, InstallAndThenCommitLegacyArtifact) {
 	mtesting::TemporaryDirectory tmpdir;
 	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
 	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact, "test", "", true));
@@ -1856,7 +1861,7 @@ Cleanup
 )"));
 }
 
-TEST(CliTest, InstallUsingOldClientAndThenCommitArtifact) {
+TEST_F(CliTestWithMenderArtifact, InstallUsingOldClientAndThenCommitArtifact) {
 	mtesting::TemporaryDirectory tmpdir;
 	string workdir = path::Join(tmpdir.Path(), "work");
 
@@ -1955,7 +1960,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, InstallUsingOldClientAndThenRollBackArtifact) {
+TEST_F(CliTestWithMenderArtifact, InstallUsingOldClientAndThenRollBackArtifact) {
 	mtesting::TemporaryDirectory tmpdir;
 	string workdir = path::Join(tmpdir.Path(), "work");
 
@@ -2055,7 +2060,7 @@ artifact_name=previous
 )"));
 }
 
-TEST(CliTest, InstallBootstrapArtifact) {
+TEST_F(CliTestWithMenderArtifact, InstallBootstrapArtifact) {
 	mtesting::TemporaryDirectory tmpdir;
 	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
 	ASSERT_TRUE(PrepareBootstrapArtifact(tmpdir.Path(), artifact));
@@ -2084,7 +2089,7 @@ Installed and committed.
 )"));
 }
 
-TEST(CliTest, InstallAndCommitArtifactFromNetwork) {
+TEST_F(CliTestWithMenderArtifact, InstallAndCommitArtifactFromNetwork) {
 	mtesting::TemporaryDirectory tmpdir;
 	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
 	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
@@ -2143,7 +2148,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, StopBeforeArtifactInstallThenResume) {
+TEST_F(CliTestWithMenderArtifact, StopBeforeArtifactInstallThenResume) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2280,7 +2285,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, StopBeforeArtifactCommit_LeaveThenResume) {
+TEST_F(CliTestWithMenderArtifact, StopBeforeArtifactCommit_LeaveThenResume) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2392,7 +2397,7 @@ artifact_name=test
 )"));
 }
 
-TEST(CliTest, StopBeforeArtifactCommit_EnterThenResume) {
+TEST_F(CliTestWithMenderArtifact, StopBeforeArtifactCommit_EnterThenResume) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2546,7 +2551,7 @@ artifact_name=test
 	EXPECT_TRUE(path::FileExists(commit_leave_run));
 }
 
-TEST(CliTest, StopBeforeArtifactCommit_EnterCommandThenRollback) {
+TEST_F(CliTestWithMenderArtifact, StopBeforeArtifactCommit_EnterCommandThenRollback) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -2706,7 +2711,7 @@ artifact_name=previous
 	EXPECT_FALSE(path::FileExists(commit_leave_run));
 }
 
-TEST(CliTest, StopBeforeArtifactRollback_Enter) {
+TEST_F(CliTestWithMenderArtifact, StopBeforeArtifactRollback_Enter) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
@@ -3401,11 +3406,10 @@ Cleanup
 	},
 };
 
-class StandaloneStateScriptTest : public testing::TestWithParam<StandaloneStateScriptTestCase> {
+class StandaloneStateScriptTest :
+	public mtesting::MenderArtifactTest,
+	public testing::WithParamInterface<StandaloneStateScriptTestCase> {
 public:
-	void SetUp() override {
-	}
-
 	mtesting::TemporaryDirectory tmpdir;
 };
 
@@ -3555,7 +3559,7 @@ exit 0
 		mtesting::FileContainsExactly(path::Join(tmpdir_path, "call.log"), GetParam().expected));
 }
 
-TEST(CliTest, MaybeInstallBootstrapArtifactSuccess) {
+TEST_F(CliTestWithMenderArtifact, MaybeInstallBootstrapArtifactSuccess) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	string bootstrap_artifact = path::Join(tmpdir.Path(), "bootstrap.mender");
@@ -3613,7 +3617,8 @@ TEST(CliTest, MaybeInstallBootstrapArtifact_PrepopulatedDB) {
 	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), "artifact_name=foobar\n"));
 }
 
-TEST(CliTest, MaybeInstallBootstrapArtifact_ArtifactVerifyKey_UnsignedArtifact) {
+TEST_F(
+	CliTestWithMenderArtifact, MaybeInstallBootstrapArtifact_ArtifactVerifyKey_UnsignedArtifact) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	string bootstrap_artifact = path::Join(tmpdir.Path(), "bootstrap.mender");
@@ -3635,7 +3640,7 @@ TEST(CliTest, MaybeInstallBootstrapArtifact_ArtifactVerifyKey_UnsignedArtifact) 
 	EXPECT_FALSE(path::FileExists(bootstrap_artifact));
 }
 
-TEST(CliTest, MaybeInstallBootstrapArtifact_ArtifactVerifyKey_SignedArtifact) {
+TEST_F(CliTestWithMenderArtifact, MaybeInstallBootstrapArtifact_ArtifactVerifyKey_SignedArtifact) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	string bootstrap_artifact = path::Join(tmpdir.Path(), "bootstrap.mender");

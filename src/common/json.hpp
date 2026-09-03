@@ -138,15 +138,16 @@ public:
 	// Defined in cpp file as specialized templates.
 	template <typename T>
 	typename enable_if<
-		not is_integral<T>::value or is_same<T, int64_t>::value,
+		not is_integral<T>::value or is_same<T, int64_t>::value or is_same<T, bool>::value,
 		expected::expected<T, error::Error>>::type
 	Get() const;
 
-	// Use this as a catch-all for all integral types besides int64_t. It then automates the
-	// process of checking whether it fits in the requested data type.
+	// Use this as a catch-all for all integral types besides int64_t. It then
+	// automates the process of checking whether it fits in the requested data
+	// type. bool has to be handled carefully as it is an integral type.
 	template <typename T>
 	typename enable_if<
-		is_integral<T>::value and not is_same<T, int64_t>::value,
+		is_integral<T>::value and not is_same<T, int64_t>::value and not is_same<T, bool>::value,
 		expected::expected<T, error::Error>>::type
 	Get() const {
 		auto num = Get<int64_t>();

@@ -3199,9 +3199,17 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 vector<string> MakeTestArtifactScripts(
 	const StateTransitionsTestCase &test_case, const string &tmpdir, const string &log_path);
 
+// Can't use mtesting::MenderArtifactTest as an extra base here: testing::TestWithParam<T>
+// already inherits ::testing::Test non-virtually, so adding another (even virtual) Test base
+// makes the Test base of this fixture ambiguous and it fails to compile. Do the check inline
+// instead.
 class StateDeathTest : public testing::TestWithParam<StateTransitionsTestCase> {
 public:
 	void SetUp() override {
+		if (!mtesting::HasMenderArtifact()) {
+			GTEST_SKIP() << "mender-artifact not available";
+		}
+
 		{
 			vector<string> args {
 				"mender-artifact",
@@ -3914,9 +3922,14 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 	EXPECT_TRUE(mtesting::FileContainsExactly(status_log_path, content));
 }
 
-class StateTestWithArtifact : public testing::Test {
+class StateTestWithArtifact : public mtesting::MenderArtifactTest {
 public:
 	void SetUp() override {
+		MenderArtifactTest::SetUp();
+		if (IsSkipped()) {
+			return;
+		}
+
 		{
 			processes::Process proc({
 				"mender-artifact",
