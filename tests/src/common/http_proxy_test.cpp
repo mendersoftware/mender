@@ -1134,3 +1134,129 @@ TEST_F(HttpsAuthProxyHttpsTest, BasicRequestAndResponse) {
 	EXPECT_TRUE(client_hit_body);
 	EXPECT_EQ(common::StringFromByteVector(received), "Test\r\n");
 }
+
+// A proxy stand-in which records the request line and headers the client sends to it. Most
+// real proxies route on the request-target and ignore the Host header, so they cannot catch a
+// client which puts the wrong value in it. Strict proxies compare the two and reject a mismatch.
+class HttpRecordingProxyTest : public HttpProxyTest {
+public:
+	void StartRecordingProxy(unsigned status_code, const string &status_message) {
+		http::ServerConfig server_config;
+		recording_proxy.reset(new http::Server(server_config, loop));
+		auto err = recording_proxy->AsyncServeUrl(
+			"http://127.0.0.1:" TEST_PROXY_PORT,
+			[](http::ExpectedIncomingRequestPtr exp_req) {
+				ASSERT_TRUE(exp_req) << exp_req.error().String();
+			},
+			[this, status_code, status_message](http::ExpectedIncomingRequestPtr exp_req) {
+				ASSERT_TRUE(exp_req) << exp_req.error().String();
+				auto req = exp_req.value();
+
+				proxy_seen_method = req->GetMethod();
+				proxy_seen_target = req->GetPath();
+				auto exp_host = req->GetHeader("Host");
+				ASSERT_TRUE(exp_host) << exp_host.error().String();
+				proxy_seen_host = exp_host.value();
+
+				auto result = req->MakeResponse();
+				ASSERT_TRUE(result);
+				auto resp = result.value();
+
+				string body = "Test\r\n";
+				resp->SetBodyReader(make_shared<io::StringReader>(body));
+				resp->SetHeader("Content-Length", to_string(body.size()));
+				resp->SetStatusCodeAndMessage(status_code, status_message);
+				resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+			});
+		ASSERT_EQ(error::NoError, err);
+	}
+
+	unique_ptr<http::Server> recording_proxy;
+	http::Method proxy_seen_method {http::Method::Invalid};
+	string proxy_seen_target;
+	string proxy_seen_host;
+};
+
+TEST_F(HttpRecordingProxyTest, ConnectHostHeaderIsTunnelDestination) {
+	// Behave like a strict proxy: refuse the tunnel. The interesting part is what the client
+	// sent, which is asserted on below.
+	StartRecordingProxy(403, "Forbidden");
+
+	bool client_hit_header = false;
+
+	http::ClientConfig client_config {
+		.server_cert_path = "server.localhost.crt",
+		.https_proxy = "http://localhost:" TEST_PROXY_PORT,
+	};
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("https://localhost:" TEST_TLS_PORT "/index.html");
+	auto err = client.AsyncCall(
+		req,
+		[&client_hit_header, this](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_FALSE(exp_resp);
+			EXPECT_THAT(exp_resp.error().String(), testing::HasSubstr("403 Forbidden"));
+			client_hit_header = true;
+			loop.Stop();
+		},
+		[this](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(false) << "Should not get here";
+			loop.Stop();
+		});
+	ASSERT_EQ(error::NoError, err);
+
+	loop.Run();
+
+	EXPECT_TRUE(client_hit_header);
+	EXPECT_EQ(proxy_seen_method, http::Method::CONNECT);
+	EXPECT_EQ(proxy_seen_target, "localhost:" TEST_TLS_PORT);
+	// RFC 9110, section 9.3.6: the Host header of a CONNECT request must be identical to the
+	// request-target. In particular it must not name the proxy.
+	EXPECT_EQ(proxy_seen_host, "localhost:" TEST_TLS_PORT);
+}
+
+TEST_F(HttpRecordingProxyTest, HttpProxyHostHeaderIsOriginServer) {
+	StartRecordingProxy(200, "Success");
+
+	bool client_hit_header = false;
+	bool client_hit_body = false;
+
+	http::ClientConfig client_config {
+		.http_proxy = "http://localhost:" TEST_PROXY_PORT,
+	};
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://localhost:" TEST_PORT "/index.html");
+	vector<uint8_t> received;
+	auto err = client.AsyncCall(
+		req,
+		[&client_hit_header, &received](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+			EXPECT_EQ(resp->GetStatusCode(), 200);
+			client_hit_header = true;
+
+			auto body_writer = make_shared<io::ByteWriter>(received);
+			body_writer->SetUnlimited(true);
+			resp->SetBodyWriter(body_writer);
+		},
+		[&client_hit_body, this](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			client_hit_body = true;
+			loop.Stop();
+		});
+	ASSERT_EQ(error::NoError, err);
+
+	loop.Run();
+
+	EXPECT_TRUE(client_hit_header);
+	EXPECT_TRUE(client_hit_body);
+	EXPECT_EQ(common::StringFromByteVector(received), "Test\r\n");
+	EXPECT_EQ(proxy_seen_method, http::Method::GET);
+	EXPECT_EQ(proxy_seen_target, "http://localhost:" TEST_PORT "/index.html");
+	// RFC 9112, section 3.2.2: with an absolute-form request-target the Host header must still
+	// name the origin server, not the proxy.
+	EXPECT_EQ(proxy_seen_host, "localhost:" TEST_PORT);
+}

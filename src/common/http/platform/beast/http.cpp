@@ -414,17 +414,19 @@ error::Error Client::AsyncCall(
 
 	request_ = req;
 
-	err = HandleProxySetup();
-	if (err != error::NoError) {
-		return err;
-	}
-
 	// NOTE: The AWS loadbalancer requires that the HOST header always be set, in order for the
-	// request to route to our k8s cluster. Set this in all cases.
+	// request to route to our k8s cluster. Set this in all cases. It must be set before
+	// HandleProxySetup(), which rewrites the address to point at the proxy: the Host header
+	// must always name the origin server, never the proxy (RFC 9112, section 3.2.2).
 	const string header_url = CreateHOSTAddress(req);
 	req->SetHeader("HOST", header_url);
 
 	log::Trace("Setting HOST address: " + header_url);
+
+	err = HandleProxySetup();
+	if (err != error::NoError) {
+		return err;
+	}
 
 	// Add User-Agent header for all requests
 	req->SetHeader("User-Agent", "Mender/" MENDER_VERSION);
@@ -543,13 +545,13 @@ error::Error Client::HandleProxySetup() {
 
 			request_->address_.path =
 				secondary_req_->address_.host + ":" + to_string(secondary_req_->address_.port);
+			// The Host header of a CONNECT request must be identical to the request-target,
+			// i.e. the tunnel destination, not the proxy (RFC 9110, section 9.3.6). Proxies
+			// which enforce destination policy on the Host header reject a mismatch.
+			request_->SetHeader("HOST", request_->address_.path);
 			request_->address_.host = proxy_address.host;
 			request_->address_.port = proxy_address.port;
 			request_->address_.protocol = proxy_address.protocol;
-
-			// Set Host header for CONNECT request - required by some proxies (RFC 7230)
-			const string header_url = CreateHOSTAddress(request_);
-			request_->SetHeader("HOST", header_url);
 
 			err = AddProxyAuthHeader(*request_, proxy_address);
 			if (err != error::NoError) {
