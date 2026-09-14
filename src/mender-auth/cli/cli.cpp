@@ -54,6 +54,7 @@ const vector<conf::CliOption> opts_bootstrap_daemon {
 		.description =
 			"Passphrase file for decrypting an encrypted private key. '-' loads passphrase from stdin",
 		.default_value = "''",
+		.parameter = "FILE or -",
 	},
 };
 
