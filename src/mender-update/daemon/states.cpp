@@ -611,9 +611,10 @@ SendStatusUpdateState::SendStatusUpdateState(
 	int retry_count) :
 	status_(status),
 	mode_(FailureMode::RetryThenFail),
-	retry_(Retry {
-		http::ExponentialBackoff(chrono::seconds(retry_interval_seconds), retry_count),
-		event_loop}) {
+	retry_(
+		Retry {
+			http::ExponentialBackoff(chrono::seconds(retry_interval_seconds), retry_count),
+			event_loop}) {
 }
 
 void SendStatusUpdateState::SetSmallestWaitInterval(chrono::milliseconds interval) {

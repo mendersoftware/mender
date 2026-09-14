@@ -51,9 +51,10 @@ expected::ExpectedInt FileCreate(const string &path, vector<Perms> perms) {
 		return fd;
 	}
 
-	return expected::unexpected(error::Error(
-		std::generic_category().default_error_condition(err),
-		"Failed to create file '" + path + "': " + strerror(err)));
+	return expected::unexpected(
+		error::Error(
+			std::generic_category().default_error_condition(err),
+			"Failed to create file '" + path + "': " + strerror(err)));
 }
 
 error::Error DataSyncRecursively(const string &dir) {

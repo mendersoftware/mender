@@ -40,8 +40,9 @@ using ExpectedPayloadType = expected::expected<vector<PayloadType>, error::Error
 
 ExpectedPayloadType ToPayloadTypes(const json::Json &j) {
 	if (!j.IsArray()) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError, "The JSON object is not an array"));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError, "The JSON object is not an array"));
 	}
 	vector<PayloadType> vector_elements {};
 	size_t vector_size {j.GetArraySize().value()};
@@ -49,9 +50,11 @@ ExpectedPayloadType ToPayloadTypes(const json::Json &j) {
 		auto expected_element =
 			j.Get(i).and_then([](const json::Json &j) { return j.Get("type"); });
 		if (!expected_element) {
-			return expected::unexpected(parser_error::MakeError(
-				parser_error::Code::ParseError,
-				"Failed to get the type from the payload: " + expected_element.error().message));
+			return expected::unexpected(
+				parser_error::MakeError(
+					parser_error::Code::ParseError,
+					"Failed to get the type from the payload: "
+						+ expected_element.error().message));
 		}
 		auto json_element = expected_element.value();
 		if (json_element.IsString()) {
@@ -83,9 +86,10 @@ ExpectedHeaderInfo Parse(io::Reader &reader) {
 	auto expected_json = json::Load(reader);
 
 	if (!expected_json) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the header JSON: " + expected_json.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the header JSON: " + expected_json.error().message));
 	}
 
 	const auto header_info_json = expected_json.value();
@@ -98,9 +102,10 @@ ExpectedHeaderInfo Parse(io::Reader &reader) {
 
 	auto payloads = header_info_json.Get("payloads").and_then(ToPayloadTypes);
 	if (!payloads) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the header-info payloads JSON: " + payloads.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the header-info payloads JSON: " + payloads.error().message));
 	}
 	info.payloads = payloads.value();
 
@@ -111,9 +116,11 @@ ExpectedHeaderInfo Parse(io::Reader &reader) {
 
 	auto provides = header_info_json.Get("artifact_provides");
 	if (!provides) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the header-info artifact_provides JSON: " + provides.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the header-info artifact_provides JSON: "
+					+ provides.error().message));
 	}
 
 	// provides:artifact_name (required)
@@ -131,10 +138,11 @@ ExpectedHeaderInfo Parse(io::Reader &reader) {
 	auto artifact_group = provides.value().Get("artifact_group").and_then(json::ToString);
 	if (!artifact_group
 		&& artifact_group.error().code != json::MakeError(json::KeyError, "").code) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the header-info artifact_group provides JSON: "
-				+ artifact_group.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the header-info artifact_group provides JSON: "
+					+ artifact_group.error().message));
 	}
 	if (artifact_group) {
 		info.provides.artifact_group = artifact_group.value();
@@ -147,9 +155,11 @@ ExpectedHeaderInfo Parse(io::Reader &reader) {
 
 	auto depends = header_info_json.Get("artifact_depends");
 	if (!depends) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the header-info artifact_depends JSON: " + depends.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the header-info artifact_depends JSON: "
+					+ depends.error().message));
 	}
 
 	// device_type[string] (required)
@@ -166,10 +176,11 @@ ExpectedHeaderInfo Parse(io::Reader &reader) {
 		depends.value().Get("artifact_name").and_then(json::ToStringVector);
 	if (!artifact_name_depends
 		&& artifact_name_depends.error().code != json::MakeError(json::KeyError, "").code) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the header-info artifact_name depends JSON: "
-				+ artifact_name_depends.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the header-info artifact_name depends JSON: "
+					+ artifact_name_depends.error().message));
 	}
 	if (artifact_name_depends) {
 		info.depends.artifact_name = artifact_name_depends.value();
@@ -180,10 +191,11 @@ ExpectedHeaderInfo Parse(io::Reader &reader) {
 		depends.value().Get("artifact_group").and_then(json::ToStringVector);
 	if (!artifact_group_depends
 		&& artifact_group_depends.error().code != json::MakeError(json::KeyError, "").code) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the header-info artifact_group_depends JSON: "
-				+ artifact_group_depends.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the header-info artifact_group_depends JSON: "
+					+ artifact_group_depends.error().message));
 	}
 	if (artifact_group_depends) {
 		info.depends.artifact_group = artifact_group_depends.value();

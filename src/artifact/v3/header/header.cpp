@@ -69,17 +69,19 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 	token::Token tok = lexer.Next();
 
 	if (tok.type != token::Type::HeaderInfo) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Got unexpected token: '" + tok.TypeToString() + "' expected 'header-info'"));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Got unexpected token: '" + tok.TypeToString() + "' expected 'header-info'"));
 	}
 
 	auto expected_info = header::info::Parse(*tok.value);
 
 	if (!expected_info) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the header-info: " + expected_info.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the header-info: " + expected_info.error().message));
 	}
 	header.info = expected_info.value();
 
@@ -111,19 +113,21 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 				"Error checking if path is equal to or within directory"));
 		}
 		if (!exp_path_is_safe.value()) {
-			return expected::unexpected(parser_error::MakeError(
-				parser_error::Code::ParseError,
-				"Error parsing state script: Provided script path is outside state script directory."));
+			return expected::unexpected(
+				parser_error::MakeError(
+					parser_error::Code::ParseError,
+					"Error parsing state script: Provided script path is outside state script directory."));
 		}
 		errno = 0;
 		ofstream myfile(artifact_script_path);
 		log::Trace("state script name: " + tok.name);
 		if (!myfile.good()) {
 			auto io_errno = errno;
-			return expected::unexpected(error::Error(
-				std::generic_category().default_error_condition(io_errno),
-				"Failed to create a file for writing the Artifact script: " + artifact_script_path
-					+ " to the filesystem"));
+			return expected::unexpected(
+				error::Error(
+					std::generic_category().default_error_condition(io_errno),
+					"Failed to create a file for writing the Artifact script: "
+						+ artifact_script_path + " to the filesystem"));
 		}
 		io::StreamWriter sw {myfile};
 
@@ -154,17 +158,19 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 		log::Trace("Creating the Artifact script version file: " + artifact_script_version_file);
 		if (!myfile.good()) {
 			auto io_errno = errno;
-			return expected::unexpected(error::Error(
-				std::generic_category().default_error_condition(io_errno),
-				"Failed to create the Artifact script version file: "
-					+ artifact_script_version_file));
+			return expected::unexpected(
+				error::Error(
+					std::generic_category().default_error_condition(io_errno),
+					"Failed to create the Artifact script version file: "
+						+ artifact_script_version_file));
 		}
 		myfile << to_string(conf.artifact_scripts_version);
 		if (!myfile.good()) {
 			auto io_errno = errno;
-			return expected::unexpected(error::Error(
-				std::generic_category().default_error_condition(io_errno),
-				"I/O error writing the Artifact scripts version file"));
+			return expected::unexpected(
+				error::Error(
+					std::generic_category().default_error_condition(io_errno),
+					"I/O error writing the Artifact scripts version file"));
 		}
 
 		// Sync the directory so we know it is permanent.
@@ -185,31 +191,35 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 
 		// NOTE: We currently do not support multiple payloads
 		if (current_index != 0) {
-			return expected::unexpected(parser_error::MakeError(
-				parser_error::Code::ParseError,
-				"Multiple header entries found. Currently only one is supported"));
+			return expected::unexpected(
+				parser_error::MakeError(
+					parser_error::Code::ParseError,
+					"Multiple header entries found. Currently only one is supported"));
 		}
 
 		// Special check for malformed artifact that does not list the payload in the header.
 		if (header.info.payloads.size() == 0) {
-			return expected::unexpected(parser_error::MakeError(
-				parser_error::Code::ParseError,
-				"Unsupported number of payloads defined in header: "
-					+ to_string(header.info.payloads.size())));
+			return expected::unexpected(
+				parser_error::MakeError(
+					parser_error::Code::ParseError,
+					"Unsupported number of payloads defined in header: "
+						+ to_string(header.info.payloads.size())));
 		}
 
 		SubHeader sub_header {};
 		if (tok.type != token::Type::ArtifactHeaderTypeInfo) {
-			return expected::unexpected(parser_error::MakeError(
-				parser_error::Code::ParseError,
-				"Unexpected entry: " + tok.TypeToString() + " expected: type-info"));
+			return expected::unexpected(
+				parser_error::MakeError(
+					parser_error::Code::ParseError,
+					"Unexpected entry: " + tok.TypeToString() + " expected: type-info"));
 		}
 
 		if (current_index != tok.Index()) {
-			return expected::unexpected(parser_error::MakeError(
-				parser_error::Code::ParseError,
-				"Unexpected index order for the type-info: " + tok.name + " expected: headers/"
-					+ IndexString(current_index) + "/type-info"));
+			return expected::unexpected(
+				parser_error::MakeError(
+					parser_error::Code::ParseError,
+					"Unexpected index order for the type-info: " + tok.name + " expected: headers/"
+						+ IndexString(current_index) + "/type-info"));
 		}
 		auto expected_type_info = type_info::Parse(*tok.value);
 		if (!expected_type_info) {
@@ -235,10 +245,11 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 		// meta-data (optional)
 		if (tok.type == token::Type::ArtifactHeaderMetaData) {
 			if (current_index != tok.Index()) {
-				return expected::unexpected(parser_error::MakeError(
-					parser_error::Code::ParseError,
-					"Unexpected index order for the meta-data: " + tok.name + " expected: headers/"
-						+ IndexString(current_index) + "/meta-data"));
+				return expected::unexpected(
+					parser_error::MakeError(
+						parser_error::Code::ParseError,
+						"Unexpected index order for the meta-data: " + tok.name
+							+ " expected: headers/" + IndexString(current_index) + "/meta-data"));
 			}
 			auto expected_meta_data = meta_data::Parse(*tok.value);
 			if (!expected_meta_data) {
@@ -255,14 +266,16 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 	}
 
 	if (header.info.payloads.size() != header.subHeaders.size()) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Header's type-info files number not equal to payloads number"));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Header's type-info files number not equal to payloads number"));
 	}
 
 	if (tok.type == token::Type::Unrecognized) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError, "Unrecognized error while parsing the header"));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError, "Unrecognized error while parsing the header"));
 	}
 
 	return header;

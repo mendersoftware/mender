@@ -49,16 +49,18 @@ namespace payload = mender::artifact::v3::payload;
 ExpectedArtifact VerifyEmptyPayloadArtifact(
 	Artifact &artifact, lexer::Lexer<token::Token, token::Type> &lexer) {
 	if (artifact.header.subHeaders.size() != 1) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"No type-info found in the header. One must be present."));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"No type-info found in the header. One must be present."));
 	}
 
 	// No meta-data allowed
 	if (artifact.header.subHeaders.at(0).metadata) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Empty payload Artifacts cannot contain a meta-data section"));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Empty payload Artifacts cannot contain a meta-data section"));
 	}
 	// TODO - When augmented sections are added - check for these also
 	log::Trace("Empty payload Artifact: Verifying empty payload");
@@ -68,8 +70,10 @@ ExpectedArtifact VerifyEmptyPayloadArtifact(
 		auto payload = expected_payload.value();
 		auto expected_payload_file = payload.Next();
 		if (expected_payload_file) {
-			return expected::unexpected(parser_error::MakeError(
-				parser_error::Code::ParseError, "Empty Payload Artifacts cannot have a payload"));
+			return expected::unexpected(
+				parser_error::MakeError(
+					parser_error::Code::ParseError,
+					"Empty Payload Artifacts cannot have a payload"));
 		} else if (
 			expected_payload_file.error().code
 			!= parser_error::MakeError(parser_error::Code::NoMorePayloadFilesError, "").code) {
@@ -93,9 +97,10 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 
 	log::Trace("Parsing Version");
 	if (tok.type != token::Type::Version) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Got unexpected token : '" + tok.TypeToString() + "' expected 'version'"));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Got unexpected token : '" + tok.TypeToString() + "' expected 'version'"));
 	}
 
 	// Note that we're not verifying the version file's checksum here because we do not know
@@ -103,9 +108,10 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 	auto expected_version = version::Parse(*tok.value);
 
 	if (!expected_version) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the version: " + expected_version.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the version: " + expected_version.error().message));
 	}
 
 	auto version = expected_version.value();
@@ -113,15 +119,17 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 	log::Trace("Parsing the Manifest");
 	tok = lexer.Next();
 	if (tok.type != token::Type::Manifest) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Got unexpected token " + tok.TypeToString() + " expected 'manifest'"));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Got unexpected token " + tok.TypeToString() + " expected 'manifest'"));
 	}
 	auto expected_manifest = manifest::Parse(*tok.value);
 	if (!expected_manifest) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the manifest: " + expected_manifest.error().String()));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the manifest: " + expected_manifest.error().String()));
 	}
 	auto manifest = expected_manifest.value();
 
@@ -131,17 +139,20 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 	// When configured for signed artifacts, refuse installing non signed ones
 	if (config.verify_signature != config::Signature::Skip
 		and config.artifact_verify_keys.size() > 0 and tok.type != token::Type::ManifestSignature) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::SignatureVerificationError,
-			"expecting signed artifact, but no signature file found"));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::SignatureVerificationError,
+				"expecting signed artifact, but no signature file found"));
 	}
 
 	if (tok.type == token::Type::ManifestSignature) {
 		auto expected_signature = manifest_sig::Parse(*tok.value);
 		if (!expected_signature) {
-			return expected::unexpected(parser_error::MakeError(
-				parser_error::Code::ParseError,
-				"Failed to parse the manifest signature: " + expected_signature.error().message));
+			return expected::unexpected(
+				parser_error::MakeError(
+					parser_error::Code::ParseError,
+					"Failed to parse the manifest signature: "
+						+ expected_signature.error().message));
 		}
 		signature = expected_signature.value();
 		tok = lexer.Next();
@@ -152,15 +163,17 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 			auto expected_verified = manifest_sig::VerifySignature(
 				*signature, manifest.shasum, config.artifact_verify_keys);
 			if (!expected_verified) {
-				return expected::unexpected(parser_error::MakeError(
-					parser_error::Code::SignatureVerificationError,
-					"Failed to verify the manifest signature: "
-						+ expected_verified.error().message));
+				return expected::unexpected(
+					parser_error::MakeError(
+						parser_error::Code::SignatureVerificationError,
+						"Failed to verify the manifest signature: "
+							+ expected_verified.error().message));
 			}
 			if (!expected_verified.value()) {
-				return expected::unexpected(parser_error::MakeError(
-					parser_error::Code::SignatureVerificationError,
-					"Wrong manifest signature or wrong key"));
+				return expected::unexpected(
+					parser_error::MakeError(
+						parser_error::Code::SignatureVerificationError,
+						"Wrong manifest signature or wrong key"));
 			}
 		}
 	}
@@ -168,24 +181,27 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 	// Manually check the version file's checksum as it is available to us now.
 	log::Trace("Check version integrity");
 	if (manifest.Get("version") != version.shasum.String()) {
-		return expected::unexpected(sha::MakeError(
-			sha::ShasumMismatchError,
-			"The checksum of version file does not match the expected checksum, (expected): "
-				+ manifest.Get("version") + " (calculated): " + version.shasum.String()));
+		return expected::unexpected(
+			sha::MakeError(
+				sha::ShasumMismatchError,
+				"The checksum of version file does not match the expected checksum, (expected): "
+					+ manifest.Get("version") + " (calculated): " + version.shasum.String()));
 	}
 
 	log::Trace("Parsing the Header");
 	if (tok.type != token::Type::Header) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Got unexpected token " + tok.TypeToString() + " expected 'Header'"));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Got unexpected token " + tok.TypeToString() + " expected 'Header'"));
 	}
 	sha::Reader shasum_reader {*tok.value, manifest.Get("header.tar")};
 	auto expected_header = v3::header::Parse(shasum_reader, config);
 	if (!expected_header) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the header: " + expected_header.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the header: " + expected_header.error().message));
 	}
 	auto header = expected_header.value();
 
@@ -214,21 +230,26 @@ ExpectedPayload Artifact::Next() {
 		// Currently only one payload supported
 		switch (tok.type) {
 		case token::Type::EOFToken:
-			return expected::unexpected(parser_error::MakeError(
-				parser_error::Code::EOFError, "Reached the end of the Artifact"));
+			return expected::unexpected(
+				parser_error::MakeError(
+					parser_error::Code::EOFError, "Reached the end of the Artifact"));
 		case token::Type::Payload:
-			return expected::unexpected(error::Error(
-				make_error_condition(errc::not_supported), "Only one artifact payload supported"));
+			return expected::unexpected(
+				error::Error(
+					make_error_condition(errc::not_supported),
+					"Only one artifact payload supported"));
 		default:
-			return expected::unexpected(parser_error::MakeError(
-				parser_error::Code::ParseError, "Unexpected token: " + tok.TypeToString()));
+			return expected::unexpected(
+				parser_error::MakeError(
+					parser_error::Code::ParseError, "Unexpected token: " + tok.TypeToString()));
 		}
 	}
 
 	if (tok.type != token::Type::Payload) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Got unexpected token " + tok.TypeToString() + " expected 'data/0000.tar"));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Got unexpected token " + tok.TypeToString() + " expected 'data/0000.tar"));
 	}
 
 	log::Trace("Parsing the payload");

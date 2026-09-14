@@ -219,8 +219,9 @@ void Process::Cancel() {
 		auto &async_wait_data = async_wait_data_;
 		auto &handler = async_wait_data->handler;
 		async_wait_data_->event_loop->Post([handler]() {
-			handler(error::Error(
-				make_error_condition(errc::operation_canceled), "Process::AsyncWait canceled"));
+			handler(
+				error::Error(
+					make_error_condition(errc::operation_canceled), "Process::AsyncWait canceled"));
 		});
 	}
 
@@ -330,8 +331,10 @@ ExpectedLineData Process::GenerateLineData(chrono::nanoseconds timeout) {
 		ifstream f(args_[0]);
 		if (!f.good()) {
 			int errnum = errno;
-			return expected::unexpected(error::Error(
-				generic_category().default_error_condition(errnum), "Cannot launch " + args_[0]));
+			return expected::unexpected(
+				error::Error(
+					generic_category().default_error_condition(errnum),
+					"Cannot launch " + args_[0]));
 		}
 	}
 
@@ -378,9 +381,10 @@ io::ExpectedAsyncReaderPtr Process::GetProcessReader(events::EventLoop &loop, in
 	int ret = pipe(fds);
 	if (ret < 0) {
 		int err = errno;
-		return expected::unexpected(error::Error(
-			generic_category().default_error_condition(err),
-			"Could not get process stdout reader"));
+		return expected::unexpected(
+			error::Error(
+				generic_category().default_error_condition(err),
+				"Could not get process stdout reader"));
 	}
 
 	pipe_ref = fds[1];

@@ -134,12 +134,14 @@ error::Error KeyValueDatabaseLmdb::OpenInternal(const string &path, bool try_rec
 			return error::NoError;
 		} catch (fs::filesystem_error &e) {
 			env_.reset();
-			return err.FollowedBy(error::Error(e.code().default_error_condition(), e.what())
-									  .WithContext("Opening LMDB database failed"));
+			return err.FollowedBy(
+				error::Error(e.code().default_error_condition(), e.what())
+					.WithContext("Opening LMDB database failed"));
 		} catch (std::runtime_error &e) {
 			env_.reset();
-			return err.FollowedBy(error::MakeError(error::GenericError, e.what())
-									  .WithContext("Opening LMDB database failed"));
+			return err.FollowedBy(
+				error::MakeError(error::GenericError, e.what())
+					.WithContext("Opening LMDB database failed"));
 		}
 	}
 

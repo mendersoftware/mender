@@ -114,9 +114,10 @@ Handle::Handle(io::Reader &reader) :
 
 ExpectedSize Handle::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
 	if (!initalized_) {
-		return expected::unexpected(common::error::MakeError(
-			common::error::GenericError,
-			"Unable to read from a tar reader which is not initialized properly"));
+		return expected::unexpected(
+			common::error::MakeError(
+				common::error::GenericError,
+				"Unable to read from a tar reader which is not initialized properly"));
 	}
 	size_t iterator_size {static_cast<size_t>(end - start)};
 	ssize_t read_bytes {archive_read_data(archive_.get(), &start[0], iterator_size)};

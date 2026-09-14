@@ -124,9 +124,10 @@ void UpdateModule::StateRunner::ProcessFinishedHandler(State state, error::Error
 		// False is returned if the directory doesn't exist, and `ec` is only set to an
 		// error if it's not this type of error, which is what we want.
 		if (!fs::remove_all(module_work_path, ec) && ec) {
-			err = err.FollowedBy(error::Error(
-				ec.default_error_condition(),
-				StateToString(state) + ": Error removing directory: " + module_work_path));
+			err = err.FollowedBy(
+				error::Error(
+					ec.default_error_condition(),
+					StateToString(state) + ": Error removing directory: " + module_work_path));
 		}
 	}
 
@@ -172,9 +173,10 @@ error::Error UpdateModule::AsyncSystemReboot(
 			return;
 		}
 
-		handler(error::Error(
-			make_error_condition(errc::timed_out),
-			"`reboot` command did not kill us; rebooting failed"));
+		handler(
+			error::Error(
+				make_error_condition(errc::timed_out),
+				"`reboot` command did not kill us; rebooting failed"));
 	});
 
 	return error::NoError;

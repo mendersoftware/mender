@@ -61,9 +61,10 @@ expected::Expected<std::unique_ptr<UpdateModule>> UpdateModule::Create(
 			"Error checking if path is equal to or within directory"));
 	}
 	if (!exp_path_is_safe.value()) {
-		return expected::unexpected(context::MakeError(
-			context::NoSuchUpdateModuleError,
-			"Error creating Update Module: Provided Module path is outside Update Modules directory."));
+		return expected::unexpected(
+			context::MakeError(
+				context::NoSuchUpdateModuleError,
+				"Error creating Update Module: Provided Module path is outside Update Modules directory."));
 	}
 
 	return std::unique_ptr<UpdateModule>(new UpdateModule(ctx, payload_type, update_module_path));
@@ -95,9 +96,11 @@ static expected::ExpectedBool HandleProvidePayloadFileSizesOutput(
 	} else if (processStdOut == "No" || processStdOut == "") {
 		return false;
 	}
-	return expected::unexpected(error::Error(
-		make_error_condition(errc::protocol_error),
-		"Unexpected output from the process for ProvidePayloadFileSizes state: " + processStdOut));
+	return expected::unexpected(
+		error::Error(
+			make_error_condition(errc::protocol_error),
+			"Unexpected output from the process for ProvidePayloadFileSizes state: "
+				+ processStdOut));
 }
 
 expected::ExpectedBool UpdateModule::ProvidePayloadFileSizes() {
@@ -184,9 +187,10 @@ static ExpectedRebootAction HandleNeedsRebootOutput(const expected::ExpectedStri
 	} else if (processStdOut == "Automatic") {
 		return RebootAction::Automatic;
 	}
-	return expected::unexpected(error::Error(
-		make_error_condition(errc::protocol_error),
-		"Unexpected output from the process for NeedsReboot state: " + processStdOut));
+	return expected::unexpected(
+		error::Error(
+			make_error_condition(errc::protocol_error),
+			"Unexpected output from the process for NeedsReboot state: " + processStdOut));
 }
 
 ExpectedRebootAction UpdateModule::NeedsReboot() {
@@ -230,9 +234,10 @@ static expected::ExpectedBool HandleSupportsRollbackOutput(
 	} else if (processStdOut == "No" || processStdOut == "") {
 		return false;
 	}
-	return expected::unexpected(error::Error(
-		make_error_condition(errc::protocol_error),
-		"Unexpected output from the process for SupportsRollback state: " + processStdOut));
+	return expected::unexpected(
+		error::Error(
+			make_error_condition(errc::protocol_error),
+			"Unexpected output from the process for SupportsRollback state: " + processStdOut));
 }
 
 expected::ExpectedBool UpdateModule::SupportsRollback() {

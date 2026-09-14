@@ -91,9 +91,10 @@ public:
 		string name = "update-module";
 		if (!PrepareTestFile(name, true, content)) {
 			int err = errno;
-			return expected::unexpected(error::Error(
-				generic_category().default_error_condition(err),
-				"Cannot create update module script"));
+			return expected::unexpected(
+				error::Error(
+					generic_category().default_error_condition(err),
+					"Cannot create update module script"));
 		}
 
 		update_module.SetUpdateModulePath(GetUpdateModulePath());
@@ -1948,19 +1949,22 @@ exit 0
 		// If we already encountered a file that was not in the manifest, the rest of the files
 		// in the manifest should not be parsed (and thus copied to work dir) at all.
 		if (fileNotInManifestEncountered) {
-			EXPECT_FALSE(std::filesystem::exists(
-				temp_dir_.Path() + "/work/files/rootfs" + std::to_string(i)));
+			EXPECT_FALSE(
+				std::filesystem::exists(
+					temp_dir_.Path() + "/work/files/rootfs" + std::to_string(i)));
 			continue;
 		}
 
 		switch (param.files[i]) {
 		case true:
-			EXPECT_TRUE(std::filesystem::exists(
-				temp_dir_.Path() + "/work/files/rootfs" + std::to_string(i)));
+			EXPECT_TRUE(
+				std::filesystem::exists(
+					temp_dir_.Path() + "/work/files/rootfs" + std::to_string(i)));
 			break;
 		case false:
-			EXPECT_FALSE(std::filesystem::exists(
-				temp_dir_.Path() + "/work/files/rootfs" + std::to_string(i)));
+			EXPECT_FALSE(
+				std::filesystem::exists(
+					temp_dir_.Path() + "/work/files/rootfs" + std::to_string(i)));
 			fileNotInManifestEncountered = true;
 			break;
 		}

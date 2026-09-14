@@ -123,9 +123,10 @@ void Server::RequestHeaderHandler(http::ExpectedIncomingRequestPtr exp_req) {
 			// We can only do this once, because the incoming request body is not
 			// seekable.
 			if (*generated) {
-				return expected::unexpected(error::Error(
-					make_error_condition(errc::invalid_seek),
-					"Cannot rewind HTTP stream to regenerate body"));
+				return expected::unexpected(
+					error::Error(
+						make_error_condition(errc::invalid_seek),
+						"Cannot rewind HTTP stream to regenerate body"));
 			} else {
 				*generated = true;
 				return body_reader;

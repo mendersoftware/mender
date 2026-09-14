@@ -85,8 +85,10 @@ ExpectedLogLevel StringToLogLevel(const string &level_str) {
 	} else if (level_str == "trace") {
 		return ExpectedLogLevel(LogLevel::Trace);
 	} else {
-		return ExpectedLogLevel(expected::unexpected(MakeError(
-			LogErrorCode::InvalidLogLevelError, "'" + level_str + "' is not a valid log level")));
+		return ExpectedLogLevel(
+			expected::unexpected(MakeError(
+				LogErrorCode::InvalidLogLevelError,
+				"'" + level_str + "' is not a valid log level")));
 	}
 }
 

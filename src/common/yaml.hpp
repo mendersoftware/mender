@@ -136,10 +136,11 @@ public:
 			}
 		}
 		if (not fits) {
-			return expected::unexpected(error::Error(
-				make_error_condition(errc::result_out_of_range),
-				"Json::Get(): Number " + to_string(num.value())
-					+ " does not fit in requested data type"));
+			return expected::unexpected(
+				error::Error(
+					make_error_condition(errc::result_out_of_range),
+					"Json::Get(): Number " + to_string(num.value())
+						+ " does not fit in requested data type"));
 		}
 		return static_cast<T>(num.value());
 	}

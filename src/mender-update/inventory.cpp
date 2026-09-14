@@ -177,13 +177,14 @@ error::Error InventoryClient::PushInventoryData(
 				} else {
 					err_str = resp->GetStatusMessage();
 				}
-				api_handler(APIResponse {
-					status,
-					nullopt,
-					MakeError(
-						BadResponseError,
-						"Got unexpected response " + to_string(status)
-							+ " from inventory API: " + err_str)});
+				api_handler(
+					APIResponse {
+						status,
+						nullopt,
+						MakeError(
+							BadResponseError,
+							"Got unexpected response " + to_string(status)
+								+ " from inventory API: " + err_str)});
 			}
 		});
 
@@ -204,8 +205,9 @@ void InventoryClient::HeaderHandler(
 	auto resp = exp_resp.value();
 	auto status = resp->GetStatusCode();
 	if (status == http::StatusTooManyRequests) {
-		api_handler(APIResponse {
-			status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")});
+		api_handler(
+			APIResponse {
+				status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")});
 	}
 	auto content_length = resp->GetHeader("Content-Length");
 	if (!content_length) {

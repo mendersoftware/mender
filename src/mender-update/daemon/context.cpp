@@ -88,9 +88,10 @@ expected::ExpectedBool DbStringToSupportsRollback(const string &str) {
 	} else if (str == Context::kRollbackNotSupported) {
 		return false;
 	} else {
-		return expected::unexpected(main_context::MakeError(
-			main_context::DatabaseValueError,
-			"\"" + str + "\" is not a valid value for SupportsRollback"));
+		return expected::unexpected(
+			main_context::MakeError(
+				main_context::DatabaseValueError,
+				"\"" + str + "\" is not a valid value for SupportsRollback"));
 	}
 }
 
@@ -122,9 +123,10 @@ update_module::ExpectedRebootAction DbStringToNeedsReboot(const string &str) {
 	} else if (str == Context::kRebootTypeCustom) {
 		return update_module::RebootAction::Yes;
 	} else {
-		return expected::unexpected(main_context::MakeError(
-			main_context::DatabaseValueError,
-			"\"" + str + "\" is not a valid value for RebootRequested"));
+		return expected::unexpected(
+			main_context::MakeError(
+				main_context::DatabaseValueError,
+				"\"" + str + "\" is not a valid value for RebootRequested"));
 	}
 }
 
@@ -157,8 +159,9 @@ Context::Context(
 	authenticator(event_loop, mender_context.GetConfig()),
 #endif
 	http_client(mender_context.GetConfig().GetHttpClientConfig(), event_loop, authenticator),
-	download_client(make_shared<http_resumer::DownloadResumerClient>(
-		mender_context.GetConfig().GetHttpClientConfig(), event_loop)),
+	download_client(
+		make_shared<http_resumer::DownloadResumerClient>(
+			mender_context.GetConfig().GetHttpClientConfig(), event_loop)),
 	deployment_client(make_shared<deployments::DeploymentClient>()),
 	inventory_client(make_shared<inventory::InventoryClient>()),
 	deployment_timer(event_loop),

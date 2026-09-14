@@ -116,9 +116,10 @@ expected::ExpectedBool IsExecutable(const string &file_path, const bool warn) {
 		}
 		return true;
 	} catch (const fs::filesystem_error &e) {
-		return expected::unexpected(error::Error(
-			e.code().default_error_condition(),
-			"Could not check executable status of '" + file_path + "'"));
+		return expected::unexpected(
+			error::Error(
+				e.code().default_error_condition(),
+				"Could not check executable status of '" + file_path + "'"));
 	}
 }
 
@@ -162,9 +163,10 @@ expected::ExpectedUnorderedSet<string> ListFiles(
 		fs::path dir_path(in_directory);
 		if (!fs::exists(dir_path)) {
 			auto err {errno};
-			return expected::unexpected(error::Error(
-				generic_category().default_error_condition(err),
-				"No such file or directory: " + in_directory));
+			return expected::unexpected(
+				error::Error(
+					generic_category().default_error_condition(err),
+					"No such file or directory: " + in_directory));
 		}
 
 		for (const auto &entry : fs::directory_iterator {dir_path}) {
@@ -181,8 +183,10 @@ expected::ExpectedUnorderedSet<string> ListFiles(
 
 		return matching_files;
 	} catch (const fs::filesystem_error &e) {
-		return expected::unexpected(error::Error(
-			e.code().default_error_condition(), "Could not list files in '" + in_directory + "'"));
+		return expected::unexpected(
+			error::Error(
+				e.code().default_error_condition(),
+				"Could not list files in '" + in_directory + "'"));
 	}
 }
 

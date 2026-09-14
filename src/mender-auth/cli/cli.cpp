@@ -155,9 +155,10 @@ static ExpectedActionPtr ParseAuthArguments(
 #ifdef MENDER_USE_DBUS
 		return DaemonAction::Create(config, passphrase, forcebootstrap);
 #else
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::not_supported),
-			"Daemon mode not support when DBus support is compiled out"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::not_supported),
+				"Daemon mode not support when DBus support is compiled out"));
 #endif
 	} else {
 		return expected::unexpected(

@@ -122,10 +122,12 @@ void UpdateModule::StreamNextOpenHandler(io::ExpectedAsyncWriterPtr writer) {
 		return;
 	}
 	if (!exp_path_is_safe.value()) {
-		DownloadErrorHandler(error::Error(
-			make_error_condition(errc::invalid_argument),
-			"Error downloading payload: Provided payload file (" + download_->current_payload_name_
-				+ ") would point outside work directory when extracted."));
+		DownloadErrorHandler(
+			error::Error(
+				make_error_condition(errc::invalid_argument),
+				"Error downloading payload: Provided payload file ("
+					+ download_->current_payload_name_
+					+ ") would point outside work directory when extracted."));
 		return;
 	}
 
@@ -145,8 +147,10 @@ void UpdateModule::StreamNextOpenHandler(io::ExpectedAsyncWriterPtr writer) {
 	}
 	size_t entry_size = stream_next_string.size() + 1;
 	if (entry_size > download_->buffer_.size()) {
-		DownloadErrorHandler(error::Error(
-			make_error_condition(errc::no_buffer_space), "Payload name is too large for buffer"));
+		DownloadErrorHandler(
+			error::Error(
+				make_error_condition(errc::no_buffer_space),
+				"Payload name is too large for buffer"));
 		return;
 	}
 	copy(stream_next_string.begin(), stream_next_string.end(), download_->buffer_.begin());
@@ -178,9 +182,10 @@ void UpdateModule::StreamNextWriteHandler(size_t expected_n, io::ExpectedSize re
 	if (!result) {
 		DownloadErrorHandler(result.error());
 	} else if (expected_n != result.value()) {
-		DownloadErrorHandler(error::Error(
-			make_error_condition(errc::io_error),
-			"Unexpected number of written bytes to stream-next"));
+		DownloadErrorHandler(
+			error::Error(
+				make_error_condition(errc::io_error),
+				"Unexpected number of written bytes to stream-next"));
 	}
 }
 
@@ -215,9 +220,10 @@ void UpdateModule::StreamWriteHandler(size_t offset, size_t expected_n, io::Expe
 	if (!result) {
 		DownloadErrorHandler(result.error());
 	} else if (result.value() == 0 || result.value() > expected_n) {
-		DownloadErrorHandler(error::Error(
-			make_error_condition(errc::io_error),
-			"Unexpected number of written bytes to download stream"));
+		DownloadErrorHandler(
+			error::Error(
+				make_error_condition(errc::io_error),
+				"Unexpected number of written bytes to download stream"));
 	} else if (result.value() < expected_n) {
 		auto new_offset = offset + result.value();
 		auto new_expected = expected_n - result.value();
@@ -264,21 +270,24 @@ void UpdateModule::EndDownloadLoop(const error::Error &err) {
 
 void UpdateModule::DownloadTimeoutHandler() {
 	download_->proc_->EnsureTerminated();
-	EndDownloadLoop(error::Error(
-		make_error_condition(errc::timed_out), "Update Module Download process timed out"));
+	EndDownloadLoop(
+		error::Error(
+			make_error_condition(errc::timed_out), "Update Module Download process timed out"));
 }
 
 void UpdateModule::ProcessEndedHandler(error::Error err) {
 	if (err != error::NoError) {
 		err = GetProcessError(err);
-		DownloadErrorHandler(error::Error(
-			err.code, "Download: Update Module returned non-zero status: " + err.message));
+		DownloadErrorHandler(
+			error::Error(
+				err.code, "Download: Update Module returned non-zero status: " + err.message));
 	} else if (download_->module_has_finished_download_) {
 		EndDownloadLoop(error::NoError);
 	} else if (download_->module_has_started_download_) {
-		DownloadErrorHandler(error::Error(
-			make_error_condition(errc::broken_pipe),
-			"Update Module started downloading, but did not finish"));
+		DownloadErrorHandler(
+			error::Error(
+				make_error_condition(errc::broken_pipe),
+				"Update Module started downloading, but did not finish"));
 	} else {
 		download_->downloading_to_files_ = true;
 		download_->stream_next_opener_.reset();
@@ -327,10 +336,12 @@ void UpdateModule::StartDownloadToFile() {
 		return;
 	}
 	if (!exp_path_is_safe.value()) {
-		DownloadErrorHandler(error::Error(
-			make_error_condition(errc::invalid_argument),
-			"Error downloading payload: Provided payload file (" + download_->current_payload_name_
-				+ ") would point outside work directory when extracted."));
+		DownloadErrorHandler(
+			error::Error(
+				make_error_condition(errc::invalid_argument),
+				"Error downloading payload: Provided payload file ("
+					+ download_->current_payload_name_
+					+ ") would point outside work directory when extracted."));
 		return;
 	}
 

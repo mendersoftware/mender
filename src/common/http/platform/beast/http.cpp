@@ -173,12 +173,16 @@ public:
 				}
 
 				if (ec == asio::error::operation_aborted) {
-					handler(expected::unexpected(error::Error(
-						make_error_condition(errc::operation_canceled),
-						"Could not read from socket")));
+					handler(
+						expected::unexpected(
+							error::Error(
+								make_error_condition(errc::operation_canceled),
+								"Could not read from socket")));
 				} else if (ec) {
-					handler(expected::unexpected(
-						error::Error(ec.default_error_condition(), "Could not read from socket")));
+					handler(
+						expected::unexpected(
+							error::Error(
+								ec.default_error_condition(), "Could not read from socket")));
 				} else {
 					handler(num_read);
 				}
@@ -200,12 +204,16 @@ public:
 				}
 
 				if (ec == asio::error::operation_aborted) {
-					handler(expected::unexpected(error::Error(
-						make_error_condition(errc::operation_canceled),
-						"Could not write to socket")));
+					handler(
+						expected::unexpected(
+							error::Error(
+								make_error_condition(errc::operation_canceled),
+								"Could not write to socket")));
 				} else if (ec) {
-					handler(expected::unexpected(
-						error::Error(ec.default_error_condition(), "Could not write to socket")));
+					handler(
+						expected::unexpected(
+							error::Error(
+								ec.default_error_condition(), "Could not write to socket")));
 				} else {
 					handler(num_written);
 				}
@@ -262,9 +270,10 @@ expected::ExpectedBool HasBody(
 	const expected::ExpectedString &transfer_encoding) {
 	if (transfer_encoding) {
 		if (transfer_encoding.value() != "chunked") {
-			return expected::unexpected(error::Error(
-				make_error_condition(errc::not_supported),
-				"Unsupported Transfer-Encoding: " + transfer_encoding.value()));
+			return expected::unexpected(
+				error::Error(
+					make_error_condition(errc::not_supported),
+					"Unsupported Transfer-Encoding: " + transfer_encoding.value()));
 		}
 		return true;
 	}
@@ -272,9 +281,10 @@ expected::ExpectedBool HasBody(
 	if (content_length) {
 		auto length = common::StringToLongLong(content_length.value());
 		if (!length || length.value() < 0) {
-			return expected::unexpected(error::Error(
-				length.error().code,
-				"Content-Length contains invalid number: " + content_length.value()));
+			return expected::unexpected(
+				error::Error(
+					length.error().code,
+					"Content-Length contains invalid number: " + content_length.value()));
 		}
 		return length.value() > 0;
 	}
@@ -568,9 +578,10 @@ error::Error Client::HandleProxySetup() {
 
 io::ExpectedAsyncReaderPtr Client::MakeBodyAsyncReader(IncomingResponsePtr resp) {
 	if (status_ != TransactionStatus::HeaderHandlerCalled) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::operation_in_progress),
-			"MakeBodyAsyncReader called while reading is in progress"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::operation_in_progress),
+				"MakeBodyAsyncReader called while reading is in progress"));
 	}
 
 	if (GetContentLength(*response_data_.http_response_parser_) == 0
@@ -585,9 +596,10 @@ io::ExpectedAsyncReaderPtr Client::MakeBodyAsyncReader(IncomingResponsePtr resp)
 
 io::ExpectedAsyncReadWriterPtr Client::SwitchProtocol(IncomingResponsePtr req) {
 	if (*cancelled_) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::not_connected),
-			"Cannot switch protocols if endpoint is not connected"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::not_connected),
+				"Cannot switch protocols if endpoint is not connected"));
 	}
 
 	// Rest of the connection is done directly on the socket, we are done here.
@@ -641,8 +653,9 @@ void Client::CallErrorHandler(
 	const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
 	status_ = TransactionStatus::Done;
 	DoCancel();
-	handler(expected::unexpected(
-		err.WithContext(MethodToString(req->method_) + " " + req->orig_address_)));
+	handler(
+		expected::unexpected(
+			err.WithContext(MethodToString(req->method_) + " " + req->orig_address_)));
 }
 
 // `next_layer().next_layer()` is the `beast::tcp_stream` inside
@@ -1431,8 +1444,9 @@ void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, RequestHandler handler) {
 	status_ = TransactionStatus::Done;
 	DoCancel();
-	handler(expected::unexpected(err.WithContext(
-		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
+	handler(
+		expected::unexpected(err.WithContext(
+			req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
 
 	server_.RemoveStream(shared_from_this());
 }
@@ -1478,8 +1492,9 @@ void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, SwitchProtocolHandler handler) {
 	status_ = TransactionStatus::Done;
 	DoCancel();
-	handler(expected::unexpected(err.WithContext(
-		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
+	handler(
+		expected::unexpected(err.WithContext(
+			req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
 
 	server_.RemoveStream(shared_from_this());
 }
@@ -2019,9 +2034,10 @@ io::ExpectedAsyncReaderPtr Server::MakeBodyAsyncReader(IncomingRequestPtr req) {
 
 	auto &stream = req->stream_;
 	if (stream.status_ != TransactionStatus::HeaderHandlerCalled) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::operation_in_progress),
-			"MakeBodyAsyncReader called while reading is in progress"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::operation_in_progress),
+				"MakeBodyAsyncReader called while reading is in progress"));
 	}
 
 	if (GetContentLength(*stream.request_data_.http_request_parser_) == 0

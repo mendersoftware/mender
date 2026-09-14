@@ -513,9 +513,11 @@ ExpectedIfstream OpenIfstream(const string &path) {
 	is.open(path);
 	if (!is) {
 		int io_errno = errno;
-		return ExpectedIfstream(expected::unexpected(error::Error(
-			generic_category().default_error_condition(io_errno),
-			"Failed to open '" + path + "' for reading")));
+		return ExpectedIfstream(
+			expected::unexpected(
+				error::Error(
+					generic_category().default_error_condition(io_errno),
+					"Failed to open '" + path + "' for reading")));
 	}
 	return ExpectedIfstream(std::move(is));
 }
@@ -534,9 +536,11 @@ ExpectedOfstream OpenOfstream(const string &path, bool append) {
 	os.open(path, append ? ios::app : ios::out);
 	if (!os) {
 		int io_errno = errno;
-		return ExpectedOfstream(expected::unexpected(error::Error(
-			generic_category().default_error_condition(io_errno),
-			"Failed to open '" + path + "' for writing")));
+		return ExpectedOfstream(
+			expected::unexpected(
+				error::Error(
+					generic_category().default_error_condition(io_errno),
+					"Failed to open '" + path + "' for writing")));
 	}
 	return os;
 }
@@ -633,8 +637,10 @@ ExpectedSize BufferedReader::Read(vector<uint8_t>::iterator start, vector<uint8_
 
 ExpectedSize BufferedReader::Rewind() {
 	if (stop_done_ && rewind_done_) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::io_error), "Buffering was stopped, cannot rewind anymore"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::io_error),
+				"Buffering was stopped, cannot rewind anymore"));
 	}
 	buffer_reader_.Rewind();
 	rewind_done_ = true;
@@ -707,8 +713,10 @@ error::Error AsyncBufferedReader::AsyncRead(
 
 ExpectedSize AsyncBufferedReader::Rewind() {
 	if (stop_done_ && rewind_done_) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::io_error), "Buffering was stopped, cannot rewind anymore"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::io_error),
+				"Buffering was stopped, cannot rewind anymore"));
 	}
 	buffer_reader_.Rewind();
 	rewind_done_ = true;

@@ -45,17 +45,19 @@ ExpectedMetaData Parse(io::Reader &reader) {
 			log::Trace("Received an empty Json body. Not treating this as an error");
 			return json::Json();
 		}
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the  meta-data JSON: " + expected_json.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the  meta-data JSON: " + expected_json.error().message));
 	}
 
 	const json::Json meta_data_json = expected_json.value();
 
 	if (!meta_data_json.IsObject()) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"The meta-data needs to be valid JSON with a top-level JSON object"));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"The meta-data needs to be valid JSON with a top-level JSON object"));
 	}
 
 	return meta_data_json;
