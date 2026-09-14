@@ -152,13 +152,17 @@ TeeReader::ExpectedTeeReaderLeafPtr TeeReader::MakeAsyncReader() {
 			[](const std::pair<TeeReaderLeafPtr, TeeReaderLeafContext> r) {
 				return r.second.buffer_bytes_missing != 0;
 			})) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::io_error), "A Reader is already reading from the buffer"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::io_error),
+				"A Reader is already reading from the buffer"));
 	}
 
 	if (stop_done_) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::io_error), "Buffering stopped, no more readers allowed"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::io_error),
+				"Buffering stopped, no more readers allowed"));
 	}
 
 	auto ex_bytes_missing = buffered_reader_->Rewind();
@@ -296,8 +300,10 @@ error::Error TeeReader::CancelReader(TeeReader::TeeReaderLeafPtr leaf_reader) {
 	leaf_readers_.erase(found);
 
 	if (handler) {
-		handler(expected::unexpected(
-			error::Error(make_error_condition(errc::operation_canceled), "Leaf reader cancelled")));
+		handler(
+			expected::unexpected(
+				error::Error(
+					make_error_condition(errc::operation_canceled), "Leaf reader cancelled")));
 	}
 
 	if (leaf_readers_.size() == 0) {

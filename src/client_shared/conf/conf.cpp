@@ -199,9 +199,10 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 
 	if (version_arg) {
 		if (arg_count > 1 || opts_iter.GetPos() < static_cast<size_t>(end - start)) {
-			return expected::unexpected(error::Error(
-				make_error_condition(errc::invalid_argument),
-				"--version can not be combined with other commands and arguments"));
+			return expected::unexpected(
+				error::Error(
+					make_error_condition(errc::invalid_argument),
+					"--version can not be combined with other commands and arguments"));
 		} else {
 			cout << kMenderVersion << endl;
 			return expected::unexpected(error::MakeError(error::ExitWithSuccessError, ""));

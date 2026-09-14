@@ -63,9 +63,10 @@ ExpectedOptionalStateData LoadStateData(database::KeyValueDatabase &db) {
 	dst.version = exp_int.value();
 
 	if (dst.version != 1 && dst.version != context::MenderContext::standalone_data_version) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::not_supported),
-			"State data has a version which is not supported by this client"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::not_supported),
+				"State data has a version which is not supported by this client"));
 	}
 
 	auto exp_string = json::Get<string>(json, keys.artifact_name, json::MissingOk::No);
@@ -135,18 +136,21 @@ ExpectedOptionalStateData LoadStateData(database::KeyValueDatabase &db) {
 	}
 
 	if (dst.artifact_name == "") {
-		return expected::unexpected(context::MakeError(
-			context::DatabaseValueError, "`" + keys.artifact_name + "` is empty"));
+		return expected::unexpected(
+			context::MakeError(
+				context::DatabaseValueError, "`" + keys.artifact_name + "` is empty"));
 	}
 
 	if (dst.payload_types.size() == 0) {
-		return expected::unexpected(context::MakeError(
-			context::DatabaseValueError, "`" + keys.payload_types + "` is empty"));
+		return expected::unexpected(
+			context::MakeError(
+				context::DatabaseValueError, "`" + keys.payload_types + "` is empty"));
 	}
 	if (dst.payload_types.size() >= 2) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::not_supported),
-			"`" + keys.payload_types + "` contains multiple payloads"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::not_supported),
+				"`" + keys.payload_types + "` contains multiple payloads"));
 	}
 
 	return dst;

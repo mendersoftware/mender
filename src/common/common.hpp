@@ -112,10 +112,11 @@ expected::expected<T, error::Error> StringTo(const string &str, int base = 10) {
 		}
 	}
 	if (not fits) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::result_out_of_range),
-			"StringTo(): Number " + to_string(num.value())
-				+ " does not fit in requested data type"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::result_out_of_range),
+				"StringTo(): Number " + to_string(num.value())
+					+ " does not fit in requested data type"));
 	}
 	return static_cast<T>(num.value());
 }

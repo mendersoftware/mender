@@ -41,20 +41,24 @@ ExpectedPayloadReader Payload::Next() {
 	if (!expected_tar_entry) {
 		if (expected_tar_entry.error().code
 			== tar::MakeError(tar::ErrorCode::TarEOFError, "").code) {
-			return expected::unexpected(parser_error::MakeError(
-				parser_error::Code::NoMorePayloadFilesError, expected_tar_entry.error().message));
+			return expected::unexpected(
+				parser_error::MakeError(
+					parser_error::Code::NoMorePayloadFilesError,
+					expected_tar_entry.error().message));
 		}
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError, expected_tar_entry.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError, expected_tar_entry.error().message));
 	}
 	auto tar_entry {expected_tar_entry.value()};
 	string tar_name = tar_entry.Name();
 	auto checksum = manifest_.Get("data/0000/" + tar_name);
 
 	if (checksum == "") {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Payload contains file that is not listed in the manifest."));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Payload contains file that is not listed in the manifest."));
 	}
 	return Reader {std::move(tar_entry), checksum};
 }

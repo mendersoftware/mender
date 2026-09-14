@@ -81,10 +81,11 @@ ExpectedManifestLine Tokenize(const string &line) {
 	 * See: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=86164
 	 */
 	if (line.size() > expected_shasum_length + expected_whitespace + max_allowed_filename_length) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::ParseError,
-			"Line (" + line + ") is too long, maximum allowed filename length is "
-				+ to_string(max_allowed_filename_length)));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::ParseError,
+				"Line (" + line + ") is too long, maximum allowed filename length is "
+					+ to_string(max_allowed_filename_length)));
 	}
 
 
@@ -92,10 +93,11 @@ ExpectedManifestLine Tokenize(const string &line) {
 	std::regex_match(line, base_match, manifest_line_regex);
 
 	if (base_match.size() != 3) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::ParseError,
-			"Line (" + line
-				+ ") is not in the expected manifest format: " + manifest_line_regex_string));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::ParseError,
+				"Line (" + line
+					+ ") is not in the expected manifest format: " + manifest_line_regex_string));
 	}
 
 	return ManifestLine {
@@ -118,8 +120,9 @@ ExpectedManifest Parse(mender::common::io::Reader &reader) {
 	}
 	auto expected_sha = sha_reader.ShaSum();
 	if (!expected_sha) {
-		expected::unexpected(parser_error::MakeError(
-			parser_error::ParseError, "Invalid ShaSum: " + expected_sha.error().message));
+		expected::unexpected(
+			parser_error::MakeError(
+				parser_error::ParseError, "Invalid ShaSum: " + expected_sha.error().message));
 	}
 	m.shasum = expected_sha.value();
 

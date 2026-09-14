@@ -495,10 +495,11 @@ static expected::ExpectedString GetProxyStringFromEnvironment(
 	}
 
 	if (primary_set && secondary_set) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::invalid_argument),
-			primary + " and " + secondary
-				+ " environment variables can't both be set at the same time"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::invalid_argument),
+				primary + " and " + secondary
+					+ " environment variables can't both be set at the same time"));
 	} else if (primary_set) {
 		return getenv(primary.c_str());
 	} else if (secondary_set) {
@@ -512,9 +513,10 @@ static expected::ExpectedString GetProxyStringFromEnvironment(
 // https://superuser.com/questions/944958/are-http-proxy-https-proxy-and-no-proxy-environment-variables-standard
 expected::ExpectedString GetHttpProxyStringFromEnvironment() {
 	if (getenv("REQUEST_METHOD") != nullptr && getenv("HTTP_PROXY") != nullptr) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::operation_not_permitted),
-			"Using REQUEST_METHOD (CGI) together with HTTP_PROXY is insecure. See https://github.com/golang/go/issues/16405"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::operation_not_permitted),
+				"Using REQUEST_METHOD (CGI) together with HTTP_PROXY is insecure. See https://github.com/golang/go/issues/16405"));
 	}
 	return GetProxyStringFromEnvironment("http_proxy", "HTTP_PROXY");
 }

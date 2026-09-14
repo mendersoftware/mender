@@ -245,9 +245,11 @@ expected::ExpectedStringVector DiscoverUpdateModules(const conf::MenderConfig &c
 			return ret;
 		}
 		// everything (?) else is an error
-		return expected::unexpected(error::Error(
-			code.default_error_condition(),
-			"Failed to discover update modules in '" + file_tree_path.string() + "': " + e.what()));
+		return expected::unexpected(
+			error::Error(
+				code.default_error_condition(),
+				"Failed to discover update modules in '" + file_tree_path.string()
+					+ "': " + e.what()));
 	}
 
 	return ret;
@@ -377,8 +379,11 @@ error::Error AsyncFifoOpener::AsyncOpen(const string &path, ExpectedWriterHandle
 			}
 
 			if (*cancelled) {
-				handler(expected::unexpected(error::Error(
-					make_error_condition(errc::operation_canceled), "AsyncFifoOpener cancelled")));
+				handler(
+					expected::unexpected(
+						error::Error(
+							make_error_condition(errc::operation_canceled),
+							"AsyncFifoOpener cancelled")));
 				return;
 			}
 

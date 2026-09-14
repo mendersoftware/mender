@@ -142,8 +142,9 @@ error::Error DeploymentClient::CheckNewDeployments(
 				CheckUpdatesAPIResponse response {optional<json::Json> {ex_j.value()}};
 				api_handler(response);
 			} else {
-				api_handler(expected::unexpected(
-					CheckUpdatesAPIResponseError {status, nullopt, ex_j.error()}));
+				api_handler(
+					expected::unexpected(
+						CheckUpdatesAPIResponseError {status, nullopt, ex_j.error()}));
 			}
 		} else if (status == http::StatusNoContent) {
 			api_handler(CheckUpdatesAPIResponse {nullopt});
@@ -151,12 +152,14 @@ error::Error DeploymentClient::CheckNewDeployments(
 			log::Warning(
 				"DeploymentClient::CheckNewDeployments - received unhandled http response: "
 				+ to_string(status));
-			api_handler(expected::unexpected(CheckUpdatesAPIResponseError {
-				status,
-				nullopt,
-				MakeError(
-					DeploymentAbortedError,
-					"received unhandled HTTP response: " + to_string(status))}));
+			api_handler(
+				expected::unexpected(
+					CheckUpdatesAPIResponseError {
+						status,
+						nullopt,
+						MakeError(
+							DeploymentAbortedError,
+							"received unhandled HTTP response: " + to_string(status))}));
 		}
 	};
 
@@ -190,12 +193,14 @@ error::Error DeploymentClient::CheckNewDeployments(
 				} else {
 					err_str = resp->GetStatusMessage();
 				}
-				api_handler(expected::unexpected(CheckUpdatesAPIResponseError {
-					status,
-					nullopt,
-					MakeError(
-						BadResponseError,
-						"Got unexpected response " + to_string(status) + ": " + err_str)}));
+				api_handler(
+					expected::unexpected(
+						CheckUpdatesAPIResponseError {
+							status,
+							nullopt,
+							MakeError(
+								BadResponseError,
+								"Got unexpected response " + to_string(status) + ": " + err_str)}));
 			}
 		};
 
@@ -233,12 +238,14 @@ error::Error DeploymentClient::CheckNewDeployments(
 			} else {
 				err_str = resp->GetStatusMessage();
 			}
-			api_handler(expected::unexpected(CheckUpdatesAPIResponseError {
-				status,
-				nullopt,
-				MakeError(
-					BadResponseError,
-					"Got unexpected response " + to_string(status) + ": " + err_str)}));
+			api_handler(
+				expected::unexpected(
+					CheckUpdatesAPIResponseError {
+						status,
+						nullopt,
+						MakeError(
+							BadResponseError,
+							"Got unexpected response " + to_string(status) + ": " + err_str)}));
 		}
 	};
 
@@ -261,8 +268,9 @@ void DeploymentClient::HeaderHandler(
 	auto resp = exp_resp.value();
 	auto status = resp->GetStatusCode();
 	if (status == http::StatusTooManyRequests) {
-		CheckUpdatesAPIResponse response = expected::unexpected(CheckUpdatesAPIResponseError {
-			status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")});
+		CheckUpdatesAPIResponse response = expected::unexpected(
+			CheckUpdatesAPIResponseError {
+				status, resp->GetHeaders(), MakeError(TooManyRequestsError, "Too many requests")});
 		api_handler(response);
 	}
 	received_body->clear();
@@ -337,10 +345,12 @@ error::Error DeploymentClient::PushStatus(
 			if (status == http::StatusNoContent) {
 				api_handler(StatusAPIResponse {status, nullopt, error::NoError});
 			} else if (status == http::StatusConflict) {
-				api_handler(StatusAPIResponse {
-					status,
-					nullopt,
-					MakeError(DeploymentAbortedError, "Could not send status update to server")});
+				api_handler(
+					StatusAPIResponse {
+						status,
+						nullopt,
+						MakeError(
+							DeploymentAbortedError, "Could not send status update to server")});
 			} else {
 				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
 				string err_str;
@@ -349,13 +359,14 @@ error::Error DeploymentClient::PushStatus(
 				} else {
 					err_str = resp->GetStatusMessage();
 				}
-				api_handler(StatusAPIResponse {
-					status,
-					nullopt,
-					MakeError(
-						BadResponseError,
-						"Got unexpected response " + to_string(status)
-							+ " from status API: " + err_str)});
+				api_handler(
+					StatusAPIResponse {
+						status,
+						nullopt,
+						MakeError(
+							BadResponseError,
+							"Got unexpected response " + to_string(status)
+								+ " from status API: " + err_str)});
 			}
 		});
 
@@ -431,9 +442,10 @@ static ExpectedOffset FindNextMsgAfter(const string &path, ifstream::off_type of
 	is.seekg(offset);
 	int io_errno = errno;
 	if (!is) {
-		return expected::unexpected(error::Error(
-			generic_category().default_error_condition(io_errno),
-			"Failed to seek to truncated logs offset in '" + path + "'"));
+		return expected::unexpected(
+			error::Error(
+				generic_category().default_error_condition(io_errno),
+				"Failed to seek to truncated logs offset in '" + path + "'"));
 	}
 
 	// Now that we have seeked to the starting offset, we need to find the next
@@ -460,9 +472,10 @@ static ExpectedOffset FindNextMsgAfter(const string &path, ifstream::off_type of
 	}
 	io_errno = errno;
 	if (!is && !is.eof()) {
-		return expected::unexpected(error::Error(
-			generic_category().default_error_condition(io_errno),
-			"Failed to read logs from '" + path + "'"));
+		return expected::unexpected(
+			error::Error(
+				generic_category().default_error_condition(io_errno),
+				"Failed to read logs from '" + path + "'"));
 	}
 
 	// In case we read the whole rest of the file not finding the next JSON log
@@ -795,13 +808,14 @@ error::Error DeploymentClient::PushLogs(
 				} else {
 					err_str = resp->GetStatusMessage();
 				}
-				api_handler(LogsAPIResponse {
-					status,
-					nullopt,
-					MakeError(
-						BadResponseError,
-						"Got unexpected response " + to_string(status)
-							+ " from logs API: " + err_str)});
+				api_handler(
+					LogsAPIResponse {
+						status,
+						nullopt,
+						MakeError(
+							BadResponseError,
+							"Got unexpected response " + to_string(status)
+								+ " from logs API: " + err_str)});
 			}
 		});
 

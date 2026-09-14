@@ -3108,7 +3108,8 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.case_name = "Empty_payload_artifact",
 			.state_chain =
 				{
-					"Download_Enter_00", "Download_Leave_00",
+					"Download_Enter_00",
+					"Download_Leave_00",
 					// No visible Cleanup, because there is no Update Module to
 					// run. We do enter the state internally though.
 				},
@@ -3573,17 +3574,20 @@ public:
 			if (fail_status_report_status_ == status && fail_status_report_count_ > 0) {
 				fail_status_report_count_--;
 				if (fail_status_aborted_) {
-					api_handler(deployments::StatusAPIResponse {
-						nullopt,
-						nullopt,
-						deployments::MakeError(
-							deployments::DeploymentAbortedError, "Cannot send status")});
+					api_handler(
+						deployments::StatusAPIResponse {
+							nullopt,
+							nullopt,
+							deployments::MakeError(
+								deployments::DeploymentAbortedError, "Cannot send status")});
 				} else {
-					api_handler(deployments::StatusAPIResponse {
-						nullopt,
-						nullopt,
-						error::Error(
-							make_error_condition(errc::host_unreachable), "Cannot send status")});
+					api_handler(
+						deployments::StatusAPIResponse {
+							nullopt,
+							nullopt,
+							error::Error(
+								make_error_condition(errc::host_unreachable),
+								"Cannot send status")});
 				}
 				return;
 			}
@@ -3592,12 +3596,13 @@ public:
 				ofstream f(status_log_path_, ios::out | ios::app);
 				f << deployments::DeploymentStatusString(status) << endl;
 				if (!f) {
-					api_handler(deployments::StatusAPIResponse {
-						nullopt,
-						nullopt,
-						error::Error(
-							generic_category().default_error_condition(errno),
-							"Could not do PushStatus")});
+					api_handler(
+						deployments::StatusAPIResponse {
+							nullopt,
+							nullopt,
+							error::Error(
+								generic_category().default_error_condition(errno),
+								"Could not do PushStatus")});
 				}
 			}
 
@@ -3991,8 +3996,9 @@ TEST_F(StateTestWithArtifact, DeploymentLogging) {
 
 	auto moved_deployment_log = path::Join(tmpdir.Path(), "deployments.0001." DEPLOYMENT_ID ".log");
 	EXPECT_TRUE(mtesting::FileContains(moved_deployment_log, "Running mender-update"));
-	EXPECT_TRUE(mtesting::FileContains(
-		moved_deployment_log, "Deployment with ID " DEPLOYMENT_ID " started"));
+	EXPECT_TRUE(
+		mtesting::FileContains(
+			moved_deployment_log, "Deployment with ID " DEPLOYMENT_ID " started"));
 
 	auto no_such_deployment_log =
 		path::Join(tmpdir.Path(), "deployments.0002." DEPLOYMENT_ID ".log");
@@ -4055,14 +4061,14 @@ TEST_F(PollForDeploymentStateTests, TooManyRequests_SecondsInRetryAfterHeader) {
 	http::Transaction::HeaderMap headers;
 	headers.insert({"Retry-After", "3600"});
 
-	mender::update::deployments::CheckUpdatesAPIResponse resp =
-		expected::unexpected(mender::update::deployments::CheckUpdatesAPIResponseError {
+	mender::update::deployments::CheckUpdatesAPIResponse resp = expected::unexpected(
+		mender::update::deployments::CheckUpdatesAPIResponseError {
 			http::StatusTooManyRequests,
 			headers,
 			MakeError(mender::update::deployments::TooManyRequestsError, "Too many requests")});
 
-	mender::update::deployments::CheckUpdatesAPIResponse resp_unauthorized =
-		expected::unexpected(mender::update::deployments::CheckUpdatesAPIResponseError {
+	mender::update::deployments::CheckUpdatesAPIResponse resp_unauthorized = expected::unexpected(
+		mender::update::deployments::CheckUpdatesAPIResponseError {
 			http::StatusUnauthorized,
 			headers,
 			MakeError(mender::update::deployments::BadResponseError, "doesn't matter")});
@@ -4104,8 +4110,8 @@ TEST_F(PollForDeploymentStateTests, TooManyRequests_DateInRetryAfterHeader) {
 	http::Transaction::HeaderMap headers;
 	headers.insert({"Retry-After", httpDate});
 
-	mender::update::deployments::CheckUpdatesAPIResponse resp =
-		expected::unexpected(mender::update::deployments::CheckUpdatesAPIResponseError {
+	mender::update::deployments::CheckUpdatesAPIResponse resp = expected::unexpected(
+		mender::update::deployments::CheckUpdatesAPIResponseError {
 			http::StatusTooManyRequests,
 			headers,
 			MakeError(mender::update::deployments::TooManyRequestsError, "Too many requests")});
@@ -4128,8 +4134,8 @@ TEST_F(PollForDeploymentStateTests, TooManyRequests_DateInRetryAfterHeader) {
 TEST_F(PollForDeploymentStateTests, TooManyRequests_NoRetryAfterHeader) {
 	http::Transaction::HeaderMap headers;
 
-	mender::update::deployments::CheckUpdatesAPIResponse resp =
-		expected::unexpected(mender::update::deployments::CheckUpdatesAPIResponseError {
+	mender::update::deployments::CheckUpdatesAPIResponse resp = expected::unexpected(
+		mender::update::deployments::CheckUpdatesAPIResponseError {
 			http::StatusTooManyRequests,
 			headers,
 			MakeError(mender::update::deployments::TooManyRequestsError, "Too many requests")});

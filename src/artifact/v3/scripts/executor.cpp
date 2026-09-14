@@ -175,9 +175,10 @@ void ScriptRunner::LogErrAndExecuteNext(
 	HandlerFunction handler) {
 	// Collect the error and carry on
 	if (err.code == processes::MakeError(processes::NonZeroExitStatusError, "").code) {
-		this->error_script_error_ = this->error_script_error_.FollowedBy(executor::MakeError(
-			executor::NonZeroExitStatusError,
-			"Got non zero exit code from script: " + *current_script));
+		this->error_script_error_ = this->error_script_error_.FollowedBy(
+			executor::MakeError(
+				executor::NonZeroExitStatusError,
+				"Got non zero exit code from script: " + *current_script));
 	} else {
 		this->error_script_error_ = this->error_script_error_.FollowedBy(err);
 	}
@@ -207,9 +208,10 @@ void ScriptRunner::HandleScriptError(Error err, HandlerFunction handler) {
 		this->retry_timeout_timer_->Cancel();
 	}
 	if (err.code == processes::MakeError(processes::NonZeroExitStatusError, "").code) {
-		return handler(executor::MakeError(
-			executor::NonZeroExitStatusError,
-			"Received error code: " + to_string(this->script_.get()->GetExitStatus())));
+		return handler(
+			executor::MakeError(
+				executor::NonZeroExitStatusError,
+				"Received error code: " + to_string(this->script_.get()->GetExitStatus())));
 	}
 	return handler(err);
 }
@@ -295,9 +297,10 @@ Error ScriptRunner::Execute(
 Error ScriptRunner::AsyncRunScripts(
 	State state, Action action, HandlerFunction handler, OnError on_error) {
 	// Verify the version in the version file (OK if no version file present)
-	auto version_file_error {CorrectVersionFile(path::Join(
-		IsArtifactScript(state) ? this->artifact_script_path_ : this->rootfs_script_path_,
-		"version"))};
+	auto version_file_error {CorrectVersionFile(
+		path::Join(
+			IsArtifactScript(state) ? this->artifact_script_path_ : this->rootfs_script_path_,
+			"version"))};
 	if (version_file_error != error::NoError) {
 		return version_file_error;
 	}

@@ -760,8 +760,11 @@ TEST(HttpForwarderTests, ProtocolSwitchSurvivesIdlePastStreamTimeout) {
 	// The byte count is incidental (a short read is legal), so only compare what arrived.
 	EXPECT_GT(bytes_read, 0U);
 	ASSERT_LE(bytes_read, payload.size());
-	EXPECT_TRUE(std::equal(
-		received.begin(), received.begin() + static_cast<ptrdiff_t>(bytes_read), payload.begin()))
+	EXPECT_TRUE(
+		std::equal(
+			received.begin(),
+			received.begin() + static_cast<ptrdiff_t>(bytes_read),
+			payload.begin()))
 		<< "Data received after the idle period does not match what was sent";
 
 	if (server_socket) {

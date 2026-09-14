@@ -364,25 +364,29 @@ static expected::ExpectedString GetPID() {
 			exp_line_data.error().WithContext("Failed to get the MainPID from systemctl"));
 	}
 	if (exp_line_data.value().size() < 1) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::message_size), "No output received from systemctl"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::message_size), "No output received from systemctl"));
 	}
 	const string prefix {"MainPID="};
 	const string line = exp_line_data.value().at(0);
 	auto split_index = line.find(prefix);
 	if (split_index == string::npos) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::no_message), "No output received from systemctl"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::no_message), "No output received from systemctl"));
 	}
 	if (split_index != 0) {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::bad_message), "Unexpected output from systemctl"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::bad_message), "Unexpected output from systemctl"));
 	}
 	const string PID = line.substr(split_index + prefix.size(), line.size());
 	if (PID == "" or PID == "0") {
-		return expected::unexpected(error::Error(
-			make_error_condition(errc::no_message),
-			"No PID found for mender-updated. The service is not running"));
+		return expected::unexpected(
+			error::Error(
+				make_error_condition(errc::no_message),
+				"No PID found for mender-updated. The service is not running"));
 	}
 	return PID;
 }

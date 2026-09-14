@@ -49,9 +49,10 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 	auto expected_json = json::Load(reader);
 
 	if (!expected_json) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the  sub-header JSON: " + expected_json.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the  sub-header JSON: " + expected_json.error().message));
 	}
 
 	const json::Json type_info_json = expected_json.value();
@@ -66,9 +67,11 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 
 	auto expected_payload = type_info_json.Get("type");
 	if (!expected_payload) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to get the type-info payload type JSON: " + expected_payload.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to get the type-info payload type JSON: "
+					+ expected_payload.error().message));
 	}
 	auto payload_type = expected_payload.value();
 	if (payload_type.IsNull()) {
@@ -76,10 +79,11 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 	} else if (payload_type.IsString()) {
 		type_info.type = payload_type.GetString().value();
 	} else {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the type-info payload type JSON: "
-				+ expected_payload.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the type-info payload type JSON: "
+					+ expected_payload.error().message));
 	}
 
 	log::Trace("type-info: Parsing the artifact_provides");
@@ -92,10 +96,11 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 		type_info_json.Get("artifact_provides").and_then(json::ToKeyValueMap);
 	if (!expected_artifact_provides
 		&& expected_artifact_provides.error().code != json::MakeError(json::KeyError, "").code) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the type-info artifact_provides JSON: "
-				+ expected_artifact_provides.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the type-info artifact_provides JSON: "
+					+ expected_artifact_provides.error().message));
 	}
 	if (expected_artifact_provides) {
 		type_info.artifact_provides = expected_artifact_provides.value();
@@ -113,10 +118,11 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 		type_info_json.Get("artifact_depends").and_then(json::ToKeyValueMap);
 	if (!expected_artifact_depends
 		&& expected_artifact_depends.error().code != json::MakeError(json::KeyError, "").code) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the type-info artifact_depends JSON: "
-				+ expected_artifact_depends.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the type-info artifact_depends JSON: "
+					+ expected_artifact_depends.error().message));
 	}
 	if (expected_artifact_depends) {
 		type_info.artifact_depends = expected_artifact_depends.value();
@@ -134,10 +140,11 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 	if (!expected_clears_artifact_provides
 		&& expected_clears_artifact_provides.error().code
 			   != json::MakeError(json::KeyError, "").code) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"Failed to parse the type-info clears_artifact_depends JSON: "
-				+ expected_clears_artifact_provides.error().message));
+		return expected::unexpected(
+			parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the type-info clears_artifact_depends JSON: "
+					+ expected_clears_artifact_provides.error().message));
 	}
 	if (expected_clears_artifact_provides) {
 		type_info.clears_artifact_provides = expected_clears_artifact_provides.value();
