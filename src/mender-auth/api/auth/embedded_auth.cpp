@@ -59,7 +59,8 @@ error::Error AuthenticatorHttp::FetchJwtToken() {
 		crypto_args_,
 		config_.paths.GetIdentityScript(),
 		[this](APIResponse resp) { FetchJwtTokenHandler(resp); },
-		config_.tenant_token);
+		config_.tenant_token,
+		config_.device_tier);
 }
 
 } // namespace auth
