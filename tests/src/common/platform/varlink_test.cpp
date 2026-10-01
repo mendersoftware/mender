@@ -641,6 +641,9 @@ TEST_F(VarlinkServerTest, CancelClosesLiveConnections) {
 }
 
 TEST_F(VarlinkServerTest, AcceptErrorBacksOffAndRecovers) {
+#ifdef MENDER_TEST_SKIP_NOFILE_BASED_TESTS
+	GTEST_SKIP();
+#endif
 	AddPing();
 	auto client = Client();
 	// Open it now: once capped, only the server's accept() needs a new fd.
