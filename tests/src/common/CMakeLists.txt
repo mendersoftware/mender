@@ -128,6 +128,9 @@ if(MENDER_USE_DBUS)
 endif()
 
 add_executable(varlink_test EXCLUDE_FROM_ALL platform/varlink_test.cpp)
+if(MENDER_TEST_SKIP_NOFILE_BASED_TESTS)
+  target_compile_definitions(varlink_test PRIVATE MENDER_TEST_SKIP_NOFILE_BASED_TESTS)
+endif()
 target_compile_options(varlink_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(varlink_test PUBLIC
   common_varlink
