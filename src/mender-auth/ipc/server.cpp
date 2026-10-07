@@ -90,7 +90,9 @@ void AuthenticatingForwarder::FetchJwtTokenHandler(auth_client::APIResponse &res
 			Cache(resp.value().token, resp.value().server_url);
 		}
 
-		log::Info("Successfully received new authorization data");
+		log::Info(
+			"Successfully received new authorization data from server '" + resp.value().server_url
+			+ "'");
 	} else {
 		ClearCache();
 		log::Error("Failed to fetch new token: " + resp.error().String());
