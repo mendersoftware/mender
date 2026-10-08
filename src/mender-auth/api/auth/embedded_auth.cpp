@@ -41,7 +41,7 @@ void AuthenticatorHttp::FetchJwtTokenHandler(APIResponse resp) {
 		token_ = resp.value().token;
 		server_url_ = resp.value().server_url;
 
-		log::Info("Successfully received new authorization data");
+		log::Info("Successfully received new authorization data from server '" + server_url_ + "'");
 	} else {
 		token_.clear();
 		server_url_.clear();
