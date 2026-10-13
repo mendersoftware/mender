@@ -151,6 +151,28 @@ TEST(CryptoTest, TestVerifySignValidECDSA) {
 	ASSERT_TRUE(expected_verify_signature.value());
 }
 
+TEST(CryptoTest, TestVerifySignValidECDSAExcessivePadding) {
+	string data_ {"foobar"};
+	vector<uint8_t> testdata {data_.begin(), data_.end()};
+
+	// A valid ECDSA signature of "foobar" made with ./private-key.ecdsa.pem
+	const string signature {
+		"MEUCIAQlo8X32l1mHx56xJ08qFvapKtV2tBk97OxDMu/JK7UAiEA3mTgclZQCHczzZ2/5+9+P9fhdM82dg9NeLKR5jTkjss="};
+
+	auto expected_shasum = mender::sha::Shasum(testdata);
+	ASSERT_TRUE(expected_shasum) << "Unexpected: " << expected_shasum.error();
+	string public_key_file = "./public-key.ecdsa.pem";
+
+	for (const string &extra_padding : vector<string> {"", "=", "=="}) {
+		auto expected_verify_signature =
+			crypto::VerifySign(public_key_file, expected_shasum.value(), signature + extra_padding);
+		ASSERT_TRUE(expected_verify_signature)
+			<< "Unexpected: " << expected_verify_signature.error() << " (with "
+			<< extra_padding.size() << " extra padding character(s))";
+		EXPECT_TRUE(expected_verify_signature.value());
+	}
+}
+
 TEST(CryptoTest, TestVerifySignInvalid) {
 	string data_ {"foobar"};
 	string public_key_file = "./public-key.rsa.pem";
