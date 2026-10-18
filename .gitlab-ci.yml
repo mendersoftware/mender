@@ -165,7 +165,7 @@ test:docker:
 
 publish:tests:
   stage: publish
-  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/python:3.11
+  image: ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}/python:3.15
   dependencies:
     - test:unit
   before_script:
