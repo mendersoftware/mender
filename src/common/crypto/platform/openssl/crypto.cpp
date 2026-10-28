@@ -103,9 +103,11 @@ auto bn_free = [](BIGNUM *bn) {
 	}
 };
 auto engine_free_func = [](ENGINE *e) {
+#ifndef OPENSSL_NO_ENGINE
 	if (e) {
 		ENGINE_free(e);
 	}
+#endif // OPENSSL_NO_ENGINE
 };
 
 auto password_callback = [](char *buf, int size, int rwflag, void *u) {
@@ -153,6 +155,12 @@ string GetOpenSSLErrorMessage() {
 }
 
 ExpectedPrivateKey LoadFromHSMEngine(const Args &args) {
+#ifdef OPENSSL_NO_ENGINE
+	return expected::unexpected(MakeError(
+		SetupError,
+		"Failed to get the " + args.ssl_engine
+			+ " engine. OpenSSL was built without engine support"));
+#else
 	log::Trace("Loading the private key from HSM");
 
 	ENGINE_load_builtin_engines();
@@ -190,6 +198,7 @@ ExpectedPrivateKey LoadFromHSMEngine(const Args &args) {
 	auto handle = unique_ptr<OpenSSLResourceHandle, void (*)(OpenSSLResourceHandle *)>(
 		new OpenSSLResourceHandle {std::move(engine)}, resource_handle_free_func);
 	return std::make_unique<PrivateKey>(std::move(private_key), std::move(handle));
+#endif // OPENSSL_NO_ENGINE
 }
 
 #ifdef MENDER_CRYPTO_OPENSSL_LEGACY
