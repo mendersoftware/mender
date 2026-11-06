@@ -4145,7 +4145,10 @@ protected:
 		for (const auto &log : logs_in_order) {
 			size_t current_pos = output.find(log, last_pos);
 			EXPECT_NE(current_pos, std::string::npos)
-				<< "Could not find log: '" << log << "' after previous match.";
+				<< "Could not find log: '" << log << "' after previous match.\n"
+				<< "------------------------ Full captured output ------------------------\n"
+				<< output
+				<< "----------------------------------------------------------------------";
 			if (current_pos == std::string::npos) {
 				return;
 			}
@@ -4218,11 +4221,12 @@ TEST_F(PollForDeploymentStateTests, TooManyRequests_SecondsInRetryAfterHeader) {
 }
 
 TEST_F(PollForDeploymentStateTests, TooManyRequests_DateInRetryAfterHeader) {
+	const long kRetryAfterSeconds = 1298;
 	time_t now = time(nullptr);
-	time_t futureTime = now + 1298;
+	time_t futureTime = now + kRetryAfterSeconds;
 	struct tm *tm_ptr = gmtime(&futureTime);
 	char buffer[100];
-	// HTTP Format, e.g. "Wed, 21 Oct 2015 07:28:00 GMT", 1298 seconds from now
+	// HTTP Format, e.g. "Wed, 21 Oct 2015 07:28:00 GMT", kRetryAfterSeconds from now
 	strftime(buffer, sizeof(buffer), "%a, %d %b %Y %H:%M:%S GMT", tm_ptr);
 	string httpDate(buffer);
 
@@ -4241,13 +4245,28 @@ TEST_F(PollForDeploymentStateTests, TooManyRequests_DateInRetryAfterHeader) {
 	callPollForDeploymentStateHandler(resp);
 
 	auto output = testing::internal::GetCapturedStderr();
-	// make sure that retrying with Retry-After does not modify normal
-	// exponential backoff behavior
-	ExpectLogsInOrder(
-		output,
-		{
-			"Retrying deployment polling in 1298 second",
-		});
+
+	// The Retry-After value here is an absolute HTTP date. The code under test
+	// derives the interval by reading the clock a second time (inside
+	// GetRemainingTime) and subtracting. Because the header only has
+	// whole-second resolution, any delay between building the header above and
+	// that second clock read can cross a second boundary and shave a second (or
+	// more on a loaded CI runner) off the logged value. So assert the interval
+	// is *close to* the requested value rather than an exact match, while still
+	// being clearly distinct from the 60s exponential-backoff default (which is
+	// what this test guards against).
+	const string prefix = "Retrying deployment polling in ";
+	auto pos = output.find(prefix);
+	ASSERT_NE(pos, string::npos)
+		<< "Could not find retry log line.\n"
+		<< "------------------------ Full captured output ------------------------\n"
+		<< output << "----------------------------------------------------------------------";
+	long logged_seconds = stol(output.substr(pos + prefix.size()));
+	// Cannot exceed the requested value; can lag slightly behind it.
+	EXPECT_LE(logged_seconds, kRetryAfterSeconds);
+	EXPECT_GE(logged_seconds, kRetryAfterSeconds - 5)
+		<< "Logged retry interval (" << logged_seconds
+		<< "s) drifted too far from the requested Retry-After (" << kRetryAfterSeconds << "s).";
 }
 
 TEST_F(PollForDeploymentStateTests, TooManyRequests_NoRetryAfterHeader) {
