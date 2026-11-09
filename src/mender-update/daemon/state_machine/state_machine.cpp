@@ -445,7 +445,9 @@ void StateMachine::LoadStateFromDb() {
 	} else if (state == ctx_.kUpdateStateCleanup) {
 		// Re-run Cleanup if spontaneously rebooted before finishing.
 		main_states_.SetState(update_cleanup_state_);
-		if (ctx_.deployment.state_data->update_info.all_rollbacks_successful) {
+		if (ctx_.deployment.state_data->update_info.deployment_succeeded) {
+			deployment_tracking_.states_.SetState(deployment_tracking_.no_failures_state_);
+		} else if (ctx_.deployment.state_data->update_info.all_rollbacks_successful) {
 			deployment_tracking_.states_.SetState(deployment_tracking_.rollback_attempted_state_);
 		} else {
 			deployment_tracking_.states_.SetState(deployment_tracking_.failure_state_);
