@@ -125,6 +125,11 @@ struct UpdateInfo {
 	// affect which deployment status you get at the end of the update, as well as the
 	// "INCONSISTENT" label on artifact_name.
 	bool all_rollbacks_successful {false};
+
+	// Set together with the Cleanup state when the deployment succeeded, so that a
+	// spontaneous reboot before the final status report still reports success. Absent in
+	// older state data, which keeps the old behaviour of reporting failure.
+	bool deployment_succeeded {false};
 };
 
 struct StateData {
