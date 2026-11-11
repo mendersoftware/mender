@@ -62,6 +62,9 @@ add_dependencies(tests events_io_test)
 
 add_executable(http_test EXCLUDE_FROM_ALL http_test.cpp)
 target_link_libraries(http_test PUBLIC common_io common_http common_processes common_testing main_test gmock)
+if(MENDER_TEST_SKIP_NETWORK_BASED_TESTS)
+  target_compile_definitions(http_test PRIVATE MENDER_TEST_SKIP_NETWORK_BASED_TESTS)
+endif()
 gtest_discover_tests(http_test
   ${MENDER_TEST_FLAGS}
   WORKING_DIRECTORY ${MENDER_TEST_SRC_DIR}/common/http/testdata/
