@@ -1711,6 +1711,9 @@ TEST(HttpTest, SerialRequestsWithSameObjectAfterCancel) {
 }
 
 TEST(HttpTest, DestroyClientBeforeRequestComplete) {
+#ifdef MENDER_TEST_SKIP_NETWORK_BASED_TESTS
+	GTEST_SKIP();
+#endif
 	TestEventLoop loop(chrono::seconds(30));
 
 	bool client_hit_header = false;
@@ -2265,6 +2268,9 @@ TEST(HttpsTest, NoCertificateError) {
 }
 
 TEST(HttpsTest, CorrectDefaultCertificateStoreVerification) {
+#ifdef MENDER_TEST_SKIP_NETWORK_BASED_TESTS
+	GTEST_SKIP();
+#endif
 	TestEventLoop loop(chrono::seconds(30));
 
 	bool client_hit_header {false};

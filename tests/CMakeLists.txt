@@ -4,6 +4,7 @@ set(MENDER_SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 set(MENDER_TEST_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 option(MENDER_DOWNLOAD_GTEST "Download google test if it is not found (Default: ON)" ON)
+option(MENDER_TEST_SKIP_NETWORK_BASED_TESTS "Skip tests requiring (external) network access (Default: OFF)" OFF)
 option(MENDER_TEST_SKIP_ASYNC_FIFO_OPENER_TESTS "Skip the AsyncFifoOpener tests (Default: OFF)" OFF)
 option(MENDER_TEST_SKIP_NOFILE_BASED_TESTS "Skip tests based on limiting NOFILE (Default: OFF)" OFF)
 option(MENDER_TEST_RUN_SEQUENTIALLY "Run tests sequentially instead of in parallel (Default: OFF)" OFF)
