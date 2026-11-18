@@ -17,10 +17,15 @@
 #include <vector>
 #include <cmath>
 #include <cstdio>
+#include <string>
+
+#include <common/log.hpp>
 
 namespace mender {
 namespace update {
 namespace progress {
+
+namespace log = mender::common::log;
 
 expected::ExpectedSize Reader::Read(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
@@ -28,11 +33,16 @@ expected::ExpectedSize Reader::Read(
 	if (exp_read) {
 		bytes_read_ += exp_read.value();
 		int percentage = static_cast<int>(bytes_read_ * 100 / tot_size_);
-		if (percentage > last_percentage_) {
-			cerr << "\r" << percentage << "%";
-			if (percentage == 100) {
-				cerr << "\n";
+		if (to_terminal_) {
+			if (percentage > last_percentage_) {
+				cerr << "\r" << percentage << "%";
+				if (percentage == 100) {
+					cerr << "\n";
+				}
+				last_percentage_ = percentage;
 			}
+		} else if (percentage / kLogStepPercent > last_percentage_ / kLogStepPercent) {
+			log::Info("Payload progress: " + to_string(percentage) + "%");
 			last_percentage_ = percentage;
 		}
 	}
