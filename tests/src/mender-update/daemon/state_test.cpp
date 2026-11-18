@@ -1277,6 +1277,39 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 		},
 
 		StateTransitionsTestCase {
+			.case_name = "Killed_in_Cleanup__successful_update",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Leave_00",
+					"ArtifactReboot_Enter_00",
+					"ArtifactReboot",
+					"ArtifactVerifyReboot",
+					"ArtifactReboot_Leave_00",
+					"ArtifactCommit_Enter_00",
+					"ArtifactCommit",
+					"ArtifactCommit_Leave_00",
+					"Cleanup",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"rebooting",
+					"installing",
+					"success",
+				},
+			.install_outcome = InstallOutcome::SuccessfulInstall,
+			.spont_reboot_states = {"Cleanup"},
+		},
+
+		StateTransitionsTestCase {
 			.case_name = "Error_in_ArtifactCommit",
 			.state_chain =
 				{
