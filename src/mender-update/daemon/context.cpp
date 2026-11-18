@@ -314,7 +314,9 @@ static string GenerateStateDataJson(const StateData &state_data) {
 			content << R"("HasDBSchemaUpdate":)"
 					<< string(update_info.has_db_schema_update ? "true," : "false,");
 			content << R"("AllRollbacksSuccessful":)"
-					<< string(update_info.all_rollbacks_successful ? "true" : "false");
+					<< string(update_info.all_rollbacks_successful ? "true," : "false,");
+			content << R"("DeploymentSucceeded":)"
+					<< string(update_info.deployment_succeeded ? "true" : "false");
 		}
 		content << "}";
 	}
@@ -527,6 +529,9 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 
 	exp_bool = json_update_info.Get("AllRollbacksSuccessful").and_then(json::ToBool);
 	DefaultOrSetOrReturnIfError(update_info.all_rollbacks_successful, exp_bool, false);
+
+	exp_bool = json_update_info.Get("DeploymentSucceeded").and_then(json::ToBool);
+	DefaultOrSetOrReturnIfError(update_info.deployment_succeeded, exp_bool, false);
 
 	return error::NoError;
 }
