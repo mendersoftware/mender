@@ -1032,6 +1032,7 @@ void UpdateSaveProvidesState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> 
 	}
 
 	bool deploy_failed = ctx.deployment.failed;
+	ctx.deployment.state_data->update_info.deployment_succeeded = !deploy_failed;
 
 	// Only the artifact_name and group should be committed in the case of a
 	// failing update in order to make this consistent with the old client
@@ -1049,6 +1050,7 @@ void UpdateSaveProvidesState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> 
 		});
 	if (err != error::NoError) {
 		log::Error("Error saving artifact data: " + err.String());
+		ctx.deployment.state_data->update_info.deployment_succeeded = false;
 		if (err.code
 			== main_context::MakeError(main_context::StateDataStoreCountExceededError, "").code) {
 			poster.PostEvent(StateEvent::StateLoopDetected);
