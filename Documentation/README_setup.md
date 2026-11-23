@@ -57,8 +57,12 @@ and then move **contents** of the `/var/lib/mender.orig` directory into the new
 location:
 
 ```
-mv /var/lib/mender.orig/* /var/lib/mender.orig/.* /var/lib/mender/
+mv /var/lib/mender.orig/* /var/lib/mender/
+mv /var/lib/mender.orig/.* /var/lib/mender/
 ```
+
+Expect the second command to fail if there are no files starting with `.` in the
+`mender.orig` directory, which is a common case.
 
 
 Device Type
