@@ -16,6 +16,8 @@
 
 #include <mender-update/progress_reader/progress_reader.hpp>
 
+#include <unistd.h>
+
 #include <common/events.hpp>
 #include <common/events_io.hpp>
 #include <common/log.hpp>
@@ -190,7 +192,8 @@ void UpdateModule::StreamNextOpenHandler(io::ExpectedAsyncWriterPtr writer) {
 	}
 	auto payload_reader = make_shared<artifact::Reader>(std::move(reader.value()));
 
-	auto progress_reader = make_shared<progress::Reader>(payload_reader, payload_reader->Size());
+	auto progress_reader = make_shared<progress::Reader>(
+		payload_reader, payload_reader->Size(), isatty(STDERR_FILENO) == 1);
 
 	download_->current_payload_reader_ =
 		make_shared<events::io::AsyncReaderFromReader>(download_->event_loop_, progress_reader);

@@ -27,11 +27,16 @@ using namespace std;
 namespace io = mender::common::io;
 namespace expected = mender::common::expected;
 
+// A terminal gets a readout redrawn in place with carriage returns. Anything else, like the
+// journal, cannot render that, and gets a log message every `kLogStepPercent` instead.
 class Reader : virtual public io::Reader {
 public:
-	Reader(const shared_ptr<io::Reader> &reader, int64_t size) :
+	static constexpr int kLogStepPercent {10};
+
+	Reader(const shared_ptr<io::Reader> &reader, int64_t size, bool to_terminal) :
 		reader_ {reader},
-		tot_size_ {size} {};
+		tot_size_ {size},
+		to_terminal_ {to_terminal} {};
 
 	expected::ExpectedSize Read(
 		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
@@ -39,6 +44,7 @@ public:
 private:
 	shared_ptr<io::Reader> reader_;
 	int64_t tot_size_;
+	bool to_terminal_;
 	int64_t bytes_read_ {0};
 	int last_percentage_ {-1};
 };

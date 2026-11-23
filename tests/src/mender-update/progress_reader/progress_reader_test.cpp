@@ -14,6 +14,7 @@
 
 #include <mender-update/progress_reader/progress_reader.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <ctime>
 #include <iostream>
@@ -38,7 +39,7 @@ TEST(ProgressReaderTests, RegularRead) {
 
 	std::shared_ptr<io::StringReader> rdr = std::make_shared<io::StringReader>(d);
 
-	auto reader = progress::Reader(rdr, 1024 * 100);
+	auto reader = progress::Reader(rdr, 1024 * 100, true);
 
 	testing::internal::CaptureStderr();
 
@@ -64,4 +65,28 @@ TEST(ProgressReaderTests, RegularRead) {
 	std::string output = testing::internal::GetCapturedStderr();
 
 	EXPECT_EQ(output, "\r0%\r5%\r25%\r90%\r100%\n");
+}
+
+TEST(ProgressReaderTests, LogsEveryStepWhenNotOnTerminal) {
+	const size_t size {1024 * 100};
+	auto rdr = std::make_shared<io::StringReader>(std::string(size, 'x'));
+
+	auto reader = progress::Reader(rdr, size, false);
+
+	testing::internal::CaptureStderr();
+
+	std::vector<uint8_t> tmp(size);
+	for (size_t percent : {5, 4, 16, 65, 10}) {
+		ASSERT_TRUE(reader.Read(tmp.begin(), std::next(tmp.begin(), percent * 1024)));
+	}
+
+	std::string output = testing::internal::GetCapturedStderr();
+
+	EXPECT_EQ(output.find('\r'), std::string::npos);
+	EXPECT_EQ(output.find("Payload progress: 5%"), std::string::npos);
+	EXPECT_EQ(output.find("Payload progress: 9%"), std::string::npos);
+	EXPECT_NE(output.find("Payload progress: 25%"), std::string::npos);
+	EXPECT_NE(output.find("Payload progress: 90%"), std::string::npos);
+	EXPECT_NE(output.find("Payload progress: 100%"), std::string::npos);
+	EXPECT_EQ(std::count(output.begin(), output.end(), '\n'), 3);
 }
