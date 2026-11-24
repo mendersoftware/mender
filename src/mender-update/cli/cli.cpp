@@ -79,7 +79,8 @@ const conf::CliCommand cmd_daemon {
 
 const conf::CliCommand cmd_install {
 	.name = "install",
-	.description = "Mender Artifact to install - local file or a URL",
+	.description =
+		"Mender Artifact to install - local file, a URL or \"-\" to read from standard input",
 	.argument =
 		conf::CliArgument {
 			.name = "artifact",

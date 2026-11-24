@@ -14,6 +14,8 @@
 
 #include <mender-update/standalone/states.hpp>
 
+#include <iostream>
+
 #include <common/http.hpp>
 #include <common/events_io.hpp>
 #include <common/io.hpp>
@@ -187,6 +189,8 @@ void PrepareDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 			return;
 		}
 		ctx.artifact_reader = reader.value();
+	} else if (ctx.artifact_src == "-") {
+		ctx.artifact_reader = make_shared<io::StreamReader>(cin);
 	} else {
 		auto stream = io::OpenIfstream(ctx.artifact_src);
 		if (!stream) {
