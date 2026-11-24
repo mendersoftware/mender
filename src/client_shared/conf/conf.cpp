@@ -91,7 +91,8 @@ ExpectedOptionValue CmdlineOptionsIterator::Next() {
 		return ExpectedOptionValue({"--", ""});
 	}
 
-	if (start_[pos_][0] == '-') {
+	// A lone "-" is a bare argument not an option (meaning reading from stdin)
+	if (start_[pos_][0] == '-' && start_[pos_] != "-") {
 		auto eq_idx = start_[pos_].find('=');
 		if (eq_idx != string::npos) {
 			option = start_[pos_].substr(0, eq_idx);

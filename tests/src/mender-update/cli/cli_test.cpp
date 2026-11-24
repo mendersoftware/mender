@@ -496,6 +496,49 @@ artifact_name=test
 )"));
 }
 
+TEST_F(CliTestWithMenderArtifact, InstallArtifactFromStdin) {
+	mtesting::TemporaryDirectory tmpdir;
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+case "$1" in
+    NeedsArtifactReboot|SupportsRollback)
+        :
+        ;;
+esac
+
+exit 0
+)"));
+
+	ifstream artifact_stream(artifact, ios::binary);
+	ASSERT_TRUE(artifact_stream.good());
+	auto *old_buf = cin.rdbuf(artifact_stream.rdbuf());
+
+	vector<string> args {
+		"--datastore",
+		tmpdir.Path(),
+		"install",
+		"-",
+	};
+
+	mtesting::RedirectStreamOutputs output;
+	int exit_status =
+		cli::Main(args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+	cin.rdbuf(old_buf);
+
+	EXPECT_EQ(exit_status, 0) << exit_status;
+
+	EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Update Module doesn't support rollback. Committing immediately.
+Installed and committed.
+)");
+	EXPECT_EQ(output.GetCerr(), "");
+}
+
 TEST_F(CliTestWithMenderArtifact, InstallAndCommitArtifactCheckProvidesDepends) {
 	/* Install two Artifacts. One to install some provides, and the second one to
 	 verify the depends
